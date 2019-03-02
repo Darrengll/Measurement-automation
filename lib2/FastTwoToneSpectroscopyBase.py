@@ -26,12 +26,30 @@ class FastTwoToneSpectroscopyBase(Measurement):
 
         self._last_resonator_result = None
 
+        # frequencies are no longer in self._swept_pars
+        # sweep over frequencies is provided automatically through
+        # trigger settings of the mw_src -> there is no need to call
+        # mw_src.set_frequency() setter and cycle through frequency parameters
+        # in Measurement._record_data()
+        # but it is still swept parameter in some sense.
+        # TODO: I propose following solution
+        # We should implement the following mechanics:
+        # Whenever this happens: some parameters are swept automatically and they are part of the
+        # visualization process.
+        #  We should just modify Measurement._record_data() in order to
+        # be able to determine such situation and skip cycling through this parameters,
+        # maybe by some additional parameter like swept_automatically=["par_name1",...,"par_nameN"]
+        # or maybe by implementing trigger interface in all device classes that could be triggered by
+        # external hardware signal and those who can trigger other devices. This is simple class with 2
+        # attributes at most. The deal is to verify a consistency of the idea before starting actual coding
+        self._frequencies = None
+
     def set_fixed_parameters(self, current=None,
                              voltage=None, detect_resonator=True, bandwidth_factor=1, **dev_params):
 
         vna_parameters = dev_params['vna'][0]
         mw_src_parameters = dev_params['mw_src'][0]
-        self._frequencies = mw_src_parameters["freq_limits"]
+        self._frequencies = mw_src_parameters["mw_src_frequencies"]
 
         if "ext_trig_channel" in mw_src_parameters.keys():
             # internal adjusted trigger parameters for vna
@@ -216,4 +234,4 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
     def _prepare_data_for_plot(self, data):
         s_data = data["data"]
         parameter_list = data[self._parameter_names[0]]
-        return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
+        return [parameter_list, data["Frequency [Hz]"] / 1e9, s_data]
