@@ -9,11 +9,19 @@ from lib2.SingleToneSpectroscopy import *
 from datetime import datetime as dt
 from lib2.Measurement import *
 from scipy.optimize import curve_fit
+from enum import Enum
+
+
+class FluxControlType(Enum):
+    CURRENT = 1
+    VOLTAGE = 2
 
 
 class FastTwoToneSpectroscopyBase(Measurement):
+    FLUX_CONTROL_PARAM_NAMES = {FluxControlType.CURRENT: ("Current", "A"),
+                                FluxControlType.VOLTAGE: ("Voltage", "V")}
 
-    def __init__(self, name, sample_name, line_attenuation_db,
+    def __init__(self, name, sample_name, flux_control_type,
                  devs_aliases_map, plot_update_interval=5):
 
         super().__init__(name, sample_name, devs_aliases_map,
@@ -22,12 +30,20 @@ class FastTwoToneSpectroscopyBase(Measurement):
         self._measurement_result = TwoToneSpectroscopyResult(name, sample_name)
         self._interrupted = False
         self._base_parameter_setter = None
-        self._base_parameter_name = None
-
         self._last_resonator_result = None
 
-    def set_fixed_parameters(self, current=None,
-                             voltage=None, detect_resonator=True, bandwidth_factor=1, **dev_params):
+        if flux_control_type is FluxControlType.CURRENT:
+            self._base_parameter_setter = self._current_src[0].set_current
+        elif flux_control_type is FluxControlType.VOLTAGE:
+            self._base_parameter_setter = self._voltage_src[0].set_voltage
+        else:
+            raise ValueError("Flux parameter type invalid")
+
+        param_name, param_dim = FastTwoToneSpectroscopyBase.FLUX_CONTROL_PARAM_NAMES[flux_control_type]
+        self._parameter_name = param_name + " [%s]" % param_dim
+        self._info_suffix = "at %.4f " + param_dim
+
+    def set_fixed_parameters(self, flux_control_parameter, detect_resonator = True, bandwidth_factor=1, **dev_params):
 
         vna_parameters = dev_params['vna'][0]
         mw_src_parameters = dev_params['mw_src'][0]
@@ -46,28 +62,14 @@ class FastTwoToneSpectroscopyBase(Measurement):
 
         self._bandwidth_factor = bandwidth_factor
 
-        
+        if flux_control_parameter is not None:
+            self._base_parameter_setter(flux_control_parameter)
+
         if detect_resonator:
-            
-            if voltage is None:
-                self._base_parameter_setter = self._current_src[0].set_current
-                base_parameter_value = current
-                self._base_parameter_name = "Current [A]"
-                msg1 = "at %.4f mA" % (current * 1e3)
-            elif current is None:
-                self._base_parameter_setter = self._voltage_src[0].set_voltage
-                base_parameter_value = voltage
-                self._base_parameter_name = "Voltage [V]"
-                msg1 = "at %.1f V" % (voltage)
-            else:
-                raise ValueError("Missing current or voltage to detect resonator at!")
-
-            self._base_parameter_setter(base_parameter_value)
-
             self._mw_src[0].set_output_state("OFF")
             msg = "Detecting a resonator within provided frequency range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
-            print(msg + msg1, flush=True)
+            print(msg + self._info_suffix % flux_control_parameter, flush=True)
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
             print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
                 res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
@@ -84,7 +86,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         return measurement_data
 
     def _detect_resonator(self, vna_parameters, plot=True):
-        
+
         self._vna[0].set_nop(100)
         self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
         if "res_find_power" in vna_parameters.keys():
@@ -111,7 +113,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         data = vna.get_sdata()
         return data
 
-    def _base_setter(self, value):
+    def _triggering_setter(self, value):
         self._base_parameter_setter(value)
         self._mw_src[0].send_sweep_trigger()  # telling mw_src to be ready to start
 
