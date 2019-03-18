@@ -9,7 +9,7 @@ class VNATimeResolvedDispersiveMeasurement2D(VNATimeResolvedDispersiveMeasuremen
                          plot_update_interval=5)
 
     def set_fixed_parameters(self, pulse_sequence_parameters,
-                             detect_resonator=True, **dev_params):
+                             detect_resonator=True, plot_resonator_fit=False, **dev_params):
         dev_params['vna'][0]["power"] = dev_params['ro_awg'][0]["calibration"] \
             .get_radiation_parameters()["lo_power"]
 
@@ -17,7 +17,7 @@ class VNATimeResolvedDispersiveMeasurement2D(VNATimeResolvedDispersiveMeasuremen
             .get_radiation_parameters()["lo_power"]
 
         super().set_fixed_parameters(pulse_sequence_parameters,
-                                     detect_resonator=detect_resonator,
+                                     detect_resonator=detect_resonator, plot_resonator_fit=plot_resonator_fit,
                                      **dev_params)
 
 

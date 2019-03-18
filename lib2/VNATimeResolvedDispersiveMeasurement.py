@@ -43,6 +43,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
                 'q_awg': 0
                 'ro_awg': 0
         """
+
         # TODO check carefully. All single device functions should be deleted?
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
         self._measurement_result.get_context() \
@@ -52,7 +53,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         dev_params['vna'][0]["trigger_type"] = "single"
         freq_limits = dev_params['vna'][0]["freq_limits"]
 
-        if detect_resonator and freq_limits[0] != freq_limits[1]:
+        if detect_resonator and freq_limits[0] != freq_limits[-1]:
             q_z_cal = dev_params['q_z_awg'][0]["calibration"] if \
                 'q_z_awg' in dev_params.keys() else None
             res_freq = self._detect_resonator(dev_params['vna'][0],
@@ -133,7 +134,11 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
                                               .add_dc_pulse(ro_duration).add_zero_until(rep_period).build())
         self._q_awg[0].output_pulse_sequence(q_pb.add_zero_until(rep_period).build())
 
-        if hasattr(self, "_q_z_awg"):
+        # TODO: 'and (q_z_calibration is not None)'  hotfix by Shamil (below)
+        # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
+        # So hasattr(self, "_q_z_awg") is True
+        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
+        if hasattr(self, "_q_z_awg") and (q_z_calibration is not None):
             q_z_pb = PulseBuilder(q_z_calibration)
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
 
@@ -147,11 +152,20 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
 
         q_pbs = [q_awg.get_pulse_builder() for q_awg in self._q_awg]
         ro_pbs = [ro_awg.get_pulse_builder() for ro_awg in self._ro_awg]
-        q_z_pbs = [q_z_awg.get_pulse_builder() for q_z_awg in self._q_z_awg] \
-            if hasattr(self, '_q_z_awg') else [None]
-        pbs = {'q_pbs': q_pbs,
+
+        # TODO: 'and (self._q_z_awg[0] is not None)'  hotfix by Shamil (below)
+        # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
+        # So hasattr(self, "_q_z_awg") is True
+        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
+        if hasattr(self, '_q_z_awg') and (self._q_z_awg[0] is not None):
+            q_z_pbs = [q_z_awg.get_pulse_builder() for q_z_awg in self._q_z_awg]
+        else:
+            q_z_pbs = [None]
+
+        self.pbs = {'q_pbs': q_pbs,  # TODO: delete 'self.' after finishing debug 14.03.2019
                'ro_pbs': ro_pbs,
                'q_z_pbs': q_z_pbs}
+        pbs = self.pbs
         seqs = self._sequence_generator(self._pulse_sequence_parameters, **pbs)
 
         for (seq, dev) in zip(seqs['q_seqs'], self._q_awg):

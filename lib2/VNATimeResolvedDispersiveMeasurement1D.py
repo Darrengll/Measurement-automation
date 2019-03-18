@@ -3,6 +3,7 @@ from lib2.VNATimeResolvedDispersiveMeasurement import *
 from lib2.IQPulseSequence import *
 
 from numpy.linalg import inv
+import numpy as np
 from scipy.optimize import least_squares, curve_fit
 
 
@@ -12,7 +13,7 @@ class VNATimeResolvedDispersiveMeasurement1D(VNATimeResolvedDispersiveMeasuremen
                  plot_update_interval=1):
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval=plot_update_interval)
 
-    def set_fixed_parameters(self, pulse_sequence_parameters,
+    def set_fixed_parameters(self, pulse_sequence_parameters, detect_resonator=True, plot_resonator_fit=True,
                              **dev_params):
         """
         :param dev_params:
@@ -24,7 +25,7 @@ class VNATimeResolvedDispersiveMeasurement1D(VNATimeResolvedDispersiveMeasuremen
         dev_params['vna'][0]["power"] = dev_params['ro_awg'][0]["calibration"] \
             .get_radiation_parameters()["lo_power"]
 
-        super().set_fixed_parameters(pulse_sequence_parameters,
+        super().set_fixed_parameters(pulse_sequence_parameters, detect_resonator=detect_resonator, plot_resonator_fit=plot_resonator_fit,
                                      **dev_params)
 
     def set_swept_parameters(self, par_name, par_values):
@@ -52,7 +53,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
         self._anno = [None] * 2
 
     def _cost_function(self, params, x, data):
-        return abs(self._model(x, *params) - data)
+        return np.abs(self._model(x, *params) - data)
 
     def _fit_complex_curve(self, X, data):
         p0, bounds = self._generate_fit_arguments(X, data)
@@ -61,32 +62,50 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
                                 X, real(data) + imag(data),
                                 p0=p0,
                                 bounds=bounds)
+        except Exception as e:
+            pass
+            # this is silent due to the frequent exceptions thrown
+            # print("VNATDM1D->_fit_complex_curve-> curve fit filed:", e)
+            # print(p0,bounds)
+            # raise e
         finally:
             try:
                 result = least_squares(self._cost_function, p0, args=(X, data),
                                        bounds=bounds, x_scale="jac", max_nfev=10000, ftol=1e-5)
+            except Exception as e:
+                print("NATDM1D->_fit_complex_curve->least_squares filed:", e)
+                print(p0, bounds)
+                raise e
+            sigma = std(abs(self._model(X, *result.x) - data))
 
-                # print(result.x)
-                sigma = std(abs(self._model(X, *result.x) - data))
-
-                if self._fit_params is not None:
+            if self._fit_params is not None:
+                try:
                     result_2 = least_squares(self._cost_function, self._fit_params,
                                              args=(X, data), bounds=bounds, x_scale="jac",
                                              max_nfev=1000, ftol=1e-5)
-                    sigma_2 = std(abs(self._model(X, *result_2.x) - data))
-                    if sigma_2 < sigma:
-                        result = result_2
-                        sigma = sigma_2
+                except Exception as e:
+                    print("NATDM1D->_fit_complex_curve->least squares (self._fit_params is not None) filed:", e)
+                    print(p0, bounds)
+                    raise e
 
-                return result, sqrt(diag(sigma ** 2 * inv(result.jac.T.dot(result.jac))))
-            except Exception as e:
-                print("Fit failed unexpectedly:", e)
-                print(p0, bounds)
-                raise e
+                sigma_2 = std(abs(self._model(X, *result_2.x) - data))
+                if sigma_2 < sigma:
+                    result = result_2
+                    sigma = sigma_2
+
+            return result, sqrt(diag(sigma ** 2 * inv(result.jac.T.dot(result.jac))))
 
     def fit(self, verbose=True):
 
         meas_data = self.get_data()
+        # hotfix. KeyError happens sometimes. Due to the fact that
+        # I manually set _data to {} in order overcome to avoid
+        # fit_complex_curve "'x0' is infeasible" exception
+        # this reset operation happens from the measurement thread
+        # so, it is what it is
+        if "data" not in meas_data.keys():
+            return
+
         data = meas_data["data"][meas_data["data"] != 0]
         if len(data) < 5:
             return
@@ -179,7 +198,16 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
             ax = axes[name]
             opt_params = self._fit_params
             err = self._fit_errors
-            X = self._prepare_data_for_plot(self.get_data())[0]
+            data = self.get_data()
+            # hotfix. KeyError happens sometimes. Due to the fact that
+            # I manually set _data to {} in order to avoid
+            # fit_complex_curve "'x0' is infeasible" exception
+            # this reset operation happens from the measurement thread
+            # so, it is what it is
+            if "data" not in data.keys():
+                return
+
+            X = self._prepare_data_for_plot(data)[0]
             Y = self._data_formats[name][0](self._model(X, *opt_params))
             if self._fit_lines[idx] is None or not self._dynamic:
                 self._fit_lines[idx], = ax.plot(X, Y, "C%d" % idx)

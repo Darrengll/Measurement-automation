@@ -7,12 +7,13 @@ from IPython.display import clear_output
 
 class IQCalibrationData():
 
-    def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,
+    def __init__(self, mixer_id, sideband_to_maintain, iq_attenuation, lo_frequency, lo_power,
         if_frequency, ssb_power, waveform_resolution, dc_offsets,
         dc_offsets_open, if_offsets, if_amplitudes, if_phase, spectral_values,
         optimization_time, end_date):
 
         self._mixer_id = mixer_id
+        self._sideband_to_maintain = sideband_to_maintain
         self._iq_attenuation = iq_attenuation
         self._lo_frequency = lo_frequency
         self._if_frequency = if_frequency
@@ -42,8 +43,9 @@ class IQCalibrationData():
                 if_phase=self._if_phase), self._spectral_values
 
     def get_radiation_parameters(self):
-        return dict(lo_frequency=self._lo_frequency, lo_power=self._lo_power,
-            if_frequency=self._if_frequency, ssb_power=self._ssb_power, waveform_resolution=self._waveform_resolution)
+        return dict(lo_frequency=self._lo_frequency, sideband_to_maintain=self._sideband_to_maintain,
+                    lo_power=self._lo_power,if_frequency=self._if_frequency,
+                    ssb_power=self._ssb_power, waveform_resolution=self._waveform_resolution)
 
     def get_mixer_parameters(self):
         return dict(mixer_id=self._mixer_id, iq_attenuation=self._iq_attenuation)
@@ -191,7 +193,8 @@ class IQCalibrator():
                         + 10*(abs(ssb_power - data[self._N_sup//2]))
             else:
                 answer = 10**(10*abs(abs(amp1)-abs(amp2)))
-        #    if( self.side == "right" ):
+        #TODO: fix this wtf
+        #     if( self.side == "right" ):
         #        answer =  data[0] + 10*abs(ssb_power - data[2]) + 0\
         #            if abs(abs(amp1)-abs(amp2))<.2 else 10**(10*abs(abs(amp2)-abs(amp1)))
             print("\rAmplitudes: ", format_number_list(if_amplitudes),
@@ -275,20 +278,24 @@ class IQCalibrator():
                     results["dc_offset_open"] = res_dc_offs_open.x
                 spectral_values = {"dc":res_dc_offs.fun, "dc_open":self._sa.get_tracedata()}
                 elapsed_time = (datetime.now() - start).total_seconds()
-                return IQCalibrationData(self._mixer_id, self._iq_attenuation,
+                return IQCalibrationData(self._mixer_id, self.side, self._iq_attenuation,
                     lo_frequency, lo_power, if_frequency, ssb_power, waveform_resolution,
                     results["dc_offsets"], array([results["dc_offset_open"]]*2), None, None, None, spectral_values,
                     elapsed_time, datetime.now())
 
             else:
-                self._sa.setup_list_sweep(list(arange(lo_frequency-self._N_sup//2*if_frequency,\
-                                                         lo_frequency+(self._N_sup//2+1)*if_frequency,\
-                                                          if_frequency)-if_frequency), [sa_res_bandwidth]*3)
+                peaks_around_LO = arange(lo_frequency-self._N_sup//2*if_frequency,
+                                        lo_frequency+(self._N_sup//2+1)*if_frequency,
+                                        if_frequency)
+                peaks_around_ssb = peaks_around_LO - if_frequency \
+                                   if self.side is "left" else \
+                                   peaks_around_LO + if_frequency
+                self._sa.setup_list_sweep(list(peaks_around_ssb), [sa_res_bandwidth]*3)
                 results["if_offsets"]=res_dc_offs.x
                 iterate_minimization(results, iterations)
                 spectral_values = {"dc":res_dc_offs.fun, "if":self._sa.get_tracedata()}
                 elapsed_time = (datetime.now() - start).total_seconds()
-                return IQCalibrationData(self._mixer_id, self._iq_attenuation,
+                return IQCalibrationData(self._mixer_id, self.side, self._iq_attenuation,
                     lo_frequency, lo_power, if_frequency, ssb_power, waveform_resolution,
                     res_dc_offs.x, None, results["if_offsets"], results["if_amplitudes"],
                     results["if_phase"], spectral_values, elapsed_time, datetime.now())
@@ -297,8 +304,11 @@ class IQCalibrator():
             return results
 
         finally:
-             self._sa.setup_swept_sa(lo_frequency, 10*if_frequency if if_frequency>0 else 1e9, nop=1001, rbw=1e5)
-             self._sa.set_continuous()
+            if( if_frequency != 0 ): # TODO: << hotfix by Shamil due to "local variable 'peaks_around_ssb' referenced before assignment" in case 'if_frequency' is 0
+                self._sa.setup_swept_sa(peaks_around_ssb[self._N_sup//2],
+                                         10*if_frequency if if_frequency > 0 else 1e9,
+                                         nop=1001, rbw=1e5)
+            self._sa.set_continuous()
 
 def format_number_list(number_list):
     formatted_string = "[ "

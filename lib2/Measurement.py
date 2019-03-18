@@ -79,6 +79,9 @@ class Measurement:
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
         self._resonator_detector = ResonatorDetector()
+        self._raw_data = None  # measurement results are stored here
+        # TODO: explicit definition of members in child classes
+        # self._measurement_result = None  # should be initialized in child class
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""

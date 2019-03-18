@@ -32,11 +32,14 @@ class DispersiveRamseyResult(VNATimeResolvedDispersiveMeasurement1DResult):
                         [10, 10, 100, max_frequency*2*pi, 10, 10, pi])
         amp_r, amp_i = ptp(real(data))/2, ptp(imag(data))/2
         p0 = (amp_r, amp_i, 3, frequency, max(real(data))-amp_r,
-                                max(imag(data))-amp_i, 0)
+              max(imag(data))-amp_i, 0)
         return p0, bounds
 
     def get_ramsey_frequency(self):
         return self._fit_params[3]/2/pi*1e6
+
+    def get_ramsey_decay(self):
+        return self._fit_params[2], self._fit_errors[2]
 
     def _generate_annotation_string(self, opt_params, err):
         return "$T_2^*=%.2f \pm %.2f \mu$s\n$|\Delta\omega/2\pi| = %.3f \pm %.3f$ MHz"%\

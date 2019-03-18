@@ -220,7 +220,7 @@ class Snapshot:
         return minimum * (1 - rel_threshold) + rel_threshold * maximum
 
     def _nullify_abs_threshold(self, abs_threshold, inplace=False):
-        """
+        """TODO: utilize cv2.inRange & cv2.threshold
         @brief: set all the data entries from x with values
                 below 'threshold' to fixed value close to zero
         @params:
@@ -346,7 +346,7 @@ class Snapshot:
         xvar_shift = self.dx * (pixel_shift - (len(snapshot.x) - 1))
         return xvar_shift
 
-    def apply_gauss(self, kernel_x, kernel_y, inplace=False):
+    def apply_gauss(self, kernel_x=0.1, kernel_y=0.1, inplace=False):
         '''
         TODO: add description
         '''

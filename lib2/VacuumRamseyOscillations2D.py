@@ -1,14 +1,14 @@
 from lib2.VNATimeResolvedDispersiveMeasurement2D import *
 
 
-class VacuumRabiOscillations2D(VNATimeResolvedDispersiveMeasurement2D):
+class VacuumRamseyOscillations2D(VNATimeResolvedDispersiveMeasurement2D):
 
     def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
-        self._measurement_result = VacuumRabiOscillations2DResult(name,
-                                                                  sample_name)
+        self._measurement_result = VacuumRamseyOscillations2DResult(name,
+                                                                    sample_name)
         self._sequence_generator = \
-            IQPulseBuilder.build_vacuum_rabi_oscillations_sequences
+            IQPulseBuilder.build_vacuum_ramsey_oscillations_sequences
 
     def set_fixed_parameters(self, pulse_sequence_parameters, **dev_params):
         super().set_fixed_parameters(pulse_sequence_parameters, **dev_params)
@@ -32,7 +32,7 @@ class VacuumRabiOscillations2D(VNATimeResolvedDispersiveMeasurement2D):
         self._output_pulse_sequence()
 
 
-class VacuumRabiOscillations2DResult(VNATimeResolvedDispersiveMeasurement2DResult):
+class VacuumRamseyOscillations2DResult(VNATimeResolvedDispersiveMeasurement2DResult):
 
     def _prepare_data_for_plot(self, data):
         return data["interaction_duration"] / 1e3, \

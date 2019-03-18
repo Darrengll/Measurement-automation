@@ -52,8 +52,9 @@ class MeasurementResult:
         self._data_lock = Lock()
         self._data = {}
         self._context = ContextBase()
-
         self._parameter_names = None
+
+        self._is_finished = False
 
         # visualization fields, see _prepare_figure(...) docstring below
         self._figure = None  # the figure that will be dynamically updated
