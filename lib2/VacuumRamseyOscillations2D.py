@@ -14,7 +14,7 @@ class VacuumRamseyOscillations2D(VNATimeResolvedDispersiveMeasurement2D):
         super().set_fixed_parameters(pulse_sequence_parameters, **dev_params)
 
     def set_swept_parameters(self, z_pulse_offset_voltages, interaction_durations):
-        swept_pars = {"z_pulse_offset_voltage": \
+        swept_pars = {"z_pulse_offset_voltage":
                           (self._set_z_pulse_offset_voltage,
                            z_pulse_offset_voltages),
                       "interaction_duration":

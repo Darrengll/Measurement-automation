@@ -162,10 +162,10 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         else:
             q_z_pbs = [None]
 
-        self.pbs = {'q_pbs': q_pbs,  # TODO: delete 'self.' after finishing debug 14.03.2019
+        pbs = {'q_pbs': q_pbs,
                'ro_pbs': ro_pbs,
                'q_z_pbs': q_z_pbs}
-        pbs = self.pbs
+
         seqs = self._sequence_generator(self._pulse_sequence_parameters, **pbs)
 
         for (seq, dev) in zip(seqs['q_seqs'], self._q_awg):

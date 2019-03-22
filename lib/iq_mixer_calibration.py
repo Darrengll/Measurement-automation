@@ -243,7 +243,7 @@ class IQCalibrator():
             if(n-1==0):
                 return
             iterate_minimization(results, n-1)
-
+        # peaks_around_ssb = None
         try:
 
             start = datetime.now()

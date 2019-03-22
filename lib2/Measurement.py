@@ -221,7 +221,7 @@ class Measurement:
         total_iterations = reduce(mul, raw_data_shape, 1)
 
         for idx_group, values_group in zip(product(*parameters_idxs), product(*parameters_values)):
-
+            # print(idx_group)
             self._call_setters(values_group)
 
             # This should be implemented in child classes:

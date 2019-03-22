@@ -161,7 +161,7 @@ class DispersiveRabiFromFrequency(Measurement):
                 unique_idcs = np.unique(x, return_index=True)[1]
                 x = x[unique_idcs]
                 y = y[unique_idcs]
-                y_from_x_fit = interp1d(x, y, kind="cubic", copy=False, assume_sorted=False, fill_value="extrapolate")
+                    y_from_x_fit = interp1d(x, y, kind="cubic", copy=False, assume_sorted=False, fill_value="extrapolate")
                 self._tts_curves[curve_name] = y_from_x_fit
 
         print("loaded tts_curves from file: " + filepath)

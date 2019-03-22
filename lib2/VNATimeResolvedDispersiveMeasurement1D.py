@@ -2,7 +2,7 @@ from lib2.Measurement import *
 from lib2.VNATimeResolvedDispersiveMeasurement import *
 from lib2.IQPulseSequence import *
 
-from numpy.linalg import inv
+from numpy.linalg import pinv # you will have to deal with this, FUCKING PSEUDOINVERSE, BABY
 import numpy as np
 from scipy.optimize import least_squares, curve_fit
 
@@ -55,6 +55,17 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
     def _cost_function(self, params, x, data):
         return np.abs(self._model(x, *params) - data)
 
+    def in_bounds(self, p0, bounds):
+        true_arr = []
+        for i, val in enumerate(p0):
+            if( val >= bounds[0][i] and val <= bounds[1][i] ):
+                true_arr.append(True)
+            else:
+                true_arr.append(False)
+
+        return true_arr
+
+
     def _fit_complex_curve(self, X, data):
         p0, bounds = self._generate_fit_arguments(X, data)
         try:
@@ -65,8 +76,8 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
         except Exception as e:
             pass
             # this is silent due to the frequent exceptions thrown
-            # print("VNATDM1D->_fit_complex_curve-> curve fit filed:", e)
-            # print(p0,bounds)
+            print("VNATDM1D->_fit_complex_curve-> curve fit filed:", e)
+            print(p0,bounds)
             # raise e
         finally:
             try:
@@ -93,7 +104,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
                     result = result_2
                     sigma = sigma_2
 
-            return result, sqrt(diag(sigma ** 2 * inv(result.jac.T.dot(result.jac))))
+            return result, sqrt(diag(sigma ** 2 * pinv(result.jac.T.dot(result.jac))))
 
     def fit(self, verbose=True):
 
