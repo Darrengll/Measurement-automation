@@ -1,79 +1,126 @@
-"""
-Paramatric single-tone spectroscopy is perfomed with a Vector Network Analyzer
-(VNA) for each parameter value which is set by a specific function that must be
-passed to the SingleToneSpectroscopy class when it is created.
-"""
 from numpy import *
+from lib2.Measurement import *
 from lib2.MeasurementResult import *
 from datetime import datetime as dt
-from matplotlib import pyplot as plt, colorbar
-from resonator_tools import circuit
-from lib2.Measurement import *
+from enum import Enum
 from time import sleep
 
 
-class SingleToneSpectroscopy(Measurement):
-    """
-    Class provides all the necssary methods for single-tone spectrscopy with VNA.
+class CrosstalksCalibrationBase(Measurement):
 
-    must-have keywords for constructor:
-        vna = list of vector network analyzers classes or internal aliases
-        src = list of voltage/current sources classes or internal aliases
 
-        For internal aliases/classes see Measurement._devs_dict dictionary in lib2/Measurement.py
-    """
+    def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
 
-    def __init__(self, name, sample_name, plot_update_interval=5, **devs_aliases_map):
-        self._vna = None  # vector network analyzers list
-        self._src = None  # voltage/current sources list
-        super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
-        self._measurement_result = SingleToneSpectroscopyResult(name, sample_name)
-        self._frequencies = []
+        super().__init__(name, sample_name, devs_aliases_map,
+                         plot_update_interval)
 
-    def set_fixed_parameters(self, **dev_params):
-        """
-        SingleToneSpectroscopy only requires vna parameters in format
-        {"bandwidth":int, ...}
-        """
-        super().set_fixed_parameters(**dev_params)
-        self._frequencies = linspace(*dev_params['vna'][0]["freq_limits"],
-                                     dev_params['vna'][0]["nop"])
-        self._vna[0].sweep_hold()
+        self._measurement_result = CrosstalksCalibrationResult(name, sample_name)
+        self._interrupted = False
+        self._base_parameter_setter = None
+        self._last_resonator_result = None
 
-    def set_swept_parameters(self, swept_parameter):
-        """
-        SingleToneSpectroscopy only takes one swept parameter in format
-        {"parameter_name":(setter, values)}
-        """
-        super().set_swept_parameters(**swept_parameter)
-        par_name = list(swept_parameter.keys())[0]
-        par_setter, par_values = swept_parameter[par_name]
-        par_setter(par_values[0])
-        sleep(1)
 
-    def _recording_iteration(self):
-        vna = self._vna[0]
-        vna.avg_clear()
-        vna.prepare_for_stb()
-        vna.sweep_single()
+    def set_fixed_parameters(self, detect_resonator = True, bandwidth_factor=1, **dev_params):
 
-        vna.wait_for_stb()
-        return vna.get_sdata()
+        vna_parameters = dev_params['vna'][0]
+        mw_src_parameters = dev_params['mw_src'][0]
+        self._frequencies = mw_src_parameters["freq_limits"]
+
+        if "ext_trig_channel" in mw_src_parameters.keys():
+            # internal adjusted trigger parameters for vna
+            vna_parameters["trig_per_point"] = True  # trigger output once per sweep point
+            vna_parameters["pos"] = True  # positive edge
+            vna_parameters["bef"] = False  # trigger sent before measurement is started
+
+            # internal adjusted trigger parameters for microwave source
+            mw_src_parameters["unit"] = "Hz"
+            mw_src_parameters["InSweep_trg_src"] = "EXT"
+            mw_src_parameters["sweep_trg_src"] = "BUS"
+
+        self._bandwidth_factor = bandwidth_factor
+
+        if detect_resonator:
+            self._mw_src[0].set_output_state("OFF")
+            msg = "Detecting a resonator within provided frequency range of the VNA %s \
+                            " % (str(vna_parameters["freq_limits"]))
+            print(msg, flush=True)
+            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
+            print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
+                res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
+            vna_parameters["freq_limits"] = (res_freq, res_freq)
+            self._measurement_result.get_context() \
+                .get_equipment()["vna"] = vna_parameters
+            self._mw_src[0].set_output_state("ON")
+
+        super().set_fixed_parameters(vna=dev_params['vna'], mw_src=dev_params['mw_src'])
+
+
+
+    def set_swept_parameters(self, **swept_pars):
+        setter_function = self._adaptive_setter if self._adaptive else self._base_setter
+
+        for swept_par in swept_pars.keys():  # only 1 parameter here
+            swept_pars[swept_par][0] = setter_function
+
+        super().set_swept_parameters(**swept_pars)
 
     def _prepare_measurement_result_data(self, parameter_names, parameters_values):
         measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
         measurement_data["Frequency [Hz]"] = self._frequencies
         return measurement_data
 
-    def _finalize(self):
-        for src in self._src:
-            if( hasattr(src, "set_voltage") ):  # voltage src
-                src.set_voltage(0)
-            if( hasattr(src, "set_current") ):  # current src
-                src.set_current(0)
+    def _detect_resonator(self, vna_parameters, plot=True):
+
+        self._vna[0].set_nop(100)
+        self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
+        if "res_find_power" in vna_parameters.keys():
+            self._vna[0].set_power(vna_parameters["res_find_power"])
+        else:
+            self._vna[0].set_power(vna_parameters["power"])
+        if "res_find_nop" in vna_parameters.keys():
+            self._vna[0].set_nop(vna_parameters["res_find_nop"])
+        else:
+            self._vna[0].set_nop(vna_parameters["nop"])
+        self._vna[0].set_bandwidth(vna_parameters["bandwidth"] * self._bandwidth_factor)
+        self._vna[0].set_averages(vna_parameters["averages"])
+        result = super()._detect_resonator(plot)
+        self._vna[0].do_set_power(vna_parameters["power"])
+        self._vna[0].do_set_power(vna_parameters["nop"])
+        return result
+
+    def _recording_iteration(self):
+        vna = self._vna[0]
+        vna.avg_clear()
+        vna.prepare_for_stb()
+        vna.sweep_single()
+        vna.wait_for_stb()
+        data = vna.get_sdata()
+        return data
+
+class CrosstalksCalibration(CrosstalksCalibrationBase):
+
+    def __init__(self, name, sample_name, **devs_aliases_map):
+        super().__init__(name, sample_name, devs_aliases_map)
+
+    def set_fixed_parameters(self, bandwidth_factor=10, **dev_params):
+
+        vna_parameters = dev_params['vna'][0]
+        mw_src_parameters = dev_params['mw_src'][0]
+        self._resonator_area = vna_parameters["freq_limits"]
+        self._adaptive = False
+
+        super().set_fixed_parameters(vna=dev_params['vna'], mw_src=dev_params['mw_src'],
+                                     detect_resonator= True,
+                                     bandwidth_factor=bandwidth_factor)
+
+    def set_swept_parameters(self, first_line_voltages, second_line_voltages):
+        setter = self._base_parameter_setter
+        swept_pars = {'First_voltage [V]':(setter, first_line_voltages),
+        'Second_voltage [V]':(setter, second_line_voltages)}
+        super().set_swept_parameters(**swept_pars)
 
 
-class SingleToneSpectroscopyResult(MeasurementResult):
+class CrosstalksCalibrationResult(MeasurementResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
@@ -95,16 +142,17 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         self._phas_map = None
         self._amp_cb = None
         self._phas_cb = None
+        self._annotation_bbox_props = dict(boxstyle="round", fc="white",
+                                           ec="black", lw=1, alpha=0.5)
 
     def _prepare_figure(self):
         fig, axes = plt.subplots(1, 2, figsize=(15, 7), sharey=True, sharex=True)
         ax_amps, ax_phas = axes
         ax_amps.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
-        ax_amps.set_ylabel("Frequency [GHz]")
-        xlabel = self._parameter_names[0][0].upper() + self._parameter_names[0][1:]
-        ax_amps.set_xlabel(xlabel)
+        ax_amps.set_ylabel("Second voltage [V]")
+        ax_amps.set_xlabel("First voltage [V]")
         ax_phas.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
-        ax_phas.set_xlabel(xlabel)
+        ax_phas.set_xlabel("First voltage [V]")
         plt.tight_layout(pad=2, h_pad=-10)
         cax_amps, kw = colorbar.make_axes(ax_amps, aspect=40)
         cax_phas, kw = colorbar.make_axes(ax_phas, aspect=40)
@@ -194,27 +242,11 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         self.min_abs = min_abs
 
     def _prepare_data_for_plot(self, data):
-        s_data = self._remove_delay(data["Frequency [Hz]"], data["data"])
-        parameter_list = data[self._parameter_names[0]]
-        if parameter_list[0] > parameter_list[-1]:
-            parameter_list = parameter_list[::-1]
-            s_data = s_data[::-1, :]
-        # s_data = self.remove_background('avg_cur')
-        return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
+        s_data = data["data"]
+        current1 = data["First_voltage [V]"]
+        current2 = data["Second_voltage [V]"]
+        return current1, current2, s_data
 
-    def remove_delay(self):
-        copy = self.copy()
-        s_data, frequencies = copy.get_data()["data"], copy.get_data()["frequencies"]
-        copy.get_data()["data"] = self._remove_delay(frequencies, s_data)
-        return copy
-
-    def _remove_delay(self, frequencies, s_data):
-        phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))
-        k, b = polyfit(frequencies, phases[0], 1)
-        phases = phases - k * frequencies - b
-        corr_s_data = abs(s_data) * exp(1j * phases)
-        corr_s_data[abs(corr_s_data) < 1e-14] = 0
-        return corr_s_data
 
     def remove_background(self, direction):
         """

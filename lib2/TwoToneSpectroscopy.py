@@ -33,11 +33,8 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         base_parameter_setter = \
             self._adaptive_setter if self._adaptive else self._base_parameter_setter
 
-        swept_pars = \
-            {self._base_parameter_name:
-             (base_parameter_setter, base_parameter_values),
-             "Frequency [Hz]":
-                 (self._mw_src[0].set_frequency, mw_src_frequencies)}
+        swept_pars = {self._base_parameter_name: (base_parameter_setter, base_parameter_values),
+                      "Frequency [Hz]": (self._mw_src[0].set_frequency, mw_src_frequencies)}
         super().set_swept_parameters(**swept_pars)
 
     def _adaptive_setter(self, value):

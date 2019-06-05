@@ -1,4 +1,4 @@
-# KeysightAWG.py
+# keysightAWG.py
 # Gleb Fedorov <vdrhc@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 
 from numpy import *
 from lib2.IQPulseSequence import *
+from drivers.keysightAWG import KeysightAWG
 
 
 class AWGChannel():
@@ -30,13 +31,18 @@ class AWGChannel():
     def output_arbitrary_waveform(self, waveform, frequency, asynchronous):
 
         self._host_awg.output_arbitrary_waveform(waveform, frequency,
-                                self._channel_number, asynchronous = asynchronous)
+                                                 self._channel_number, asynchronous = asynchronous)
 
+    def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous):
+        self._host_awg.output_continuous_wave(frequency, amplitude, phase,
+                                              offset, waveform_resolution, self._channel_number, asynchronous=asynchronous)
 
 class CalibratedAWG():
 
-    def __init__(self, channel):
+    def __init__(self, channel: AWGChannel):
         self._channel = channel
+        # requires to be setted before pulse builder object is instantiated
+        self._calibration = None
 
     def set_parameters(self, parameters):
         """
@@ -75,11 +81,10 @@ class CalibratedAWG():
                         .get_waveform(), frequency, asynchronous=asynchronous)
 
 class IQAWG():
-
-
-    def __init__(self, channel_I, channel_Q, triggered=False):
+    def __init__(self, channel_I: AWGChannel, channel_Q: AWGChannel, triggered=False):
         self._channels = [channel_I, channel_Q]
         self._triggered = triggered
+        self._calibration = None  # TODO: BUG CAN BE HERE (SHAMIL 23.04.2019)
 
     def set_parameters(self, parameters):
         """
@@ -122,7 +127,7 @@ class IQAWG():
         amplitudes: float, V
             amplitude of the output waves
         phase: float
-            relative phase in radians of the iutput waves
+            relative phase in radians of the output waves
         offsets: float, V
             voltage offset of the waveforms
         waveform_resolution: float, ns
@@ -139,7 +144,7 @@ class IQAWG():
             offsets[1], waveform_resolution, 2, asynchronous = False)
 
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
-            waveform_resolution, channel, asynchronous):
+            waveform_resolution, channel, asynchronous=False):
         """
         Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
 
@@ -159,11 +164,8 @@ class IQAWG():
         channel: 1 or 2
             channel which will output the wave
         """
-
-        N_points = 1/frequency/waveform_resolution*1e9+1 if frequency !=0 else 3
-        waveform = amplitude*sin(2*pi*linspace(0,1,N_points)+phase) + offset
-        self._channels[channel-1].output_arbitrary_waveform(waveform, frequency,
-                                                            asynchronous=asynchronous)
+        self._channels[channel-1].output_continuous_wave(frequency, amplitude, phase, offset,
+                                                            waveform_resolution, asynchronous=asynchronous)
 
     def output_pulse_sequence(self, pulse_sequence, asynchronous=False):
         """
@@ -189,7 +191,6 @@ class IQAWG():
         self._channels[1].output_arbitrary_waveform(pulse_sequence
                                                     .get_Q_waveform()[:end_idx], frequency,
                                                     asynchronous=asynchronous)
-
 
 class IQAWG2(IQAWG):
     """

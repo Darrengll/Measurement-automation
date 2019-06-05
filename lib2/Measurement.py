@@ -19,26 +19,41 @@ from loggingserver import LoggingServer
 
 class Measurement:
     """
-    Any inheritance?
     The class contains methods to help with the implementation of measurement classes.
-
+    Every new distinct measurement type is implemented as a child class of Measurement.
     """
-    logger = LoggingServer.getInstance()
+    logger = LoggingServer.getInstance("default_logger")  # HOTFIX by Shamil 07.04.2019 (name arg is now ought to be supplied)кr
     _actual_devices = {}
     _log = []
+
+    """
+    Measurement._devs_dict - dictionary with the following structure:
+    {"internal_device_alias": [ list_of_possible_VISA_aliases, [device_module, "device_class"], ...}
+        "internal_devise_alias" : str 
+            device name alias for usage in lib2 library.
+        list_of_possible_VISA_aliases : list of str() 
+            list of every possible VISA aliases that could be used for this particular device
+        device_module : object
+            python file that contains driver class of the device
+            provided python class API for the device.
+        "device_class" : str
+            Name of the device class in 'device_module' module
+            Device is initialized with
+            device_module.device_class(...) constructor
+    """
     _devs_dict = \
-        {'vna1': [["PNA-L", "PNA-L1"], [Agilent_PNA_L, "Agilent_PNA_L"]],
-         'vna2': [["PNA-L-2", "PNA-L2"], [Agilent_PNA_L, "Agilent_PNA_L"]],
-         'vna3': [["pna"], [Agilent_PNA_L, "Agilent_PNA_L"]],
+        {'vna1': [["PNA-L", "PNA-L1"], [agilent_PNA_L, "Agilent_PNA_L"]],
+         'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
+         'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
          'vna4': [["ZNB"], [znb, "Znb"]],
          'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
          'exg': [["EXG"], [E8257D, "EXG"]],
          'psg2': [['PSG'], [E8257D, "EXG"]],
          'mxg': [["MXG"], [E8257D, "MXG"]],
          'psg1': [["psg1"], [E8257D, "EXG"]],
-         'awg1': [["AWG", "AWG1"], [KeysightAWG, "KeysightAWG"]],
-         'awg2': [["AWG_Vadik", "AWG2"], [KeysightAWG, "KeysightAWG"]],
-         'awg3': [["AWG3"], [KeysightAWG, "KeysightAWG"]],
+         'awg1': [["AWG", "AWG1"], [keysightAWG, "KeysightAWG"]],
+         'awg2': [["AWG_Vadik", "AWG2"], [keysightAWG, "KeysightAWG"]],
+         'awg3': [["AWG3"], [keysightAWG, "KeysightAWG"]],
          'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
          'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
          'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
@@ -50,19 +65,9 @@ class Measurement:
          'k6220': [["k6220"], [k6220, "K6220"]]
          }
 
+
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
         """
-        Parameters:
-        --------------------
-        name: string
-            name of the measurement
-        sample_name: string
-            the name of the sample that is measured
-        devs_aliases_map: dictionary
-            with devices' standard names(if it`s not virtual device) or
-             object from a device class. A key is a string that will be an object field
-        --------------------
-
         Constructor creates variables for devices passed to it and initialises all devices.
 
         Standard names of devices within this driver are:
@@ -73,6 +78,28 @@ class Measurement:
 
         if key is not recognised doesn't returns a mistake
 
+        Parameters:
+        --------------------
+        name: string
+            name of the measurement
+        sample_name: string
+            the name of the sample that is measured
+        devs_aliases_map: dictionary
+            A key is a string that will be prepended with '_' and
+            defined as class attribute with setattr(self, '_' + key).
+            This attribute will be initialized with an appropriate device driver class from ./../drivers
+            based on the devs_aliases_map[key] content.
+            Example:
+                Measurement( ..., vna=["vna1"], ...)
+                # "vna1" - internal alias for vector network analyzer number 1, see Measurement._devs_dict for more details
+                    or
+                vna1 = Agilent_PNA_L( "PNA_L1" )
+                # "PNA_L1" - VISA alias for vector network analyzer, see Keysight Connection Expert or NI MAX
+                # (UIs that provide convinience for VISA alias manipulation)
+                Measurement( ..., vna=[vna1], ...)
+
+            see implementation for details on attributes initialization
+        --------------------
         """
         self._interrupted = False
         self._name = name
@@ -174,10 +201,13 @@ class Measurement:
         t = Thread(target=self.measure)
         t.start()
 
-        self._measurement_result.visualize_dynamic()
-        self.join()
-
-        return self._measurement_result
+        try:
+            self._measurement_result.visualize_dynamic()
+            self.join()
+        except Exception as e:
+            print("exception {}".format(e))
+        finally:
+            return self._measurement_result
 
     def join(self):
         stop_messages = {KeyboardInterrupt: "\nMeasurement interrupted!",
@@ -192,6 +222,7 @@ class Measurement:
         except (KeyboardInterrupt, AttributeError) as e:
             print(stop_messages[type(e)])
             self._interrupted = True
+            raise e
         finally:
             self._measurement_result.finalize()
             plt.close(figure_number)
@@ -261,6 +292,17 @@ class Measurement:
         self._measurement_result.set_recording_time(dt.now() - start_time)
         print("\nElapsed time: %s" % self._format_time_delta((dt.now() - start_time)
                                                              .total_seconds()))
+        self._finalize()
+
+    def _finalize(self):
+        """
+        Post-measurement clean-up. E.g. setting all voltage/current sources to 0,
+        closing other stuff.
+        May be overwritten in child-classes.
+        -------
+
+        """
+        pass
 
     def set_measurement_result(self, measurement_result: MeasurementResult):
         self._measurement_result = measurement_result
@@ -289,7 +331,7 @@ class Measurement:
         measurement_data["data"] = self._raw_data
         return measurement_data
 
-    def _detect_resonator(self, plot=False, tries_number=10):
+    def _detect_resonator(self, plot=False, tries_number=3):
         """
         Finds frequency of the resonator visible on the VNA screen
         """

@@ -1,4 +1,4 @@
-# KeysightAWG.py
+# keysightAWG.py
 # Gleb Fedorov <vdrhc@gmail.com>
 # Alexander Korenkov <soyer94_44@mail.ru>
 # Alexey Dmitriev <dmitrmipt@gmail.com>

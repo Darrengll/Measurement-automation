@@ -65,23 +65,27 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         super().set_fixed_parameters(**dev_params)
 
     def set_basis(self, basis):
-        d_real = abs(real(basis[0] - basis[1]))
-        d_imag = abs(imag(basis[0] - basis[1]))
-        relation = d_real / d_imag
+        d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
+        relation = d_real/d_imag
         if relation > 5:
             # Imag quadrature is not oscillating, ignore it by making imag
             # distance equal to ten real distances so that new normalized values
-            # obtained via that component will be small
-            ground_state = real(basis[0]) - 1j * 5 * d_real
-            excited_state = real(basis[1]) + 1j * 5 * d_real
+            # obtained via that component would be small
+            ground_state = real(basis[0]) + 1j * imag(basis[0])
+            excited_state = real(basis[1]) + 1j * (imag(basis[0]) + 10 * d_real)
             basis = (ground_state, excited_state)
         elif relation < 0.2:
             # Real quadrature is not oscillating, ignore it
-            ground_state = -5 * d_imag + 1j * imag(basis[0])
-            excited_state = 5 * d_imag + 1j * imag(basis[1])
+            ground_state = real(basis[0]) + 1j * imag(basis[0])
+            excited_state = real(basis[0]) + 10 * d_imag + 1j * imag(basis[1])
             basis = (ground_state, excited_state)
 
         self._basis = basis
+
+    def _calculate_basis_complex_amplitudes(self, basis):
+        d_real = abs(real(basis[0] - basis[1]))
+        d_imag = abs(imag(basis[0] - basis[1]))
+        return d_real, d_imag
 
     def set_ult_calib(self, value=False):
         self._ult_calib = value
@@ -102,7 +106,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
             vna.wait_for_stb()
             bg = vna.get_sdata()
             q_lo.set_output_state("ON")
-            mean_data = mean(data) / mean(bg)
+            mean_data = mean(data-bg)
         else:
             mean_data = mean(data)
         if self._basis is None:
@@ -113,7 +117,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         return p_r + 1j * p_i
 
     def _detect_resonator(self, vna_parameters, ro_calibration, q_calibration,
-                          q_z_calibration=None, plot_resonator_fit=True):
+                          q_z_calibration=None, plot_resonator_fit=True, z_offset=None):
 
         self._q_lo[0].set_output_state("OFF")
         print("Detecting a resonator within provided frequency range of the VNA %s\

@@ -43,7 +43,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         self._frequencies = None
 
     def set_fixed_parameters(self, start_current=None, start_voltage=None,
-                             detect_resonator=True, bandwidth_factor=1, adaptive=True,
+                             detect_resonator=False, bandwidth_factor=1, adaptive=True,
                              **dev_params):
         self._adaptive = adaptive
 
@@ -65,7 +65,6 @@ class FastTwoToneSpectroscopyBase(Measurement):
             mw_src_parameters["sweep_trg_src"] = "BUS"
 
         self._bandwidth_factor = bandwidth_factor
-
 
         if detect_resonator:
             msg1 = ""
@@ -122,11 +121,10 @@ class FastTwoToneSpectroscopyBase(Measurement):
                 print("no successful fit is present, terminating")
                 return None
             else:
-                res_result = self._last_resonator_result
+                res_freq, res_amp, res_phase = self._last_resonator_result
         else:
             self._last_resonator_result = res_result
-
-        res_freq, res_amp, res_phase = self._last_resonator_result
+            res_freq, res_amp, res_phase = self._last_resonator_result
 
         # print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
         #            degrees"%(res_freq/1e9, res_amp*1e3, res_phase/pi*180), end="")

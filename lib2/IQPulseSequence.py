@@ -22,6 +22,16 @@ class PulseSequence():
         copy._waveform = concatenate((copy._waveform[:-1], other._waveform))
         return copy
 
+    def direct_add(self, another):
+        copy = deepcopy(self)
+        try:
+            copy._waveform = self._waveform + another._waveform
+            return copy
+        except Exception as e:
+            print("Direct summation is not possible:", e)
+            print(self._waveform.shape,another._waveform.shape)
+            raise e
+
     def total_points(self):
         return len(self._waveform)
 
@@ -53,6 +63,10 @@ class IQPulseSequence():
     def __add__(self, other):
         I, Q = other.get_IQ_sequences()
         return IQPulseSequence(self._i + I, self._q + Q)
+
+    def direct_add(self, another):
+        I, Q = another.get_IQ_sequences()
+        return IQPulseSequence(self._i.direct_add(I), self._q.direct_add(Q))
 
     def get_IQ_sequences(self):
         return self._i, self._q
@@ -89,7 +103,7 @@ class PulseBuilder():
     def __init__(self, calibration):
         self._calibration = calibration
         self._waveform_resolution = \
-            calibration["waveform_resolution"]
+            calibration.get_radiation_parameters()["waveform_resolution"]
         self._pulse_seq = PulseSequence(self._waveform_resolution)
 
     def add_zero_pulse(self, duration):
@@ -101,7 +115,7 @@ class PulseBuilder():
         duration: float, ns
             Duration of the pulse in nanoseconds
         """
-        offset = self._calibration["zero_offset"]
+        offset = self._calibration.get_optimization_results()[0]["dc_offsets"][0]
         N_time_steps = int(round(duration / self._waveform_resolution))
         self._pulse_seq.append_pulse(zeros(N_time_steps + 1) + offset)
         return self
@@ -122,7 +136,7 @@ class PulseBuilder():
             Specifies the smoothing coefficient for tanh window, 0 for no
             smoothing
         """
-        offset = self._calibration["zero_offset"] + offset_voltage
+        offset = self._calibration.get_optimization_results()[0]["dc_offsets"][0] + offset_voltage
         N_time_steps = int(round(duration / self._waveform_resolution))
 
         if tanh_sigma == 0:
@@ -135,7 +149,7 @@ class PulseBuilder():
                 (tanh(start) + 1) / 2 * (tanh(end) + 1) / 2 * \
                 offset_voltage
             waveform -= min(abs(waveform)) * sign(offset_voltage)
-            waveform += self._calibration["zero_offset"]
+            waveform += offset
 
         self._pulse_seq.append_pulse(waveform)
         return self
@@ -205,7 +219,7 @@ class IQPulseBuilder():
             Make sure that the radiation parameters of this calibration are in match with your actual settings
         """
 
-        self._iqmx_calibration = iqmx_calibration
+        self._iqmx_calibration = deepcopy(iqmx_calibration)
         self._waveform_resolution = \
             iqmx_calibration.get_radiation_parameters()["waveform_resolution"]
         self._pulse_seq_I = PulseSequence(self._waveform_resolution)
@@ -340,11 +354,11 @@ class IQPulseBuilder():
         global_phase = 0
         pulse_ax = pulse_string[1]
         pulse_angle = eval(pulse_string.replace(pulse_ax, "1"))  # in pi's
-        # if window == "rectangular":
-        # pulse_time = pulse_duration*abs(pulse_angle)
-        # else:
-        pulse_time = pulse_duration
-        pulse_amplitude = abs(pulse_angle) * pulse_amplitude
+        if window is "rectangular" or pulse_ax is "I":
+            pulse_time = pulse_duration*abs(pulse_angle)
+        else:
+            pulse_time = pulse_duration
+            pulse_amplitude = abs(pulse_angle) * pulse_amplitude
         pulse_phase = pi / 2 * (1 - sign(pulse_angle)) + global_phase
         if pulse_ax == "I":
             self.add_zero_pulse(pulse_time)
@@ -362,6 +376,47 @@ class IQPulseBuilder():
         else:
             raise ValueError("Axis of %s is not allowed. Check your sequence." % (pulse_str))
         return self
+
+    # """
+    # for 1 AWG and 2 qubits SHAMIL
+    # """
+    # def add_sine_pulse_from_string2(self, pulse_string, pulse_duration,
+    #                                pulse_amplitude, window='gaussian'):
+    #     """
+    #     pulse_duration is pi_pulse_duraton for rectangular window
+    #     and is arbitrary for gaussian window.
+    #
+    #     pulse_amplitude is pi_pulse_amplitude for gaussian window and
+    #     is arbitrary for rectangular window.
+    #     """
+    #     global_phase = 0
+    #     pulse_ax = pulse_string[1]
+    #     pulse_angle = eval(pulse_string.replace(pulse_ax, "1"))  # in pi's
+    #     # if window == "rectangular":
+    #     # pulse_time = pulse_duration*abs(pulse_angle)
+    #     # else:
+    #     pulse_time = pulse_duration
+    #     if( pulse_string.endswith("/2") ):
+    #         pulse_time /= 2
+    #
+    #     pulse_amplitude = abs(pulse_angle) * pulse_amplitude
+    #     pulse_phase = pi / 2 * (1 - sign(pulse_angle)) + global_phase
+    #     if pulse_ax == "I":
+    #         self.add_zero_pulse(1) # 1 ns in case waveform will be fucked up
+    #     elif pulse_ax == "X":
+    #         self.add_sine_pulse(duration=pulse_time, phase=pulse_phase,
+    #                             amplitude=pulse_amplitude,
+    #                             window=window)
+    #     elif pulse_ax == "Y":
+    #         self.add_sine_pulse(duration=pulse_time, phase=pulse_phase + pi / 2,
+    #                             amplitude=pulse_amplitude,
+    #                             window=window)
+    #     elif pulse_ax == "Z":
+    #         global_phase += pi * pulse_angle
+    #         pulse_time = 0
+    #     else:
+    #         raise ValueError("Axis of %s is not allowed. Check your sequence." % (pulse_str))
+    #     return self
 
     def add_zero_until(self, total_duration):
         """
@@ -501,14 +556,18 @@ class IQPulseBuilder():
             pulse_sequence_parameters["half_pi_pulse_duration"]
         echo_delay = \
             pulse_sequence_parameters["echo_delay"]
+        window = \
+            pulse_sequence_parameters["modulating_window"]
+        amplitude = \
+            pulse_sequence_parameters["excitation_amplitude"]
         exc_pb = pbs['q_pbs'][0]
         ro_pb = pbs['ro_pbs'][0]
         exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
-            .add_sine_pulse(half_pi_pulse_duration, 0) \
+            .add_sine_pulse(half_pi_pulse_duration, amplitude=amplitude, window=window) \
             .add_zero_pulse(echo_delay / 2) \
-            .add_sine_pulse(2 * half_pi_pulse_duration) \
+            .add_sine_pulse(half_pi_pulse_duration, amplitude=2*amplitude, window=window) \
             .add_zero_pulse(echo_delay / 2) \
-            .add_sine_pulse(half_pi_pulse_duration) \
+            .add_sine_pulse(half_pi_pulse_duration, amplitude=amplitude, window=window) \
             .add_zero_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
@@ -920,17 +979,96 @@ class IQPulseBuilder():
                 'ro_seqs': [ro_pb.build()]}
 
     @staticmethod
-    def build_vacuum_ramsey_oscillations_sequences(pulse_sequence_parameters, **pbs):
+    def build_rabi_comparison_sequences0(pulse_sequence_parameters, **pbs):
         awg_trigger_reaction_delay = \
             pulse_sequence_parameters["awg_trigger_reaction_delay"]
         readout_duration = \
             pulse_sequence_parameters["readout_duration"]
         repetition_period = \
             pulse_sequence_parameters["repetition_period"]
-        pi_pulse1_duration = \
-            pulse_sequence_parameters["pi_pulse1_duration"]
         pi_pulse2_duration = \
             pulse_sequence_parameters["pi_pulse2_duration"]
+        rabi_pulse_duration = \
+            pulse_sequence_parameters["rabi_pulse_duration"]
+        window = \
+            pulse_sequence_parameters["modulating_window"]
+        amplitude = \
+            pulse_sequence_parameters["excitation_amplitude"]
+        padding = \
+            pulse_sequence_parameters["padding"]
+        exc_pb1 = pbs['q_pbs'][0][0]
+        exc_pb2 = pbs['q_pbs'][0][1]
+        ro_pb = pbs['ro_pbs'][0]
+
+        exc_ps1 = exc_pb1.add_zero_pulse(awg_trigger_reaction_delay).build()
+        exc_ps2 = exc_pb2.add_sine_pulse(rabi_pulse_duration) \
+            .add_zero_pulse(padding) \
+            .add_zero_pulse(readout_duration) \
+            .add_zero_until(repetition_period).build()
+
+        exc_ps = exc_ps1 + exc_ps2
+
+        ro_pb.add_zero_pulse(rabi_pulse_duration + padding) \
+            .add_dc_pulse(readout_duration) \
+            .add_zero_until(repetition_period)
+
+        return {'q_seqs': [exc_ps],
+                'ro_seqs': [ro_pb.build()]}
+
+    @staticmethod
+    def build_rabi_comparison_sequences1(pulse_sequence_parameters, **pbs):
+        awg_trigger_reaction_delay = \
+            pulse_sequence_parameters["awg_trigger_reaction_delay"]
+        readout_duration = \
+            pulse_sequence_parameters["readout_duration"]
+        repetition_period = \
+            pulse_sequence_parameters["repetition_period"]
+        pi_pulse2_duration = \
+            pulse_sequence_parameters["pi_pulse2_duration"]
+        rabi_pulse_duration = \
+            pulse_sequence_parameters["rabi_pulse_duration"]
+        window = \
+            pulse_sequence_parameters["modulating_window"]
+        amplitude = \
+            pulse_sequence_parameters["excitation_amplitude"]
+        padding = \
+            pulse_sequence_parameters["padding"]
+        exc_pb1 = pbs['q_pbs'][0][0]
+        exc_pb2 = pbs['q_pbs'][0][1]
+        ro_pb = pbs['ro_pbs'][0]
+
+        exc_ps1 = exc_pb1.add_zero_pulse(awg_trigger_reaction_delay) \
+            .add_sine_pulse(pi_pulse2_duration,
+                            amplitude=amplitude, window=window) \
+            .add_zero_pulse(padding).build()
+        exc_ps2 = exc_pb2.add_sine_pulse(rabi_pulse_duration) \
+            .add_zero_pulse(padding) \
+            .add_zero_pulse(readout_duration) \
+            .add_zero_until(repetition_period).build()
+
+        exc_ps = exc_ps1 + exc_ps2
+
+        ro_pb.add_zero_pulse(pi_pulse2_duration + padding + rabi_pulse_duration + padding) \
+            .add_dc_pulse(readout_duration) \
+            .add_zero_until(repetition_period)
+
+        return {'q_seqs': [exc_ps],
+                'ro_seqs': [ro_pb.build()]}
+
+    @staticmethod
+    def build_vacuum_ramsey_oscillations_sequences(pulse_sequence_parameters, **pbs):
+        awg_trigger_reaction_delay_z = \
+            pulse_sequence_parameters["awg_trigger_reaction_delay_z"]
+        awg_trigger_reaction_delay_ro = \
+            pulse_sequence_parameters["awg_trigger_reaction_delay_ro"]
+        readout_duration = \
+            pulse_sequence_parameters["readout_duration"]
+        repetition_period = \
+            pulse_sequence_parameters["repetition_period"]
+        pi_pulse1_duration = \
+            pulse_sequence_parameters["pi_pulse_duration_osc"]
+        pi_pulse2_duration = \
+            pulse_sequence_parameters["pi_pulse_duration_control"]
         window = \
             pulse_sequence_parameters["modulating_window"]
         z_pulse_offset_voltage = \
@@ -939,8 +1077,8 @@ class IQPulseBuilder():
             pulse_sequence_parameters["interaction_duration"]
         padding = \
             pulse_sequence_parameters["padding"]
-        amplitude = \
-            pulse_sequence_parameters["excitation_amplitude"]
+        amplitudes = \
+            pulse_sequence_parameters["pi_pulse_amplitudes"]
         z_smoothing_coefficient = \
             pulse_sequence_parameters["z_smoothing_coefficient"]
         exc_pb_cal1 = pbs['q_pbs'][0][0]
@@ -949,24 +1087,27 @@ class IQPulseBuilder():
         z_pb = pbs['q_z_pbs'][0]
 
 
-        exc_ps1 = exc_pb_cal2.add_zero_pulse(awg_trigger_reaction_delay) \
+        exc_ps1 = exc_pb_cal2.add_zero_pulse(awg_trigger_reaction_delay_z) \
             .add_sine_pulse(pi_pulse2_duration) \
             .add_zero_pulse(padding).build()
         exc_ps2 = exc_pb_cal1.add_sine_pulse(0.5 * pi_pulse1_duration, 0,
-                                             amplitude=amplitude, window=window) \
+                                             amplitude=amplitudes[0], window=window) \
             .add_zero_pulse(2*padding + z_pulse_duration) \
             .add_sine_pulse(0.5 * pi_pulse1_duration, 0,
-                            amplitude=amplitude, window=window) \
+                            amplitude=amplitudes[0], window=window) \
             .add_zero_until(repetition_period).build()
 
         exc_ps = exc_ps1 + exc_ps2
 
-        z_pb.add_zero_pulse(pi_pulse2_duration + 0.5 * pi_pulse1_duration + padding) \
+        z_pb.add_zero_pulse(pi_pulse2_duration + padding +  0.5 * pi_pulse1_duration + padding) \
             .add_rect_pulse(z_pulse_duration, z_pulse_offset_voltage,
                             z_smoothing_coefficient) \
             .add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(pi_pulse2_duration + 0.5 * pi_pulse1_duration + padding + z_pulse_duration + padding + 0.5 * pi_pulse1_duration) \
+        ro_trigger_compensation = awg_trigger_reaction_delay_z - awg_trigger_reaction_delay_ro
+        ro_pb.add_zero_pulse(pi_pulse2_duration + padding + 0.5 * pi_pulse1_duration + \
+                             padding + z_pulse_duration + padding + 0.5 * pi_pulse1_duration+padding + \
+                             ro_trigger_compensation) \
             .add_dc_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
@@ -987,6 +1128,7 @@ class IQPulseBuilder():
         TODO
         Synchronized pulse sequence for 2 qubits local excitations generators and one joint readout
         """
+
         awg_trigger_reaction_delay = \
             pulse_sequence_parameters["awg_trigger_reaction_delay"]
         readout_duration = \
@@ -1005,6 +1147,7 @@ class IQPulseBuilder():
 
         exc_pbs = pbs['q_pbs']
         ro_pb = pbs['ro_pbs'][0]
+
         exc_pbs[0].add_zero_pulse(awg_trigger_reaction_delay) \
             .add_sine_pulse(excitation_duration, 0, amplitude=amplitude_1, window=window) \
             .add_zero_pulse(readout_duration) \
@@ -1044,6 +1187,8 @@ class IQPulseBuilder():
         if 'excitation_amplitude_2' in pulse_sequence_parameters.keys():
             amplitude_2 = \
                 pulse_sequence_parameters["excitation_amplitude_2"]
+        readout_offset_voltage = \
+            pulse_sequence_parameters["readout_offset_voltage"]
         pulses_padding = \
             pulse_sequence_parameters["pulses_padding"]
         ro_padding = \
@@ -1051,22 +1196,30 @@ class IQPulseBuilder():
 
         exc_pbs = pbs['q_pbs']
         ro_pb = pbs['ro_pbs'][0]
+        z_pb = pbs['q_z_pbs'][0]
 
+        exc_pbs[0][1]._iqmx_calibration._dc_offsets = array([0, 0])
+        exc_pbs[0][1]._iqmx_calibration._if_offsets = array([0, 0])
         exc_pbs[0][0].add_zero_pulse(awg_trigger_reaction_delay) \
             .add_sine_pulse(excitation_duration, 0, amplitude=amplitude_1, window=window) \
-            .add_zero_pulse(pulses_padding)
-
-        exc_pbs[0][1].add_sine_pulse(excitation_duration, 0, amplitude=amplitude_2, window=window) \
-            .add_zero_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(2*excitation_duration + pulses_padding + ro_padding) \
+        exc_pbs[0][1].add_zero_pulse(awg_trigger_reaction_delay)\
+            .add_sine_pulse(excitation_duration, 0, amplitude=amplitude_2, window=window) \
+            .add_zero_until(repetition_period)
+
+        ro_pb.add_zero_pulse(excitation_duration + ro_padding) \
             .add_dc_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
+        z_pb.add_zero_pulse(excitation_duration + ro_padding) \
+            .add_rect_pulse(readout_duration, readout_offset_voltage, 1) \
+            .add_zero_until(repetition_period)
 
-        return {'q_seqs': [exc_pbs[0][0].build() + exc_pbs[0][1].build()],
-                'ro_seqs': [ro_pb.build()]}
+
+        return {'q_seqs': [exc_pbs[0][0].build().direct_add(exc_pbs[0][1].build())],
+                'ro_seqs': [ro_pb.build()],
+                'q_z_seqs': [z_pb.build()]}
 
     @staticmethod
     def build_joint_tomography_pulse_sequences(pulse_sequence_parameters, **pbs):
@@ -1079,11 +1232,10 @@ class IQPulseBuilder():
             pulse_sequence_parameters["repetition_period"]
         tomo_delay = \
             pulse_sequence_parameters["tomo_delay"]
-        pulse_length = \
-            pulse_sequence_parameters["pulse_length"]
+        pi_pulse_lengths = \
+            pulse_sequence_parameters["pi_pulse_lengths"]
         window = \
             pulse_sequence_parameters["modulating_window"]
-
         tomo_rotations = \
             pulse_sequence_parameters["tomo_local_rotations"]
         prep_pulses = \
@@ -1111,17 +1263,149 @@ class IQPulseBuilder():
                                         exc_pbs[qubit], z_pbs[qubit],
                                         pulse_sequence_parameters,
                                         qubit=qubit)
-
             exc_pbs[qubit].add_zero_pulse(readout_duration) \
-                .add_zero_until(repetition_period)
+                          .add_zero_until(repetition_period)
             z_pbs[qubit].add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(prep_total_duration_max + tomo_delay + pulse_length) \
+        ro_pb.add_zero_pulse(prep_total_duration_max + tomo_delay + max(pi_pulse_lengths)) \
             .add_dc_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
         return {'q_seqs': [exc_pbs[0].build(), exc_pbs[1].build()],
                 'q_z_seqs': [z_pbs[0].build(), z_pbs[1].build()],
+                'ro_seqs': [ro_pb.build()]}
+
+    # version for single AWG and 2 qubits
+    @staticmethod
+    def build_joint_tomography_pulse_sequences2(pulse_sequence_parameters, **pbs):
+        # TODO New, check required
+        awg_trigger_reaction_delay = \
+            pulse_sequence_parameters["awg_trigger_reaction_delay"]
+        readout_duration = \
+            pulse_sequence_parameters["readout_duration"]
+        repetition_period = \
+            pulse_sequence_parameters["repetition_period"]
+        tomo_delay = \
+            pulse_sequence_parameters["tomo_delay"]
+        tomo_rotations = \
+            pulse_sequence_parameters["tomo_local_rotations"]
+        prep_pulses = \
+            pulse_sequence_parameters["prep_pulses"]  # Tuple of arrays with strings of pulses, i.e. '+X/2'
+        # ( [qubit_1_preparation_list], [qubit_2_preparation_list], ...)
+        padding = pulse_sequence_parameters["padding"]
+
+        exc_pb1 = pbs['q_pbs'][0][0]
+        exc_pb2 = pbs["q_pbs"][0][1]
+        exc_pb2._iqmx_calibration._dc_offsets = array([0, 0])
+        exc_pb2._iqmx_calibration._if_offsets = array([0, 0])
+
+        z_pb = pbs['q_z_pbs'][0]
+        ro_pb = pbs['ro_pbs'][0]
+        prep_total_duration = 0
+        tomo_total_duration = 0
+
+        # prep for qubit 0
+        exc_pb1.add_zero_pulse(awg_trigger_reaction_delay)
+        exc_pb2.add_zero_pulse(awg_trigger_reaction_delay)
+
+        for com in prep_pulses[0]:
+            duration = build_1q_pulse_from_command(com, exc_pb1, z_pb, pulse_sequence_parameters, qubit=0)
+            exc_pb2.add_zero_pulse(duration)
+            prep_total_duration += duration
+
+            # prep for qubit 1
+        for com in prep_pulses[1]:
+            duration = build_1q_pulse_from_command(com, exc_pb2, z_pb, pulse_sequence_parameters, qubit=1)
+            exc_pb1.add_zero_pulse(duration)
+            prep_total_duration += duration
+
+        if pulse_sequence_parameters["gate_type"] is "SWAP":
+            z_pulse_offset_voltage = \
+                pulse_sequence_parameters["z_pulse_offset_voltage"]
+            z_dur = pulse_sequence_parameters["z_pulse_duration"]
+            exc_pb1.add_zero_pulse(z_dur + 2*padding)
+            exc_pb2.add_zero_pulse(z_dur + 2*padding)
+            z_smoothing_coefficient = pulse_sequence_parameters["z_smoothing_coefficient"]
+            z_pb.add_zero_pulse(padding)\
+                .add_rect_pulse(z_dur, offset_voltage=z_pulse_offset_voltage,
+                                tanh_sigma=z_smoothing_coefficient)\
+                .add_zero_pulse(padding)
+            prep_total_duration += z_dur + 2*padding
+
+        exc_pb1.add_zero_pulse(tomo_delay)
+        exc_pb2.add_zero_pulse(tomo_delay)
+
+        # tomo pulses for qubit 0
+
+        duration = build_1q_pulse_from_command(tomo_rotations[0], exc_pb1, z_pb, pulse_sequence_parameters, qubit=0)
+        exc_pb2.add_zero_pulse(duration)
+        tomo_total_duration += duration
+
+        # tomo pulses for qubit 1
+        duration = build_1q_pulse_from_command(tomo_rotations[1], exc_pb2, z_pb, pulse_sequence_parameters, qubit=1)
+        exc_pb1.add_zero_pulse(duration)
+        tomo_total_duration += duration
+
+        ro_pb.add_zero_pulse(prep_total_duration + tomo_total_duration + tomo_delay) \
+            .add_dc_pulse(readout_duration) \
+            .add_zero_until(repetition_period)
+
+        exc_pb1.add_zero_until(repetition_period)
+        exc_pb2.add_zero_until(repetition_period)
+
+        pulse_seq = exc_pb1.build().direct_add(exc_pb2.build())
+
+        return {'q_seqs': [pulse_seq],
+                'q_z_seqs': [z_pb.build()],
+                'ro_seqs': [ro_pb.build()]}
+
+    @staticmethod
+    def build_dispersive_shift_joint_sequences(pulse_sequence_parameters, **pbs):
+
+        awg_trigger_reaction_delay = \
+            pulse_sequence_parameters["awg_trigger_reaction_delay"]
+        readout_duration = \
+            pulse_sequence_parameters["readout_duration"]
+        repetition_period = \
+            pulse_sequence_parameters["repetition_period"]
+        prep_pulses = \
+            pulse_sequence_parameters["prep_pulses"]
+
+        exc_pb1 = pbs['q_pbs'][0][0]
+        exc_pb2 = pbs["q_pbs"][0][1]
+        exc_pb2._iqmx_calibration._dc_offsets = array([0, 0])
+        exc_pb2._iqmx_calibration._if_offsets = array([0, 0])
+
+        z_pb = pbs['q_z_pbs'][0]
+        ro_pb = pbs['ro_pbs'][0]
+        prep_total_duration = 0
+
+        # prep for qubit 0
+        exc_pb1.add_zero_pulse(awg_trigger_reaction_delay)
+        exc_pb2.add_zero_pulse(awg_trigger_reaction_delay)
+
+        for com in prep_pulses[0]:
+            duration = build_1q_pulse_from_command(com, exc_pb1, z_pb, pulse_sequence_parameters, qubit=0)
+            exc_pb2.add_zero_pulse(duration)
+            prep_total_duration += duration
+
+            # prep for qubit 1
+        for com in prep_pulses[1]:
+            duration = build_1q_pulse_from_command(com, exc_pb2, z_pb, pulse_sequence_parameters, qubit=1)
+            exc_pb1.add_zero_pulse(duration)
+            prep_total_duration += duration
+
+        exc_pb1.add_zero_until(repetition_period)
+        exc_pb2.add_zero_until(repetition_period)
+
+        pulse_seq = exc_pb1.build().direct_add(exc_pb2.build())
+
+        ro_pb.add_zero_pulse(prep_total_duration) \
+            .add_dc_pulse(readout_duration) \
+            .add_zero_until(repetition_period)
+
+        return {'q_seqs': [pulse_seq],
+                "q_z_seqs":[z_pb.build()],
                 'ro_seqs': [ro_pb.build()]}
 
     @staticmethod
@@ -1184,26 +1468,27 @@ class IQPulseBuilder():
 
 def build_1q_pulse_from_command(command, exc_pb, z_pb, pulse_sequence_parameters,
                                 qubit=0):
-    pulse_length = pulse_sequence_parameters["pulse_length"]
+    pi_pulse_length = pulse_sequence_parameters["pi_pulse_lengths"][qubit]
     pulse_pi_amplitude = pulse_sequence_parameters["pulse_pi_amplitudes"][qubit]
     window = pulse_sequence_parameters["modulating_window"]
     padding = pulse_sequence_parameters["padding"]
 
-    z_pulse_offset_voltage = pulse_sequence_parameters["z_pulse_offset_voltages"][qubit]
-    z_pulse_duration = pulse_sequence_parameters["z_pulse_duration"]
-    z_smoothing_coefficient = pulse_sequence_parameters["z_smoothing_coefficient"]
+    # z_pulse_offset_voltage = pulse_sequence_parameters["z_pulse_offset_voltages"][qubit]
+    # z_pulse_duration = pulse_sequence_parameters["z_pulse_duration"]
+    # z_smoothing_coefficient = pulse_sequence_parameters["z_smoothing_coefficient"]
 
     total_duration = 0
-    if command[1] != "Z":
-        exc_pb.add_sine_pulse_from_string(command, pulse_length,
-                                          pulse_pi_amplitude, window=window)
-        exc_pb.add_zero_pulse(padding)
-        z_pb.add_zero_pulse(pulse_length + padding)
-        total_duration += pulse_length + padding
-    elif command[1] == "Z":
-        z_pb.add_rect_pulse(z_pulse_duration, z_pulse_offset_voltage,
-                            z_smoothing_coefficient)
-        z_pb.add_zero_pulse(padding)
-        exc_pb.add_zero_pulse(z_pulse_duration + padding)
-        total_duration += z_pulse_duration + padding
+    exc_pb.add_sine_pulse_from_string(command, pi_pulse_length,
+                                      pulse_pi_amplitude, window=window)
+    exc_pb.add_zero_pulse(padding)
+    pulse_ax = command[1]
+    pulse_angle = abs(eval(command.replace(pulse_ax, "1")))
+
+    if window is "rectangular" or pulse_ax is "I":
+        z_pb.add_zero_pulse(pi_pulse_length*pulse_angle + padding)
+        total_duration += pi_pulse_length*pulse_angle + padding
+    else:
+        z_pb.add_zero_pulse(pi_pulse_length + padding)
+        total_duration += pi_pulse_length + padding
+
     return total_duration

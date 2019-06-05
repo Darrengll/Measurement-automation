@@ -55,22 +55,42 @@ class Keysight_DSOX3034(Instrument):
             flags=Instrument.FLAG_GETSET,
             minval=2, maxval=65536)
 
+        Channel.ALL = [Channel.ONE, Channel.TWO, Channel.THREE, Channel.FOUR]
+        self.reinit_device()
+
+
+    def set_trigger(self, channel, thres, rising_edge=True):
+        if( rising_edge is True ):
+            self._visainstrument.write("TRIGger:SWEep NORMAL")
+            self._visainstrument.write(":TRIGger:MODE EDGE")
+            self._visainstrument.write(":TRIGger:EDGE:SOURce " + channel.value)
+            self._visainstrument.write(":TRIGger:EDGE:LEVel {0:.3f}".format(thres))
+            self._visainstrument.write(":TRIGger:EDGE:SLOPe POSitive")
+
+
+    def preset(self):
+        # self._visainstrument.write("*CLS")
+        self._visainstrument.write("*RST")
+
+    def reinit_device(self):
+        self.preset()
         self._visainstrument.write(":WAV:FORMat WORD")
-        self._vsteps = 65536 # the discretization for the WORD format
+        self._vsteps = 65536  # the discretization for the WORD format
         self._visainstrument.write(":WAV:UNSIGNED 0")
         self._visainstrument.write(":TIMebase:REFerence LEFT")
-
-        Channel.ALL = [Channel.ONE, Channel.TWO, Channel.THREE, Channel.FOUR]
         self.set_offset(0, *Channel.ALL)
 
-    def digitize(self):
+    def digitize(self, nonblocking=False):
         """
         Initiates a measurement, blocks until measurement finished.
         """
-        self._visainstrument.timeout = 100e3
-        self._visainstrument.write(":DIGitize")
-        self._visainstrument.query("*OPC?")
-        self._visainstrument.timeout = 1000
+        if( nonblocking is False ):
+            self._visainstrument.timeout = 100e3
+            self._visainstrument.write(":DIGitize")
+            self._visainstrument.query("*OPC?")
+            self._visainstrument.timeout = 1000
+        else:
+            self._visainstrument.write(":DIGitize")
 
     def get_data(self, *channels):
         """

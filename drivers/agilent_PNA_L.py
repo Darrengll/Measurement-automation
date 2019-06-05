@@ -1,4 +1,4 @@
-# Agilent_PNA_L.py
+# agilent_PNA_L.py
 # Gleb Fedorov <vdrhtc@gmail.com>
 # Derived from Agilent PNA X made by Marcus Jerger, 2012
 # Derived from Anritsu_VNA.py hacked by Hannes Rotzinger hannes.rotzinger@kit.edu, 2011

@@ -20,8 +20,11 @@ class VacuumRabiOscillations(VNATimeResolvedDispersiveMeasurement1D):
 
 class VacuumRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DResult):
 
-    def _model(self, t, A_r, A_i, T_R, Omega_R, offset_r, offset_i):
-        return -(A_r + 1j * A_i) * exp(-1 / T_R * t) * (cos(Omega_R * t) + 1) + offset_r + offset_i * 1j
+    def _model(self, t, A_r, A_i, T_R, T_1_ast, Omega_R, phi, offset_r, offset_i,
+               exp_offset_r, exp_offset_i):
+        return -(A_r + 1j * A_i) * exp(-1 / T_R * t) * (cos(Omega_R * t + phi) + 1) + \
+               offset_r + offset_i * 1j + \
+               (1 - np.exp(-1 / T_1_ast * t)) * (exp_offset_r + 1j * exp_offset_i)
 
     def _generate_fit_arguments(self, x, data):
         amp_r, amp_i = ptp(real(data)) / 2, ptp(imag(data)) / 2
@@ -35,20 +38,23 @@ class VacuumRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DResult)
         max_frequency = 1 / time_step / 2 / 5
         min_frequency = 0
         frequency = random.random(1) * max_frequency
-        p0 = [amp_r, amp_i, 1, frequency * 2 * pi, offset_r, offset_i]
+        p0 = [amp_r, amp_i, 1, 1, frequency * 2 * pi, 0, offset_r,
+              offset_i, offset_i, offset_r]
 
-        bounds = ([-abs(amp_r) * 1.5, -abs(amp_i) * 1.5, 0.1,
-                   min_frequency * 2 * pi, -10, -10],
-                  [abs(amp_r) * 1.5, abs(amp_i) * 1.5, 100,
-                   max_frequency * 2 * pi, 10, 10])
+        bounds = ([-abs(amp_r) * 1.5, -abs(amp_i) * 1.5, 0.1, 0.1,
+                   min_frequency * 2 * pi, -pi, -10, -10, -10, -10],
+                  [abs(amp_r) * 1.5, abs(amp_i) * 1.5, 100, 100,
+                   max_frequency * 2 * pi, pi, 10, 10, 10, 10])
         return p0, bounds
 
     def _generate_annotation_string(self, opt_params, err):
-        return "$T_R=%.2f \pm %.2f \mu$s\n$\Omega_R/2\pi = %.2f \pm %.2f$ MHz" % \
-               (opt_params[2], err[2], opt_params[3] / 2 / pi, err[3] / 2 / pi)
+        return "$T_R=%.2f \pm %.2f \mu$s\n$\Omega_R/2\pi = %.2f \pm %.2f$ MHz\n$T_1^*=%.2f \pm %.2f$" % \
+               (opt_params[2], err[2],
+                opt_params[4], err[4],
+                opt_params[3] / 2 / pi, err[3] / 2 / pi,)
 
     def get_pi_pulse_duration(self):
-        return 1 / (self._fit_params[3] / 2 / pi) / 2
+        return 1 / (self._fit_params[3]) / 2
 
     def get_basis(self):
         fit = self._fit_params

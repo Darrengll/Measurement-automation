@@ -46,8 +46,8 @@ class DispersiveRamseyResult(VNATimeResolvedDispersiveMeasurement1DResult):
             (opt_params[2], err[2], opt_params[3]/2/pi, err[3]/2/pi)
 
 class DispersiveRamseyResultDrift(DispersiveRamseyResult):
-    def _model(self, t, A_r, A_i, T_2_ast, Delta_Omega, offset_r,
-               offset_i, phase, T_1_ast, exp_offset_r, exp_offset_i):
+    def _model(self, t, A_r, A_i, T_2_ast, Delta_Omega, offset_r, offset_i, phase,
+               T_1_ast, exp_offset_r, exp_offset_i):
         value = (A_r+1j*A_i)*exp(-(1/T_2_ast+1/T_1_ast)*t)*cos(Delta_Omega*t+phase) + \
                 offset_r+1j*offset_i + (1-np.exp(-1/T_1_ast*t))*(exp_offset_r + 1j*exp_offset_i)
         return value

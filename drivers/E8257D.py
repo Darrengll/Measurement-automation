@@ -125,10 +125,10 @@ class MXG(Instrument):
         return output
 
     def set_power(self, power_dBm):
-        if (power_dBm >= -130) & (power_dBm <= 15):
+        if (power_dBm >= -130) & (power_dBm <= 19):
             self.write(":SOURce:POWer {0}DBM".format(power_dBm))
         else:
-            print("Error: power must be between -130 and 15 dBm")
+            print("Error: power must be between -130 and 19 dBm")
 
     def get_power(self):
         bla = self.query(":SOURce:POWer?")

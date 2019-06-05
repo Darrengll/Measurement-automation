@@ -15,7 +15,7 @@ from lib2.TwoToneSpectroscopy import *
 from lib2.fulaut.qubit_spectra import transmon_spectrum
 from loggingserver import LoggingServer
 
-from drivers.KeysightAWG import *
+from drivers.keysightAWG import *
 from drivers.Tektronix_AWG5014 import *
 from drivers.IQAWG import *
 from drivers.Agilent_EXA import *

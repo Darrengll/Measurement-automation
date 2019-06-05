@@ -10,3 +10,4 @@ log/
 .idea/*
 Git token
 spectrum_code
+*.pdf

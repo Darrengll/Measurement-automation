@@ -25,7 +25,9 @@ class VNATimeResolvedDispersiveMeasurement1D(VNATimeResolvedDispersiveMeasuremen
         dev_params['vna'][0]["power"] = dev_params['ro_awg'][0]["calibration"] \
             .get_radiation_parameters()["lo_power"]
 
-        super().set_fixed_parameters(pulse_sequence_parameters, detect_resonator=detect_resonator, plot_resonator_fit=plot_resonator_fit,
+        super().set_fixed_parameters(pulse_sequence_parameters,
+                                     detect_resonator=detect_resonator,
+                                     plot_resonator_fit=plot_resonator_fit,
                                      **dev_params)
 
     def set_swept_parameters(self, par_name, par_values):
@@ -76,8 +78,8 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
         except Exception as e:
             pass
             # this is silent due to the frequent exceptions thrown
-            print("VNATDM1D->_fit_complex_curve-> curve fit filed:", e)
-            print(p0,bounds)
+            # print("VNATDM1D->_fit_complex_curve-> curve fit filed:", e)
+            # print(p0,bounds)
             # raise e
         finally:
             try:
@@ -200,8 +202,9 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
 
 
 
-    def _plot_fit(self, axes):
-        self.fit(verbose=False)
+    def _plot_fit(self, axes, do_fit=True):
+        if do_fit:
+            self.fit(verbose=False)
         if self._fit_params is None:
             return
 

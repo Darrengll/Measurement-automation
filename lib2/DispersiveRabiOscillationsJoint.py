@@ -375,7 +375,7 @@ class DispersiveRabiOscillationsJointResult2(VNATimeResolvedDispersiveMeasuremen
         return p0, bounds
 
     def _generate_fit_arguments(self, x, data):  # TODO bounds
-        amp_r, amp_i = random.uniform(-1,1)*ptp(real(data)) / 2 + 0.01, random.uniform(-1,1)*ptp(imag(data)) / 2 + 0.01
+        amp_r, amp_i = ptp(real(data)) / 2 + 0.01, ptp(imag(data)) / 2 + 0.01
         time_step = x[1] - x[0]
         max_frequency = 1 / time_step / 2 / 5
         min_frequency = 1e-6
@@ -385,10 +385,10 @@ class DispersiveRabiOscillationsJointResult2(VNATimeResolvedDispersiveMeasuremen
         g = frequency / 10
 
         p0_dict = OrderedDict(
-            [('b_II_r', amp_r), ( 'b_II_i', amp_i),
-            ('b_ZI_r', amp_r), ( 'b_ZI_i', amp_i),
-            ('b_IZ_r', amp_r), ( 'b_IZ_i', amp_i),
-            ('b_ZZ_r', amp_r), ( 'b_ZZ_i', amp_i),
+            [('b_II_r', random.uniform(-1,1)*amp_r), ( 'b_II_i',  random.uniform(-1,1)*amp_i),
+            ('b_ZI_r', random.uniform(-1,1)*amp_r), ( 'b_ZI_i', random.uniform(-1,1)*amp_i),
+            ('b_IZ_r', random.uniform(-1,1)*amp_r), ( 'b_IZ_i', random.uniform(-1,1)*amp_i),
+            ('b_ZZ_r', random.uniform(-1,1)*amp_r), ( 'b_ZZ_i', random.uniform(-1,1)*amp_i),
             ('g_1_q1', g), ('g_2_q1', g), ('omega_r_q1', frequency),
             ('g_1_q2', g), ('g_2_q2', g), ('omega_r_q2', frequency)]
         )
@@ -422,9 +422,9 @@ class DispersiveRabiOscillationsJointResult2(VNATimeResolvedDispersiveMeasuremen
                 if key.startswith('g'):
                     bounds[0][i] = 0.6 * value
                     bounds[1][i] = 1.4 * value
-                else:
-                    bounds[0][i] = 0.98*value
-                    bounds[1][i] = 1.02*value
+                elif key.startswith('o'):
+                    bounds[0][i] = 0.7*value
+                    bounds[1][i] = 1.3*value
 
         return p0, bounds
 
@@ -434,10 +434,10 @@ class DispersiveRabiOscillationsJointResult2(VNATimeResolvedDispersiveMeasuremen
                '$T_{q2} = %.2f \pm %.2f \mu$s\n' % (2 / (opt_params[-3] + opt_params[-2]), err[2]) +\
                '$\Omega_{q1}/2\pi = %.2f \pm %.2f$ MHz\n' % (opt_params[-4]/2/pi, err[-4]/2/pi) +\
                '$\Omega_{q2}/2\pi = %.2f \pm %.2f$ MHz\n' % (opt_params[-1] / 2 / pi, err[-1] / 2 / pi) + \
-               '$\\beta_{II}-1 = %.4f + %.4f i$\n' % (opt_params[0]-1, opt_params[1]) +\
-               '$\\beta_{ZI} = %.4f + %.4f i$\n' % (opt_params[2], opt_params[3]) +\
-               '$\\beta_{IZ} = %.4f + %.4f i$\n' % (opt_params[4], opt_params[5]) +\
-               '$\\beta_{ZZ} = %.4f + %.4f i$\n' % (opt_params[6], opt_params[7])
+               '$\\beta_{II}-1 = %.4g + %.4g i$\n' % (opt_params[0]-1, opt_params[1]) +\
+               '$\\beta_{ZI} = %.4g + %.4g i$\n' % (opt_params[2], opt_params[3]) +\
+               '$\\beta_{IZ} = %.4g + %.4g i$\n' % (opt_params[4], opt_params[5]) +\
+               '$\\beta_{ZZ} = %.4g + %.4g i$\n' % (opt_params[6], opt_params[7])
 
     def get_betas(self):
         return (self._fit_params[0] + 1j * self._fit_params[1],
