@@ -23,7 +23,7 @@ class Measurement:
     The class contains methods to help with the implementation of measurement classes.
 
     """
-    logger = LoggingServer.getInstance()
+    logger = LoggingServer.getInstance('')
     _actual_devices = {}
     _log = []
     _devs_dict = \
