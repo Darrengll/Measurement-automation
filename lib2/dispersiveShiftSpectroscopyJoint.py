@@ -1,18 +1,26 @@
 from lib2.VNATimeResolvedDispersiveMeasurement1D import *
 
 
-class DispersiveShiftSpectroscopyJoint(
-    VNATimeResolvedDispersiveMeasurement):
+class DispersiveShiftSpectroscopyJoint(VNATimeResolvedDispersiveMeasurement):
 
     def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
-        self._sequence_generator = IQPulseBuilder.build_dispersive_shift_joint_sequences
+        if( len(self._q_awg) == 1 ):  # signle awg for a signle mixer - multiplexing signal sequence generator
+            self._sequence_generator = IQPulseBuilder.build_dispersive_shift_joint_sequences_multiplex
+        else:  # 2 awg for 2 mixers
+            self._sequence_generator = IQPulseBuilder.build_dispersive_shift_joint_sequences
+
         self._measurement_result = \
             TimeResolvedDispersiveShiftSpectroscopyResult(name, sample_name)
 
+        self._frequencies = None  # list of frequencies readout is measured in
+        self._soft_avg = 1
+
     def set_fixed_parameters(self, pulse_sequence_parameters, **dev_params):
-        self._frequencies = linspace(*dev_params['vna'][0]["freq_limits"],
-                                     dev_params['vna'][0]["nop"])
+        self._frequencies = np.linspace(*dev_params['vna'][0]["freq_limits"], dev_params["vna"][0]["nop"])
+
+        if ("soft_avg" in dev_params['vna'][0]) and (dev_params['vna'][0]["soft_avg"] > 0):
+                self._soft_avg = int(dev_params["vna"][0]["soft_avg"])
 
         super().set_fixed_parameters(pulse_sequence_parameters, detect_resonator=False,
                                      **dev_params)
@@ -30,23 +38,37 @@ class DispersiveShiftSpectroscopyJoint(
     def _recording_iteration(self):
         vna = self._vna[0]
         q_lo = self._q_lo[0]
-        vna.avg_clear();
-        vna.prepare_for_stb();
-        vna.sweep_single();
-        vna.wait_for_stb();
-        data = vna.get_sdata()
+
+        for i in range(self._soft_avg):
+            vna.avg_clear();
+            vna.prepare_for_stb();
+            vna.sweep_single();
+            vna.wait_for_stb();
+
+            if i == 0:
+                data = vna.get_sdata()
+            else:
+                data += vna.get_sdata()
+
+            if self._ult_calib:
+                q_lo.set_output_state("OFF")
+                vna.avg_clear()
+                vna.prepare_for_stb()
+                vna.sweep_single()
+                vna.wait_for_stb()
+                bg = vna.get_sdata()
+                q_lo.set_output_state("ON")
+                if( i == 0 ):
+                    data_cal = data - bg
+                else:
+                    data_cal += data - bg
+
         if self._ult_calib:
-            q_lo.set_output_state("OFF")
-            vna.avg_clear()
-            vna.prepare_for_stb()
-            vna.sweep_single()
-            vna.wait_for_stb()
-            bg = vna.get_sdata()
-            q_lo.set_output_state("ON")
-            data_cal = data - bg
-            return data_cal
+            return data_cal/self._soft_avg
         else:
-            return data
+            return data/self._soft_avg
+
+
 
     def _prepare_measurement_result_data(self, parameter_names, parameters_values):
         measurement_data = \
@@ -125,16 +147,14 @@ class TimeResolvedDispersiveShiftSpectroscopyResult(VNATimeResolvedDispersiveMea
 
             for prep_idx, prep_pulses in enumerate(combinations):
                 if self._lines[idx_format][prep_idx] is None or not self._dynamic:
-
-                    #print(data[prep_idx])
-                    self._lines[idx_format][prep_idx] = ax.plot(mean(freqs),
-                                                                mean(data_digest(data[prep_idx])), '.',
+                    self._lines[idx_format][prep_idx] = ax.plot(freqs,
+                                                                data_digest(data[prep_idx]), '.',
                                                                 label = str(prep_pulses))[0]
 
                     ax.set_ylabel(data_name)
                 else:
-                    self._lines[idx_format][prep_idx].set_xdata(mean(freqs))
-                    self._lines[idx_format][prep_idx].set_ydata(mean(data_digest(data[prep_idx])))
+                    self._lines[idx_format][prep_idx].set_xdata(freqs)
+                    self._lines[idx_format][prep_idx].set_ydata(data_digest(data[prep_idx]))
                     ax.relim()
                     ax.autoscale_view()
 

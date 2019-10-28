@@ -35,6 +35,13 @@ class DispersiveRamseyResult(VNATimeResolvedDispersiveMeasurement1DResult):
               max(imag(data))-amp_i, 0)
         return p0, bounds
 
+    def get_basis(self):
+        fit = self._fit_params
+        A_r, A_i, offset_r, offset_i = fit[0], fit[1], fit[-2], fit[-1]
+        ground_state = -A_r+offset_r+1j*(-A_i+offset_i)
+        excited_state = A_r+offset_r+1j*(A_i+offset_i)
+        return array((ground_state, excited_state))
+
     def get_ramsey_frequency(self):
         return self._fit_params[3]/2/pi*1e6
 

@@ -40,7 +40,9 @@ try:
         part_done = (idx+1)/len(currents)
         elapsed_time = (dt.now()-start).total_seconds()
         estimated_time_left = elapsed_time/part_done - elapsed_time
-        print("\rTime left:", format_time_delta(estimated_time_left), "current %.3e, center frequency %.5e"%(current_val, center_freq), end=" %.2f %%"%((idx+1)/len(currents)*100), flush=True)
+        print("\rTime left:", format_time_delta(estimated_time_left),
+              "current %.3e, center frequency %.5e"%(current_val, center_freq),
+              end=" %.2f %%"%((idx+1)/len(currents)*100), flush=True)
 
     center_freq_estimator = interpolate(currents, center_freqs)
     plot(currents, center_freq_estimator(currents), "o")

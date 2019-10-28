@@ -12,6 +12,7 @@ from functools import reduce
 from operator import mul
 from matplotlib import pyplot as plt
 import sys
+import numpy as np
 from numpy import zeros, complex_
 
 from loggingserver import LoggingServer
@@ -22,7 +23,7 @@ class Measurement:
     The class contains methods to help with the implementation of measurement classes.
     Every new distinct measurement type is implemented as a child class of Measurement.
     """
-    logger = LoggingServer.getInstance("default_logger")  # HOTFIX by Shamil 07.04.2019 (name arg is now ought to be supplied)кr
+    logger = LoggingServer.getInstance("default_logger")  # HOTFIX by Shamil 07.04.2019 (name arg is now ought to be supplied)
     _actual_devices = {}
     _log = []
 
@@ -55,6 +56,7 @@ class Measurement:
          'awg2': [["AWG_Vadik", "AWG2"], [keysightAWG, "KeysightAWG"]],
          'awg3': [["AWG3"], [keysightAWG, "KeysightAWG"]],
          'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
+         # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
          'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
          'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
          'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
@@ -76,7 +78,7 @@ class Measurement:
 
         with _ added in front for a variable of a class
 
-        if key is not recognised doesn't returns a mistake
+        if key is not recognised, it doesn't return any mistake
 
         Parameters:
         --------------------
@@ -243,12 +245,9 @@ class Measurement:
         done_iterations = 0
         start_time = self._measurement_result.get_start_datetime()
 
-        parameters_values = \
-            [self._swept_pars[parameter_name][1] for parameter_name in par_names]
-        parameters_idxs = \
-            [list(range(len(self._swept_pars[parameter_name][1]))) for parameter_name in par_names]
-        raw_data_shape = \
-            [len(indices) for indices in parameters_idxs]
+        parameters_values = [self._swept_pars[parameter_name][1] for parameter_name in par_names]
+        parameters_idxs = [list(range(len(self._swept_pars[parameter_name][1]))) for parameter_name in par_names]
+        raw_data_shape = [len(indices) for indices in parameters_idxs]
         total_iterations = reduce(mul, raw_data_shape, 1)
 
         for idx_group, values_group in zip(product(*parameters_idxs), product(*parameters_values)):
@@ -275,12 +274,13 @@ class Measurement:
             avg_time = (dt.now() - start_time).total_seconds() / done_iterations
             time_left = self._format_time_delta(avg_time * (total_iterations - done_iterations))
 
-            formatted_values_group = \
-                '[' + "".join(["%s: %.2e, " % (par_names[idx], value)
-                               for idx, value in enumerate(values_group)])[:-2] + ']' \
-                    if isinstance(values_group[0], (float, int)) else \
-                    '[' + "".join(["%s: %s, " % (par_names[idx], str(value))
-                                   for idx, value in enumerate(values_group)])[:-2] + ']'
+            formatted_values_group = "["
+            for idx, value in enumerate(values_group):
+                if isinstance(value, (float, int, np.float)):
+                    formatted_values_group += "{}: {:.2f}, ".format(par_names[idx], value)
+                else:
+                    formatted_values_group += "{}: {}, ".format(par_names[idx], value)
+            formatted_values_group = formatted_values_group[:-2] + "]"
 
             print("\rTime left: " + time_left + ", %s" % formatted_values_group +
                   ", average cycle time: " + str(round(avg_time, 2)) + " s       ",
@@ -300,7 +300,6 @@ class Measurement:
         closing other stuff.
         May be overwritten in child-classes.
         -------
-
         """
         pass
 

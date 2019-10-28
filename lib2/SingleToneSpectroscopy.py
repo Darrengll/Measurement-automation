@@ -14,7 +14,7 @@ from time import sleep
 
 class SingleToneSpectroscopy(Measurement):
     """
-    Class provides all the necssary methods for single-tone spectrscopy with VNA.
+    Class provides all the necessary methods for single-tone spectroscopy with VNA.
 
     must-have keywords for constructor:
         vna = list of vector network analyzers classes or internal aliases
@@ -67,10 +67,8 @@ class SingleToneSpectroscopy(Measurement):
 
     def _finalize(self):
         for src in self._src:
-            if( hasattr(src, "set_voltage") ):  # voltage src
+            if((hasattr(src, "set_current")) and ( src._visainstrument.ask(":SOUR:FUNC?") == "VOLT\n" )):  # voltage src
                 src.set_voltage(0)
-            if( hasattr(src, "set_current") ):  # current src
-                src.set_current(0)
 
 
 class SingleToneSpectroscopyResult(MeasurementResult):
@@ -199,7 +197,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         if parameter_list[0] > parameter_list[-1]:
             parameter_list = parameter_list[::-1]
             s_data = s_data[::-1, :]
-        # s_data = self.remove_background('avg_cur')
+        #s_data = self.remove_background('avg_cur')
         return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
 
     def remove_delay(self):

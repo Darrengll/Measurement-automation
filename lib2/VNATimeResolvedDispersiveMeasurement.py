@@ -99,27 +99,34 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         vna.wait_for_stb()
         data = vna.get_sdata()
         if self._ult_calib:
-            q_lo.set_output_state("OFF")
+            for q_lo in self._q_lo:
+                q_lo.set_output_state("OFF")
             vna.avg_clear()
             vna.prepare_for_stb()
             vna.sweep_single()
             vna.wait_for_stb()
             bg = vna.get_sdata()
-            q_lo.set_output_state("ON")
+            for q_lo in self._q_lo:
+                q_lo.set_output_state("ON")
             mean_data = mean(data-bg)
         else:
             mean_data = mean(data)
+
         if self._basis is None:
             return mean_data
-        basis = self._basis
-        p_r = (real(mean_data) - real(basis[0])) / (real(basis[1]) - real(basis[0]))
-        p_i = (imag(mean_data) - imag(basis[0])) / (imag(basis[1]) - imag(basis[0]))
-        return p_r + 1j * p_i
+        else:
+            basis = self._basis
+            p_r = (real(mean_data) - real(basis[0])) / (real(basis[1]) - real(basis[0]))
+            p_i = (imag(mean_data) - imag(basis[0])) / (imag(basis[1]) - imag(basis[0]))
+            return p_r + 1j * p_i
 
     def _detect_resonator(self, vna_parameters, ro_calibration, q_calibration,
                           q_z_calibration=None, plot_resonator_fit=True, z_offset=None):
 
-        self._q_lo[0].set_output_state("OFF")
+        # turning all microwave OFF
+        for q_lo in self._q_lo:
+            q_lo.set_output_state("OFF")
+
         print("Detecting a resonator within provided frequency range of the VNA %s\
                     " % (str(vna_parameters["freq_limits"])))
 
@@ -132,24 +139,31 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         rep_period = self._pulse_sequence_parameters["repetition_period"]
         ro_duration = self._pulse_sequence_parameters["readout_duration"]
 
+        # making sure that readout is in pulse regime
         ro_pb = IQPulseBuilder(ro_calibration)
-        q_pb = IQPulseBuilder(q_calibration)
         self._ro_awg[0].output_pulse_sequence(ro_pb
                                               .add_dc_pulse(ro_duration).add_zero_until(rep_period).build())
-        self._q_awg[0].output_pulse_sequence(q_pb.add_zero_until(rep_period).build())
+
+        # turning all the AWG output OFF
+        q_pb = IQPulseBuilder(q_calibration)
+        for q_awg in self._q_awg:
+            q_awg.output_pulse_sequence(q_pb.add_zero_until(rep_period).build())
 
         # TODO: 'and (q_z_calibration is not None)'  hotfix by Shamil (below)
         # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
         # So hasattr(self, "_q_z_awg") is True
         # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
-        if hasattr(self, "_q_z_awg") and (q_z_calibration is not None):
+        if q_z_calibration is not None:
             q_z_pb = PulseBuilder(q_z_calibration)
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
 
         res_freq, res_amp, res_phase = super()._detect_resonator(plot_resonator_fit)
         print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % \
               (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
-        self._q_lo[0].set_output_state("ON")
+
+        # turning microwave back ON
+        for q_lo in self._q_lo:
+            q_lo.set_output_state("ON")
         return res_freq
 
     def _output_pulse_sequence(self):

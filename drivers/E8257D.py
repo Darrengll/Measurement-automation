@@ -63,7 +63,7 @@ class MXG(Instrument):
         if "frequency" in keys:
             self.set_frequency(parameters_dict["frequency"])
 
-        # trigger stuff by Elena
+        
         if "sweep_trg_src" in keys:
             self.set_freq_sweep()
 
@@ -116,7 +116,7 @@ class MXG(Instrument):
         self.write(":SOURce:FREQuency:CW {0}HZ".format(freq))
 
     def get_frequency(self):
-        bla = 0  # self.read(":SOURce:FREQuency:CW?")
+        bla = self.query(":SOURce:FREQuency:CW?")
         try:
             output = float(bla)
         except:

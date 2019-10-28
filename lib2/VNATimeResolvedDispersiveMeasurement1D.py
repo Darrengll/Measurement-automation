@@ -86,7 +86,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
                 result = least_squares(self._cost_function, p0, args=(X, data),
                                        bounds=bounds, x_scale="jac", max_nfev=10000, ftol=1e-5)
             except Exception as e:
-                print("NATDM1D->_fit_complex_curve->least_squares filed:", e)
+                print("VNATDM1D->_fit_complex_curve->least_squares filed:", e)
                 print(p0, bounds)
                 raise e
             sigma = std(abs(self._model(X, *result.x) - data))
@@ -97,7 +97,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
                                              args=(X, data), bounds=bounds, x_scale="jac",
                                              max_nfev=1000, ftol=1e-5)
                 except Exception as e:
-                    print("NATDM1D->_fit_complex_curve->least squares (self._fit_params is not None) filed:", e)
+                    print("VNATDM1D->_fit_complex_curve->least squares (self._fit_params is not None) filed:", e)
                     print(p0, bounds)
                     raise e
 

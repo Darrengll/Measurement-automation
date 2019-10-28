@@ -52,7 +52,7 @@ class Agilent_PNA_L(Instrument):
 
         self._address = address
         rm = visa.ResourceManager()
-        self._visainstrument = rm.open_resource(self._address)# no term_chars for GPIB!!!!!
+        self._visainstrument = rm.open_resource(self._address) # no term_chars for GPIB!!!!!
         self._zerospan = False
         self._freqpoints = 0
         self._ci = channel_index
@@ -143,14 +143,14 @@ class Agilent_PNA_L(Instrument):
 
 
         # sets the S21 setting in the PNA X
-        # self.define_S21() # this two lines is uncommented by Shamil 06/26/2017 due to the fact that
-        # self.set_S21()  # by using high level measurement child classes it is not possible to continue proper operation
-                        # of PNA-L after self._visaintrument.write( "SYST:FPReset" ) command, it seem like without this
+        # self.define_S21() # these two lines were uncommented by Shamil 06/26/2017 due to the fact that
+        # self.set_S21()  # by using high level measurement child classes it was not possible to continue proper operation
+                        # of PNA-L after self._visaintrument.write( "SYST:FPReset" ) command. It seems like without these
                         # lines of code there is no trace selected after self.select_default_trace()
                         # and self.get_all seem do interrupt the program with timeout exception thrown by low-level visa
                         # GPIB drivers. The reason is that PNA-L doesn't have any number of points in sweep (get_all start
                         # by quering number of points in current sweep), because there is no traces defined, hence there
-                        # is no number of points available to read
+                        # is no number of points parameter available to read
         # self.select_default_trace()
 
 
@@ -450,7 +450,7 @@ class Agilent_PNA_L(Instrument):
 
     def do_set_CWfreq(self,freq):
         """
-        Set CW frequancy valid if sweepind in CW mode.
+        Set CW frequency valid if sweepind in CW mode.
         """
 
         self.logger.debug(__name__ + ' : set CW frequency')

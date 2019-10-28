@@ -1,4 +1,4 @@
-# keysightAWG.py
+    # keysightAWG.py
 # Gleb Fedorov <vdrhc@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,9 @@
 
 from numpy import *
 from lib2.IQPulseSequence import *
+import keysightSD1
+from drivers.keysightM3202A import KeysightM3202A
+# there are functions that are not universal and work only with M3202A
 from drivers.keysightAWG import KeysightAWG
 
 
@@ -143,6 +146,167 @@ class IQAWG():
         self._output_continuous_wave(frequency, amplitudes[1], 0,
             offsets[1], waveform_resolution, 2, asynchronous = False)
 
+    def output_IQ_waves_from_calibration(self, optimized = True):
+        cal = self._calibration
+        self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[0],
+                                     cal._if_phase[0], cal._if_offsets[0],
+                                     cal._waveform_resolution, 1, asynchronous=optimized)
+        self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[1],
+                                     0, cal._if_offsets[1],
+                                     cal._waveform_resolution, 2, asynchronous=False)
+
+    def output_zero(self):
+        cal = self._calibration
+        awg = self._channels[0]._host_awg
+        chanI = self._channels[0]._channel_number
+        chanQ = self._channels[1]._channel_number
+        awg.synchronize_channels(chanI, chanQ)
+        self._output_continuous_wave(0, 0, 0, cal._dc_offsets[0], 1, 0)
+        self._output_continuous_wave(0, 0, 0, cal._dc_offsets[1], 2, 1)
+
+    def output_continuous_two_freq_IQ_waves(self, dfreq, prescaler=1, ampl_coef=1):
+        fs = KeysightM3202A.calc_sampling_rate(prescaler)  # Hz
+        N = fs / dfreq
+        array_mod = (cos(linspace(0, 4 * pi, 2 * N, endpoint=False)) - 1) / 2
+        self._channels[0]._host_awg.synchronize_channels(*[channel._channel_number for channel in self._channels])
+        modulation_coeff = 2.
+        self.output_modulated_IQ_waves(array_mod, modulation_coeff, prescaler, ampl_coef)
+
+    def change_amplitudes_of_cont_IQ_waves(self, ampl_coef):
+        cal = self._calibration
+        awg = self._channels[0]._host_awg
+        awg.change_amplitude_of_carrier_signal(cal._if_amplitudes[0], self._channels[0]._channel_number, ampl_coef)
+        awg.change_amplitude_of_carrier_signal(cal._if_amplitudes[1], self._channels[1]._channel_number, ampl_coef)
+
+    def update_modulation_coefficient_of_IQ_waves(self, modulation_amp):
+        """
+        Parameters
+        ----------
+        modulation_amp : float
+            amplitude of the modulation signal
+            G * AWG(t) * carrier_signal(t)
+            G = 'modulation_amp'
+            AWG(t) - normalized such that max(abs(AWG(t))) = 1
+
+        Returns
+        -------
+        None
+        """
+        awg = self._channels[0]._host_awg
+        chanI = self._channels[0]._channel_number
+        chanQ = self._channels[1]._channel_number
+        awg.start_modulation_AM(chanI, modulation_amp)
+        awg.start_modulation_AM(chanQ, modulation_amp)
+
+    def setup_AM_and_carrier_from_calibration(self, calibration=None, amp_coeffs=(1, 1)):
+        """
+        This function tells awg that it's output will be modulated and setups
+        carrier sine signal parameters based on calibration parameters.
+        This function is used primarly by time domain measurement classes that utilize sine
+        function generator feature of the AWG. This function is called by them during
+        'set_fixed_parameters'.
+
+        Parameters
+        ---------
+        modulationAmp : float
+            WARNING. THIS IS SPECIFIC FOR M3202A.
+            AM Modulation
+            Output(t) = G * AWG(t) * cos(2 * pi * f * t + phi)
+            'modulation_amp' = G
+
+        calibration : IQCalibrationData
+            Overwrites 'self._calibration' if provided
+        amp_coeffs : tuple[float]
+            Multipliers for carrier signal amplitude
+            Used to tune the power of the output signal
+            that is roughly proportional to the this coefficients
+
+        Returns
+        -------
+        None
+        """
+        if calibration is not None:
+            self._calibration = calibration
+        elif self._calibration is not None:
+            cal = self._calibration
+        else:  # no calibration found
+            raise ValueError("no calibration provided")
+
+        if( self._channels[0]._host_awg is self._channels[1]._host_awg ):
+            awg = self._channels[0]._host_awg
+        else:
+            raise NotImplementedError("Two channels are in different AWG. "
+                                      "'setup_carrier_from_calibration' is not implemented")
+
+        # getting AWG's channel numbers
+        chanI = self._channels[0]._channel_number
+        chanQ = self._channels[1]._channel_number
+
+        # stop AWG
+        awg.stop_AWG(chanI)
+
+        awg.synchronize_channels(chanI, chanQ)  # verify that both channels are started simultaneously
+
+        # tell AWG that amplitude modulation is chosen
+        awg.start_modulation_AM(chanI, cal._if_amplitudes[0]*amp_coeffs[0])
+        awg.start_modulation_AM(chanQ, cal._if_amplitudes[1]*amp_coeffs[1])
+        # setup carrier signal according to calibration
+        awg.setup_carrier_signal(cal._if_frequency, 0,
+                                 cal._if_phase[0], cal._if_offsets[0], chanI)
+        awg.setup_carrier_signal(cal._if_frequency, 0,
+                                 0, cal._if_offsets[1], chanQ)
+
+    def output_modulated_IQ_waves(self, array_mod, prescaler=0, ampl_coeffs=(1, 1)):
+        """
+        WARNING: THIS FUNCTION IS FOR M3202A ONLY
+
+        AM Modulation
+        -------------
+        Output(t) = G * AWG(t)) * cos(2 * pi * f * t + phi)
+        G = 'modulation_amp'
+
+        Example:
+        --------
+        for required signal s(t) = A * cos(2*pi*f*t) * cos(2*pi*dfreq*t)
+        Modulation should be
+        A + G * AWG(t) = A * cos(2*pi*dfreq*t)
+        G * AWG(t) = A * (cos(2*pi*dfreq*t) - 1)
+        The array must be normalized, i.e. max(abs(AWG(t))) = 1
+        AWG(t) = (cos(2*pi*dfreq*t) - 1) / 2, where division by 2 is for normalization
+        G = 2 * A
+        modulationCoeff = 2
+        """
+        cal = self._calibration
+        awg = self._channels[0]._host_awg
+        chanI = self._channels[0]._channel_number
+        chanQ = self._channels[1]._channel_number
+        awg.synchronize_channels(chanI, chanQ)
+
+        awg.stop_AWG(chanI)
+        awg.clear()
+        awg.setup_carrier_signal(cal._if_frequency, 0,
+                                 cal._if_phase[0], cal._if_offsets[0], chanI)
+        awg.setup_carrier_signal(cal._if_frequency, 0,
+                                 0, cal._if_offsets[1], chanQ)
+        waveform_id = 3
+        awg.load_modulating_waveform(array_mod, waveform_id)
+
+        # single waveform from RAM is used to modulate both channelss
+        awg.queue_waveform(chanI, waveform_id, prescaler)
+        awg.queue_waveform(chanQ, waveform_id, prescaler)
+        deviationGainI = cal._if_amplitudes[0] * ampl_coeffs[0]
+        deviationGainQ = cal._if_amplitudes[1] * ampl_coeffs[1]
+        awg.module.modulationAmplitudeConfig(chanI-1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM, deviationGainI)
+        awg.module.modulationAmplitudeConfig(chanQ-1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM, deviationGainQ)
+        awg.start_AWG(chanI)
+
+    def stop_modulated_IQ_waves(self):
+        awg = self._channels[0]._host_awg
+        chanI = self._channels[0]._channel_number
+        chanQ = self._channels[1]._channel_number
+        awg.stop_modulation(chanI)
+        awg.stop_modulation(chanQ)
+
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous=False):
         """
@@ -178,6 +342,7 @@ class IQAWG():
         resolution = pulse_sequence.get_waveform_resolution()
         length = len(pulse_sequence.get_I_waveform())
         if self._triggered:
+            # this is made if 2 AWG is triggering another one and has the same signal period
             duration = pulse_sequence.get_duration() - 1000 * resolution
             end_idx = length - 1000
         else:
@@ -192,11 +357,10 @@ class IQAWG():
                                                     .get_Q_waveform()[:end_idx], frequency,
                                                     asynchronous=asynchronous)
 
-class IQAWG2(IQAWG):
+class IQAWG_Multiplexed(IQAWG):
     """
-        Test class for CPHASE pulse sequence generation
         (generate 2 qubit frequencies pulses with single lo and 2 channeled AWG)
-        uses 2 different callibrations for subsequent pulses for q1 & q2 resp.
+        uses 2 different callibrations to generate pulses for q1 & q2 resp.
     """
 
     def set_parameters(self, parameters):

@@ -4,7 +4,6 @@ from scipy.optimize import minimize
 from datetime import datetime
 from IPython.display import clear_output
 
-
 class IQCalibrationData():
 
     def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,

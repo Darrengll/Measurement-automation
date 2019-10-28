@@ -11,3 +11,7 @@ log/
 Git token
 spectrum_code
 *.pdf
+
+*.eps
+*.png
+*.rar

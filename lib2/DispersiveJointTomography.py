@@ -11,7 +11,6 @@ from numpy.linalg import cholesky
 from tqdm import tqdm_notebook
 
 
-
 class Tomo:
     """
     Class for tomograhy
@@ -33,7 +32,7 @@ class Tomo:
     def __init__(self, dim=4):
         self._dim = dim
         self._local_rotations = []
-        self._measurement_operator = []
+        self._measurement_operators = []
         self._measurements = []
 
     @staticmethod
@@ -92,8 +91,8 @@ class Tomo:
             rot_seq.append(op)
         self._local_rotations = rot_seq
 
-    def upload_measurement_operator(self, meas_op):
-        self._measurement_operator = meas_op
+    def upload_measurement_operators(self, meas_ops):
+        self._measurement_operators = meas_ops
 
     def construct_measurements(self, measurement_results):
         """
@@ -101,9 +100,10 @@ class Tomo:
         Tomo.upload_rotation_sequence_from_command_list() and Tomo.upload_measurement_operator must be uploaded
         :param measurement_results: measured expected values
         """
-        self._measurements = [(rot.dag() * self._measurement_operator * rot, res)
-                              # (rot * self._measurement_operator * rot.dag(), res)
-                                for (rot, res) in zip(self._local_rotations, measurement_results)]
+        self._measurements = []
+        for meas_op, meas_op_results in zip(self._measurement_operators, measurement_results):
+            self._measurements.append([(rot.dag() * meas_op * rot, res)
+                                       for (rot, res) in zip(self._local_rotations, meas_op_results)])
 
     def construct_measurements_from_matrix(self, dens_matrix):
         """
@@ -111,9 +111,11 @@ class Tomo:
         Tomo.upload_rotation_sequence_from_command_list() and Tomo.upload_measurement_operator must be uploaded
         :param dens_matrix: density matrix to construct measurement outcomes
         """
-        self._measurements = [(rot.dag() * self._measurement_operator * rot,
-                               expect(dens_matrix, rot.dag() * self._measurement_operator * rot))
-                              for rot in self._local_rotations]
+        self._measurements = []
+        for meas_op in self._measurement_operators:
+            self._measurements.append([(rot.dag() * meas_op * rot,
+                                        expect(rot.dag() * meas_op * rot, dens_matrix))
+                                       for rot in self._local_rotations])
 
     def upload_measurements(self, meas):            # Загрузить набор измерений [(оператор, измеренное среднее), ...]
         """
@@ -125,8 +127,9 @@ class Tomo:
     def likelihood(self, x):                        # Вычисление Likelihood по загруженным измерениям \
         rho = self.x_to_rho(x)                      # для матрицы плотности заданной через x
         lh = 0
-        for (op, ex) in self._measurements:
-            lh += np.abs(expect(rho, op) - ex) ** 2
+        for meas_op_results in self._measurements: # summing among different measurable operators
+            for (op, ex) in meas_op_results:  # summing through tomography rotations
+                lh += np.abs(expect(rho, op) - ex) ** 2
         return lh
 
     def find_rho(self, averages=30, x0=None): # Минимизации Likelihood
@@ -142,9 +145,8 @@ class Tomo:
             else:
                 if new.fun < best.fun:
                     best = new
-            print(self.likelihood(best.x), "\n")
+            print("\r" + str(self.likelihood(best.x)), end="", flush=True)
         return self.x_to_rho(best.x)
-
 
 class DispersiveJointTomography(VNATimeResolvedDispersiveMeasurement):
 
@@ -152,17 +154,18 @@ class DispersiveJointTomography(VNATimeResolvedDispersiveMeasurement):
         super().__init__(name, sample_name, devs_aliases_map)
         self._measurement_result = \
             DispersiveJointTomographyResult(name, sample_name)
+        self._meas_pairs = None  # contain pairs [(meas_op1, freq1), ...]
         self._sequence_generator = IQPulseBuilder.build_joint_tomography_pulse_sequences
 
-    def set_fixed_parameters(self, pulse_sequence_parameters, betas,
+    def set_fixed_parameters(self, pulse_sequence_parameters,
                              detect_resonator=True, plot_resonator_fit=True,
                              **dev_params):
         super().set_fixed_parameters(pulse_sequence_parameters, **dev_params)
-        self._measurement_result.upload_betas(*betas)
+        self._measurement_result.upload_prep_pulses(pulse_sequence_parameters["prep_pulses"])
 
-    def set_swept_parameters(self, local_rotations_list):
+    def set_swept_parameters(self, local_rotations_list, meas_op_pairs):
         """
-        :param local_rotations_list: should have form:
+        local_rotations_list: should have form:
                     { (q1_rot_1, q2_rot_1),
                       (q1_rot_2, q2_rot_2),
                       ...
@@ -170,125 +173,106 @@ class DispersiveJointTomography(VNATimeResolvedDispersiveMeasurement):
             e.g.    { ('+X/2', '-Y'),
                       ('+X', '+X')
                     }
+
+        meas_ops: have form [(Meas_op1, freq1),...]
         """
-        swept_pars = {"tomo_local_rotations":
-                          (self._set_tomo_params, local_rotations_list)}
-        super().set_swept_parameters(**swept_pars)
+        self._meas_pairs = meas_op_pairs
+        self._measurement_result.upload_meas_ops(meas_op_pairs[:, 0])  # upload different operators
         self._measurement_result.upload_local_rotations(local_rotations_list)
+        self._measurement_result.find_expected_tomo_matrix()
+
+        from collections import OrderedDict
+        swept_pars = OrderedDict([
+            ["ro_frequency",(lambda x: self._vna[0].set_freq_limits(x, x), meas_op_pairs[:,1].astype(np.float64))], # frequency list
+            ["tomo_local_rotations", (self._set_tomo_params, local_rotations_list)]
+        ])
+        super().set_swept_parameters(**swept_pars)
 
     def _set_tomo_params(self, local_rotations):
         self._pulse_sequence_parameters["tomo_local_rotations"] = local_rotations
         super()._output_pulse_sequence()
 
-    # TODO
-    #     1. Preparation pulse sequence
-    #     2. Rotation pulses on both qubits
-    #     3. set_swept_parameters -- Any changes required?
-    #           Change to
-        '''
-        swept_pars :{'par1': [value1, value2, ...],
-                     'par2': [value1, value2, ...], ...,
-                     'setter' : setter}
-        '''
-    #            Instead of
-        '''
-        swept_pars :{'par1': (setter1, [value1, value2, ...]),
-                     'par2': (setter2, [value1, value2, ...]), ...}
-        '''
 
-
-class DispersiveJointTomographyResult(VNATimeResolvedDispersiveMeasurementResult):      # TODO
+class DispersiveJointTomographyResult(VNATimeResolvedDispersiveMeasurementResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
         self._local_rotations_list = []
-        self._pulse_sequence_parameters = self._context \
-            .get_pulse_sequence_parameters()
-        self._betas = None#(0, 0, 0, 0)
-        self._expect_dm = None
-        self._expect_dm_to_pass = None
-        self._maps = None
+
+        # preparation pulses in form [["q11","q12",...],["q21",...],...,["qN1",...,]] qNM: M-th pulse to N-th qubit
         self._prep_pulses = None
+        self._expect_dm = None  # density matrix of the system, after applying self._prep_pulses sequence
+        self._experiment_rho = None  # density matrix restrored from experiment
+        self._fidelity = None  # fidelity of the state
+
+        # list of measurement operators like M = II beta_II + IZ beta_IZ + ... + ZZ beta_ZZ in computational basis
+        self._meas_ops = None
+
+        # expected measurement result based on the qubit state preparation sequence and measurement operator
+        self._expected_tomo_measurements = None
+        self._tomo = None  # tomography class instance used to calculations
 
     def upload_local_rotations(self, local_rotations_list):
         self._local_rotations_list = local_rotations_list
 
-    def upload_betas(self, betas):
-        self._betas = betas
+    def upload_meas_ops(self, meas_ops):
+        self._meas_ops = meas_ops
 
-    def upload_expect_dm(self):
+    def upload_prep_pulses(self, prep_pulses):
+        self._prep_pulses = prep_pulses
+
         state00 = tensor(basis(2, 0), basis(2, 0))
         expect_state = state00
         rfc = Tomo.rotator_from_command
         for pair_rots in zip(self._prep_pulses[0], self._prep_pulses[1]):
-            print(pair_rots)
+            # print(pair_rots)
             expect_state = tensor(rfc(pair_rots[0]), rfc(pair_rots[1])) * deepcopy(expect_state)
         expect_dm = expect_state * expect_state.dag()
         self._expect_dm = expect_dm
-        #self._expect_dm_to_pass = expect_dm.full().flatten()
 
-    def find_density_matrix(self):
-        beta_II, beta_ZI, beta_IZ, beta_ZZ = self._betas
-        joint_op = (beta_II * tensor(identity(2), identity(2)) +
-                    beta_ZI * tensor(sigmaz(), identity(2)) +
-                    beta_IZ * tensor(identity(2), sigmaz()) +
-                    beta_ZZ * tensor(sigmaz(), sigmaz()))
-
+    def find_density_matrix(self,avgs=10):
         self._tomo = Tomo(dim=4)
-        self._tomo.upload_measurement_operator(joint_op)
+        self._tomo.upload_measurement_operators(self._meas_ops)
         self._tomo.upload_rotation_sequence_from_command_list(self._local_rotations_list)
 
         res = self.get_data()['data']
         self._tomo.construct_measurements(res)
-        return self._tomo.find_rho()
+        self._experiment_rho = self._tomo.find_rho(averages=avgs, x0=Tomo.rho_to_x(self._expect_dm))
+        self._fidelity = (self._experiment_rho*self._expect_dm).tr()
 
-    def find_density_matrix_bm(self, avs=100):
+        return self._experiment_rho
 
-        joint_op = self._betas
-
-        self._tomo = Tomo(dim=4)
-        self._tomo.upload_measurement_operator(joint_op)
-        self._tomo.upload_rotation_sequence_from_command_list(self._local_rotations_list)
-
-        res = self.get_data()['data']
-        self._tomo.construct_measurements(res)
-        expect_dm = self.__dict__.get("_expect_dm")
-        return self._tomo.find_rho(averages=avs, x0=Tomo.rho_to_x(expect_dm))
-
-    def find_density_matrix_sim(self, dens_matrix):
+    def find_expected_tomo_matrix(self):
         """
         For simulations:
             Constructs measurement outcomes based on the matrix given
         :param dens_matrix: density matrix to construct measurement outcomes
         """
-        beta_II, beta_ZI, beta_IZ, beta_ZZ = self._betas
-        joint_op = (beta_II * tensor(identity(2), identity(2)) +
-                    beta_ZI * tensor(sigmaz(), identity(2)) +
-                    beta_IZ * tensor(identity(2), sigmaz()) +
-                    beta_ZZ * tensor(sigmaz(), sigmaz()))
-
         self._tomo = Tomo(dim=4)
-        self._tomo.upload_measurement_operator(joint_op)
+        self._tomo.upload_measurement_operators(self._meas_ops)
         self._tomo.upload_rotation_sequence_from_command_list(self._local_rotations_list)
+        self._tomo.construct_measurements_from_matrix(self._expect_dm)
 
-        self._tomo.construct_measurements_from_matrix(dens_matrix)
-        return self._tomo.find_rho()
+        self._expected_tomo_measurements = deepcopy(self._tomo._measurements)
+        return self._tomo._measurements
 
     def _prepare_figure(self):
-        fig, axes = plt.subplots(1, 2, figsize=(15, 7), sharex=True)
+        fig, axes = plt.subplots(2, 2, figsize=(15, 7))
         fig.canvas.set_window_title(self._name)
         axes = ravel(axes)
         for ax in axes:
             ax.set_xlabel('Qubit 2 local rotations')
             ax.set_ylabel('Qubit 1 local rotations')
-        cax_reals, kw = colorbar.make_axes(axes[0], aspect=40)
-        cax_imags, kw = colorbar.make_axes(axes[1], aspect=40)
-        #cax_reals_exp, kw = colorbar.make_axes(axes[2], aspect=40)
-        #cax_imags_exp, kw = colorbar.make_axes(axes[3], aspect=40)
-        for caxis in [cax_reals, cax_imags]:#, cax_reals_exp, cax_imags_exp]:
-            caxis.set_title("$\mathfrak{Re}[S_{21}]$ [a.u.]", position=(0.5, -0.05))
-            caxis.set_title("$\mathfrak{Im}[S_{21}]$ [a.u.]", position=(0.5, -0.1))
-        return fig, axes, (cax_reals, cax_imags)#, cax_reals_exp, cax_imags_exp)
+
+        cax_amps_theory, kw = colorbar.make_axes(axes[0], aspect=40)
+        cax_phas_theory, kw = colorbar.make_axes(axes[1], aspect=40)
+        cax_amps, kw = colorbar.make_axes(axes[2], aspect=40)
+        cax_phas, kw = colorbar.make_axes(axes[3], aspect=40)
+        cax_amps_theory.set_title("$\\operatorname{Re}(S_{21})$", position=(0.5, -0.05))
+        cax_phas_theory.set_title("$\\operatorname{Im}(S_{21})$", position=(0.5, -0.1))
+        cax_amps.set_title("$\\operatorname{Re}(S_{21})$", position=(0.5, -0.05))
+        cax_phas.set_title("$\\operatorname{Im}(S_{21})$", position=(0.5, -0.1))
+        return fig, axes, (cax_amps_theory, cax_phas_theory, cax_amps, cax_phas)
 
     def _plot(self, data):
         axes = self._axes
@@ -303,24 +287,25 @@ class DispersiveJointTomographyResult(VNATimeResolvedDispersiveMeasurementResult
             data_dict[key] = dict.fromkeys(keys2)
         keys1 = list(data_dict.keys())
         keys2 = list(data_dict[keys1[0]].keys())
-        list(zip(data['tomo_local_rotations'], data['data']))
-        for ((rot1, rot2), res) in zip(data['tomo_local_rotations'], data['data']):
-            data_dict[rot1][rot2] = res
+
+        expected_tomo_dict = deepcopy(data_dict)
+        for ((rot1, rot2), res_experiment, expected_rots_meas) in zip(data['tomo_local_rotations'], data['data'][0], self._expected_tomo_measurements[0]):
+            data_dict[rot1][rot2] = res_experiment
+            expected_tomo_dict[rot1][rot2] = expected_rots_meas[1]
 
         data_matrix = [[data_dict[k1][k2] if data_dict[k1][k2] is not None else 0
                         for k2 in keys2] for k1 in keys1]
-        if self._maps is None or not self._dynamic:
-            self._maps = axes[0].imshow(real(data_matrix)), axes[1].imshow(imag(data_matrix))
-            self._cbs = plt.colorbar(self._maps[0], cax=caxes[0]), plt.colorbar(self._maps[1], cax=caxes[1])
-        else:
-            data = [real(data_matrix), imag(data_matrix)]
-            for datum, map, cb in zip(data, self._maps, self._cbs):
-                map.set_data(datum)
-                values = datum[datum != 0]
-                map.set_clim(min(values), max(values))
-                cb.set_clim(min(values), max(values))
-        # axes[0].set_title('Real')
-        # axes[1].set_title('Imag')
+        expected_tomo_matrix = [[expected_tomo_dict[k1][k2] if expected_tomo_dict[k1][k2] is not None else 0
+                        for k2 in keys2] for k1 in keys1]
+
+        for ax in axes:
+            ax.clear()
+
+        datas = [real(data_matrix), imag(data_matrix), real(expected_tomo_matrix), imag(expected_tomo_matrix)]
+        plots = [ax.imshow(data, vmax=np.max(data), vmin=np.min(data)) for ax,data in zip(axes,datas)]
+        for plot, cax in zip(plots, caxes):
+            plt.colorbar(plot, cax)
+
         for (ax, cax) in zip(axes, caxes):
             ax.set_xticks(range(len(keys2)))
             ax.set_yticks(range(len(keys1)))
@@ -331,12 +316,23 @@ class DispersiveJointTomographyResult(VNATimeResolvedDispersiveMeasurementResult
                     if data_dict[keys1[i]][keys2[j]] is None:
                         ax.text(j, i, 'No data', ha="center", va="center", color="w")
 
+    def plot_density_matrices(self):
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+        from qutip.visualization import matrix_histogram_complex
+        fig = plt.figure()
+        axs = [1, 2]
+        axs = list(map(lambda x: fig.add_subplot(1, 2, x, projection="3d"), axs))
+
+        fig.canvas.set_window_title(self._name + " F = {:.4f}".format(self._fidelity))
+        matrix_histogram_complex(self._expect_dm, ax=axs[0])
+        matrix_histogram_complex(self._experiment_rho, ax=axs[1])
+
+
+
 """
 class for 1 AWG and 2 qubits 
 """
-
-
-class DispersiveJointTomography2(VNATimeResolvedDispersiveMeasurement):
+class DispersiveJointTomographyMultiplexed(VNATimeResolvedDispersiveMeasurement):
 
     def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
@@ -388,7 +384,7 @@ class DispersiveJointTomography2(VNATimeResolvedDispersiveMeasurement):
         '''
 
 
-class DispersiveJointTomographyResult2(VNATimeResolvedDispersiveMeasurementResult):      # TODO
+class DispersiveJointTomographyResultMultiplexed(VNATimeResolvedDispersiveMeasurementResult):      # TODO
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
@@ -402,7 +398,7 @@ class DispersiveJointTomographyResult2(VNATimeResolvedDispersiveMeasurementResul
     def upload_betas(self, *betas):
         self._betas = betas
 
-    def find_density_matrix(self):
+    def find_density_matrix(self,avgs=10):
         beta_II, beta_ZI, beta_IZ, beta_ZZ = self._betas
         joint_op = (beta_II * tensor(identity(2), identity(2)) +
                     beta_ZI * tensor(sigmaz(), identity(2)) +
@@ -415,7 +411,7 @@ class DispersiveJointTomographyResult2(VNATimeResolvedDispersiveMeasurementResul
 
         res = self.get_data()['data']
         tomo.construct_measurements(res)
-        return tomo.find_rho()
+        return tomo.find_rho(averages=avgs)
 
     def find_density_matrix_sim(self, dens_matrix):
         """

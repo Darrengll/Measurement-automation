@@ -4,6 +4,7 @@ class AWGVoltageSource():
     def __init__(self, awg, channel_number):
         self._awg = awg
         self._channel_number = channel_number
+        self._voltage = None
 
     def set_voltage(self, voltage):
         self._voltage = voltage
