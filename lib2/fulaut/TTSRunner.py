@@ -27,18 +27,18 @@ class TTSRunner():
             self._ro_awg = awgs["ro_awg"]
             self._q_awg = awgs["q_awg"]
             self._open_mixers()
-            self._vna_power = -25
+            self._vna_power = -20
         else:
-            self._vna_power = -50
+            self._vna_power = -40
 
-        self._vna_parameters = {"bandwidth": 200,
+        self._vna_parameters = {"bandwidth": 100,
                                 "freq_limits": self._res_limits,
-                                "nop": 10,
+                                "nop": 15,
                                 "power": self._vna_power,
                                 "averages": 1,
                                 "sweep_type": "LIN"}
 
-        self._mw_src_parameters = {"power": -5}
+        self._mw_src_parameters = {"power": -15}
 
         res_freq, g, period, sweet_spot, max_q_freq, d = self._fit_p0
 
@@ -50,6 +50,7 @@ class TTSRunner():
         self._currents = linspace(center - period / 4,
                                   center + period / 4,
                                   101)
+        #self._currents = linspace(-2e-5, 7e-5, 201)
 
         min_q_freq = \
             transmon_spectrum(sweet_spot + period / 2, period, sweet_spot, max_q_freq, d)
@@ -63,9 +64,11 @@ class TTSRunner():
         # else:
         #     mw_limits = (res_freq-0.1e9, expected_q_freq+1e9)
 
-        mw_limits = (expected_q_freq - .7e9, expected_q_freq + 0.5e9)
+        mw_limits = (5e9, 5.8e9)
 
-        self._mw_src_frequencies = linspace(*mw_limits, 201)
+        #mw_limits = (expected_q_freq - 1.5e9, expected_q_freq + 0.5e9)
+
+        self._mw_src_frequencies = linspace(*mw_limits, 151)
 
         self._tts_result = None
         self._launch_datetime = datetime.today()

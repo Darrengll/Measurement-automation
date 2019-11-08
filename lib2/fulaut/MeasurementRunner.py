@@ -74,7 +74,7 @@ class MeasurementRunner():
 
         self._open_only_readout_mixer()
 
-        ro = ResonatorOracle(self._vna, self._s_parameter, 3e6)
+        ro = ResonatorOracle(self._vna, self._s_parameter, 10e6)
         scan_areas = ro.launch()[:]
 
         for idx, res_limits in enumerate(scan_areas):
@@ -114,7 +114,7 @@ class MeasurementRunner():
             sws_current = self._tts_fit_params[qubit_name][1]
             period = self._tts_fit_params[qubit_name][0]
             # period_fraction = float(input("Enter current offset in period fraction: "))
-            for period_fraction in linspace(0.1, 0.2, 10):
+            for period_fraction in linspace(0, 0, 1):
                 current = sws_current + period_fraction*period
                 q_freq = transmon_spectrum(current, *self._tts_fit_params[qubit_name][:-1])
                 self._logger.debug("Pulsed measurements at %.3f GHz, %.2e A, "
@@ -243,7 +243,7 @@ class MeasurementRunner():
                                          ro_awg=[self._ro_awg],
                                          plot_update_interval=0.5)
 
-        vna_parameters = {"bandwidth": 20,
+        vna_parameters = {"bandwidth": 10,
                           "freq_limits": self._res_limits[qubit_name],
                           "nop": 10,
                           "averages": 1,

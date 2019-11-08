@@ -2,7 +2,7 @@ from lib2.SingleToneSpectroscopy import *
 from lib2.fulaut.AnticrossingOracle import *
 from lib2.LoggingServer import LoggingServer
 from datetime import datetime
-
+from time import sleep
 
 class STSRunner():
 
@@ -20,20 +20,20 @@ class STSRunner():
             self._ro_awg = awgs["ro_awg"]
             self._q_awg = awgs["q_awg"]
             self._open_only_readout_mixer()
-            self._vna_power = -25
+            self._vna_power = -20
         else:
             self._vna_power = -50
 
-        self._vna_parameters = {"bandwidth": 500,
-                                "nop": 101,
+        self._vna_parameters = {"bandwidth": 300,
+                                "nop": 201,
                                 "power": self._vna_power,
-                                "averages": 1,
+                                "averages": 2,
                                 "sweep_type": "LIN"}
-        self._currents = linspace(-.1e-3, .1e-3, 101)
+        self._currents = linspace(-1e-4, 1e-4, 101)
+        #self._currents = linspace(-0.4e-4, 1.2e-4, 101)
         self._sts_result = None
         self._launch_datetime = datetime.today()
         self._cur_src[0].set_appropriate_range(max(abs(self._currents)))
-
         self._logger = LoggingServer.getInstance()
 
     def run(self):
@@ -84,8 +84,8 @@ class STSRunner():
 
             self._logger.debug("Scan: " + str(self._scan_area / 1e6))
             self._logger.debug("Ptp: " + str(ptp(res_points[:, 1]) / 1e6))
-            if 0.1 * self._scan_area < ptp(res_points[:, 1]) < 0.5 * self._scan_area:
-                self._logger.debug("Flux dependence found. Zooming...")
+            if 0.1e6 < ptp(res_points[:, 1]) < 0.5 * self._scan_area:
+                self._logger.debug("Flux dependence found. Rescaling y-axis...")
                 self._scan_area = max(ptp(res_points[:, 1]) / 0.25, 3e6)
                 self._res_freq = mean(res_points[:, 1])
                 break
@@ -136,6 +136,8 @@ class STSRunner():
         self._STS.set_swept_parameters({'Current [A]': \
                                             (self._STS._src[0].set_current, self._currents)})
 
+        self._cur_src[0].set_current(self._currents[0])
+        sleep(0.5)
         self._sts_result = self._STS.launch()
 
     def get_scan_area(self):
