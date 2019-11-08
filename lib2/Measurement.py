@@ -7,6 +7,7 @@ from threading import Thread
 
 from lib2.MeasurementResult import MeasurementResult
 from lib2.ResonatorDetector import *
+from lib2.GlobalParameters import *
 from itertools import product
 from functools import reduce
 from operator import mul
@@ -45,7 +46,8 @@ class Measurement:
          'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
          'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
          'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'k6220': [["k6220"], [k6220, "K6220"]]
+         'k6220': [["k6220"], [k6220, "K6220"]],
+         'NCS513': [["NCS513"], [NCS513, "NCS513"]]
          }
 
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
@@ -76,7 +78,10 @@ class Measurement:
         self._name = name
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
-        self._resonator_detector = ResonatorDetector()
+        if GlobalParameters().resonator_types['reflection'] == True:
+            self._resonator_detector = ResonatorDetector(type= 'reflection')
+        else:
+            self._resonator_detector = ResonatorDetector(type = 'transmission')
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""
