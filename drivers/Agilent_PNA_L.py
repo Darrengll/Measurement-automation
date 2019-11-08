@@ -235,14 +235,29 @@ class Agilent_PNA_L(Instrument):
         """
         self._visainstrument.write( "CALCulate:PARameter:DEF:EXT 'CH1_S21_1','S21'")
 
-    def define_Sij(self,i=2,j=1):
+    def define_Sij(self,i=2,j=1, name=None):
         """
         defines the Sij measurement in the PNA X
         """
-        self._visainstrument.write( "CALCulate:PARameter:DEF:EXT "+'CH1_S%s%s_1'%(i,j)+', S%s%s'%(i,j))
+        if( name == None ):
+            self._visainstrument.write( "CALCulate:PARameter:DEF:EXT "+'CH1_S%s%s_1'%(i,j)+', S%s%s'%(i,j))
+        else:
+            self._visainstrument.write(  "CALCulate:PARameter:DEF:EXT "+name+', S%s%s'%(i,j))
 
     def select_S_param(self, S_param):
-        print("No method defined")
+        self.preset()
+
+        self._visainstrument.write("DISPlay:ARRange SPLit")
+
+        meas_names = ["POLar", "UPHase", "MLOGarithmic"]
+        for i, name in enumerate(meas_names):
+            # defining new measurement with the same channel number and s-param but different name
+            self.define_Sij(i=int(S_param[1]), j=int(S_param[2]), name=name)
+            # different names are allowing to feed measurements to different window traces
+            # This is NOT the trace number of the channel which appears as the Tr annotation on the Trace Status display
+            self._visainstrument.write("DISPlay:WINDow{0}:TRACe1:FEED ".format(i+1) + name)
+            self._visainstrument.write("CALCulate1:PARameter:SELect "+name) # selecting measurement
+            self._visainstrument.write("CALCulate1:FORMat "+name) # changing format of the selecting measurement
 
     def get_sweep_type(self):
         return self._visainstrument.query("SENS:SWE:TYPE?")[:-1]
@@ -256,7 +271,7 @@ class Agilent_PNA_L(Instrument):
         self._visainstrument.write('DISP:WIND Off')
         self._visainstrument.write('DISP:WIND On')
 
-    def set_autoscale(self):
+    def set_autoscale(i,self):
         self._visainstrument.write("DISP:WIND:TRAC:Y:AUTO")
 
     def get_sweep(self):

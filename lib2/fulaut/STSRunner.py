@@ -1,6 +1,6 @@
 from lib2.SingleToneSpectroscopy import *
 from lib2.fulaut.AnticrossingOracle import *
-from lib2.LoggingServer import LoggingServer
+from loggingserver import LoggingServer
 from datetime import datetime
 from time import sleep
 

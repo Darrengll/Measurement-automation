@@ -1,4 +1,4 @@
-from scipy import *
+from scipy import angle, argmin, linspace
 from resonator_tools.circuit import notch_port, reflection_port
 from numpy import abs
 from matplotlib import pyplot as plt
@@ -29,12 +29,12 @@ class ResonatorDetector():
     def set_plot(self, plot):
         self._plot = plot
 
-    def detect(self):
+    def detect(self, verbose = False):
 
         frequencies, sdata = self._freqs, self._s_data
 
         if not self._fast:
-            result = self._fit()
+            result = self._fit(verbose)
         else:
             amps = abs(self._s_data)
             phas = angle(self._s_data)
@@ -42,15 +42,17 @@ class ResonatorDetector():
             result = frequencies[min_idx], min(amps), phas[min_idx]
 
         if result is not None:
-            if self._plot:
+            if self._plot and not verbose:
                 self._port.plotall()
             return result
 
-    def _fit(self):
-
+    def _fit(self, verbose):
         scan_range = self._freqs[-1] - self._freqs[0]
 
         self._port.autofit()
+
+        if verbose:
+            self._port.plotall()
 
         if not self._freqs[0] < self._port.fitresults["fr"] < self._freqs[-1] \
                 or self._port.fitresults["Ql"] > 20000:
@@ -60,8 +62,6 @@ class ResonatorDetector():
         min_idx = argmin(abs(self._s_data))
         expected_frequency = self._freqs[min_idx]
         expected_amplitude = abs(self._s_data)[min_idx]
-
-        fit_min_idx = argmin(abs(self._port.z_data_sim))
 
         fine_freqs = linspace(self._freqs[0], self._freqs[-1], 10000)
         if self._type == 'reflection':
@@ -83,10 +83,12 @@ class ResonatorDetector():
                                            alpha=self._port.fitresults["alpha"],
                                            delay=self._port.fitresults["delay"])
 
-        #plt.plot(fine_freqs, abs(fine_model))
-        fit_frequency = fine_freqs[argmin(abs(fine_model))]
-        fit_amplitude = min(abs(self._port.z_data_sim))
-        fit_angle = angle(self._port.z_data_sim)[fit_min_idx]
+        if verbose:
+            plt.plot(fine_freqs, abs(fine_model))
+        fit_min_idx = argmin(abs(fine_model))
+        fit_frequency = fine_freqs[fit_min_idx]
+        fit_amplitude = min(abs(fine_model))
+        fit_angle = angle(fine_model)[fit_min_idx]
         res_width = fit_frequency / self._port.fitresults["Ql"]
 
         if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \

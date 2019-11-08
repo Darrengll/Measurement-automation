@@ -1,0 +1,26 @@
+version: 2
+
+pip-run:  &pip-install
+  # Upgrade pip and setuptools and wheel to get as clean an install as possible
+  name: Upgrade pip, setuptools, wheel
+  command: |
+    python -mpip install --upgrade --user pip
+    python -mpip install --upgrade --user wheel
+    python -mpip install --upgrade --user setuptools
+
+deps-run: &deps-install
+  command: |
+    python -mpip install --user matplotlib pytest pyvisa scipy pytest-cov jupyter
+    python -mpip install --user codecov pillow
+    python -mpip install --user git+https://github.com/vdrhtc/resonator_tools
+    python -mpip install --user git+https://github.com/vdrhtc/LoggingServer
+
+jobs:
+  build:
+    docker: # use the docker executor type; machine and macos executors are also supported
+      - image: circleci/python:3.6 # the primary container, where your job's commands are run
+    steps:
+      - checkout # check out the code in the project directory
+      - run: *deps-install
+      - run: python -mpytest --cov . --cov-report xml tests/
+      - run: python -mcodecov

@@ -188,3 +188,10 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
                 self._fit_lines[idx].set_ydata(Y)
             self._annotate_fit_plot(idx, ax, opt_params, err)
             plt.draw()
+
+    def __getstate__(self):
+        d = super().__getstate__()
+        d['_lines'] = [None]*2
+        d['_fit_lines'] = [None]*2
+        d['_anno'] = [None]*2
+        return d

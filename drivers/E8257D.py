@@ -160,8 +160,8 @@ class MXG(Instrument):
         self.write(":LIST:TYPE STEP")
 
     def set_freq_limits(self, freq_limits):
-        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz"))
-        self.write(":FREQuency:STOP %f%s" % (freq_limits[1], "Hz"))
+        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz")) # TODO: rename
+        self.write(":FREQuency:STOP %f%s" % (freq_limits[-1], "Hz"))
 
     def do_set_nop(self, nop):
         self.write(":SWEep:POINts %i" % (nop))

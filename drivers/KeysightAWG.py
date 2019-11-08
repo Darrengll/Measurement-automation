@@ -93,9 +93,9 @@ class KeysightAWG(Instrument):
         if len(set((waveform * 8191).astype(int))) == 1:
             # Crest data out of range KOSTYL FUCK YOU KEYSIGHT look carefully.
             waveform = waveform[:3]
-            self.load_arbitrary_waveform_to_volatile_memory(waveform[:-1], channel)
-            self.prepare_waveform(WaveformType.arbitrary, repetition_rate, 2, 0, channel)
-            self.set_output(channel, 1)
+        self.load_arbitrary_waveform_to_volatile_memory(waveform[:-1], channel)
+        self.prepare_waveform(WaveformType.arbitrary, repetition_rate, 2, 0, channel)
+        self.set_output(channel, 1)
 
     def output_continuous_wave(self, frequency=100e6, amplitude=0.1, phase=0, offset=0, waveform_resolution=1,
                                channel=1):

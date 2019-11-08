@@ -23,6 +23,11 @@ class VNATimeResolvedDispersiveMeasurement2D(VNATimeResolvedDispersiveMeasuremen
 
 class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeasurementResult):
 
+    def __init__(self, name, sample_name):
+        super().__init__(name, sample_name)
+        self._maps = [None]*4
+        self._cbs = [None]*4
+
     def _prepare_figure(self):
         fig, axes, caxes = super()._prepare_figure()
         plt.tight_layout(pad=2, h_pad=5, w_pad=0)
@@ -53,21 +58,28 @@ class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeas
         X, Y, Z_raw = self._prepare_data_for_plot(data)
         extent = [X[0], X[-1], Y[0], Y[-1]]
 
-        for idx, name in enumerate(self._data_formats.keys()):
-            caxes[idx].clear()
-            ax = axes[idx]
-            ax.clear()
 
+        for idx, name in enumerate(self._data_formats.keys()):
+            ax = axes[idx]
             Z = self._data_formats[name][0](Z_raw)
             max_Z = max(Z[Z != 0])
             min_Z = min(Z[Z != 0])
-            Z_map = ax.imshow(Z, origin='lower', aspect='auto',
-                              cmap="RdBu_r", vmin=min_Z, vmax=max_Z, extent=extent)
-            cb = plt.colorbar(Z_map, cax=caxes[idx])
-            cb.set_label(self._data_formats[name][1])
-            ax.grid()
-            cb.formatter.set_scientific(True)
-            cb.formatter.set_powerlimits((0, 4))
-            cb.update_ticks()
+            if self._maps[idx] is None or not self._dynamic:
+                ax.grid()
+                self._maps[idx] = ax.imshow(Z, origin='lower', cmap="RdBu_r",
+                                                aspect='auto', vmax=max_Z, vmin=min_Z,
+                                                extent=extent)
+                self._cbs[idx] = plt.colorbar(self._maps[idx], cax=caxes[idx])
+                self._cbs[idx].set_label(self._data_formats[name][1])
+                self._cbs[idx].formatter.set_scientific(True)
+                self._cbs[idx].formatter.set_powerlimits((0, 0))
+                self._cbs[idx].update_ticks()
+                self._annotate_axes(axes)
+            else:
+                self._maps[idx].set_data(Z)
+                self._maps[idx].set_clim(min_Z, max_Z)
+                self._cbs[idx].set_clim(min_Z, max_Z)
 
-        self._annotate_axes(axes)
+
+        plt.draw()
+

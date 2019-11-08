@@ -11,9 +11,11 @@ from lib2.GlobalParameters import *
 from itertools import product
 from functools import reduce
 from operator import mul
+from matplotlib import pyplot as plt
 import sys
+from numpy import zeros, complex_
 
-from lib2.LoggingServer import LoggingServer
+from loggingserver import LoggingServer
 
 
 class Measurement:
@@ -22,7 +24,7 @@ class Measurement:
     The class contains methods to help with the implementation of measurement classes.
 
     """
-    logger = LoggingServer.getInstance()
+    logger = LoggingServer.getInstance('')
     _actual_devices = {}
     _log = []
     _devs_dict = \
@@ -71,9 +73,12 @@ class Measurement:
 
         with _ added in front for a variable of a class
 
-        if key is not recognised doesn't returns a mistake
+        if key is not recognised, do not return an error
 
         """
+        Measurement.logger.debug("Measurement " + name + " init")
+        Measurement.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
+        
         self._interrupted = False
         self._name = name
         self._sample_name = sample_name
@@ -85,14 +90,15 @@ class Measurement:
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""
-        rm = pyvisa.ResourceManager()
-        temp_list = list(rm.list_resources_info().values())
-        Measurement.logger.debug("Measurement " + name + " init")
-        Measurement.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
-        self._devs_info = [item[4] for item in list(temp_list)]
-        # returns list of tuples: (IP Address string, alias) for all
-        # devices present in VISA
-        self._write_to_log()
+        try:
+            rm = pyvisa.ResourceManager()
+            # returns list of tuples: (IP Address string, alias) for all
+            # devices present in VISA
+            temp_list = list(rm.list_resources_info().values())
+            self._devs_info = [item[4] for item in list(temp_list)]
+        except ValueError:
+            print("NI Visa implementation not found; automatic device discovery unavailable")
+        
         for field_name, dev_list in self._devs_aliases_map.items():
             atr_name = "_" + field_name
             self.__setattr__(atr_name, [None] * len(dev_list))
@@ -134,6 +140,7 @@ class Measurement:
             dev_list = getattr(self, '_' + dev_name)
             for pars, dev in zip(self._fixed_pars[dev_name], dev_list):
                 dev.set_parameters(pars)
+
 
     def set_fixed_parameters(self, **fixed_pars):
         """

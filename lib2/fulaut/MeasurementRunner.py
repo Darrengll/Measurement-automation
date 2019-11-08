@@ -13,7 +13,7 @@ from lib2.MeasurementResult import *
 from lib2.SingleToneSpectroscopy import *
 from lib2.TwoToneSpectroscopy import *
 from lib2.fulaut.qubit_spectra import transmon_spectrum
-from lib2.LoggingServer import LoggingServer
+from loggingserver import LoggingServer
 
 from drivers.KeysightAWG import *
 from drivers.Tektronix_AWG5014 import *
@@ -160,7 +160,7 @@ class MeasurementRunner():
                           "averages": 1,
                           "res_find_nop":401}
 
-        raadout_delays = linspace(0, 50000, 101)
+        readout_delays = linspace(0, 50000, 101)
         exc_frequency = self._exact_qubit_freqs[qubit_name]
         pi_pulse_duration = \
             self._dro_results[qubit_name].get_pi_pulse_duration() * 1e3
@@ -181,7 +181,7 @@ class MeasurementRunner():
                         ro_awg = [ro_awg_params],
                         q_awg = [q_awg_params],
                         q_lo = [q_lo_params])
-        DD.set_swept_parameters(raadout_delays)
+        DD.set_swept_parameters(readout_delays)
         MeasurementResult.close_figure_by_window_name("Resonator fit")
         dd_result = DD.launch()
         self._dd_results[qubit_name] = dd_result

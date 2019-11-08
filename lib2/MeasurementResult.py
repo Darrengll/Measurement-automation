@@ -1,7 +1,6 @@
 import fnmatch
 import os
 import pickle
-import platform
 import traceback
 from datetime import datetime
 from threading import Lock
@@ -12,7 +11,9 @@ from matplotlib import animation, pyplot as plt
 from matplotlib._pylab_helpers import Gcf
 from numpy import array, where
 import copy
+import shutil
 
+import locale
 
 def find(pattern, path):
     result = []
@@ -52,10 +53,11 @@ class MeasurementResult:
 
         self._parameter_names = None
 
-        # Dynamic visualization fields, see _prepare_figure(...) docstring below
-        self._dynamic_figure = None  # the figure that will be dynamically updated
-        self._dynamic_axes = None  # axes of the subplots contained inside it
-        self._dynamic_caxes = None  # colorbar axes for heatmaps
+        # visualization fields, see _prepare_figure(...) docstring below
+        self._figure = None  # the figure that will be dynamically updated
+        self._axes = None  # axes of the subplots contained inside it
+        self._caxes = None  # colorbar axes for heatmaps
+        self._anim = None
 
         self._exception_info = None
 
@@ -63,10 +65,36 @@ class MeasurementResult:
         self._parameter_names = parameter_names
 
     @staticmethod
-    def load(sample_name, name, date='', return_all=False):
+    def delete(sample_name, name, date='', delete_all=False):
         """
         Finds all files with matching result name within the file structure of ./data/
-        folder and prompts user to resolve any ambiguities.
+        folder, prompts user to resolve any ambiguities. Then deletes selected
+        measurement data.
+
+        Example usage:
+        >>> from lib2.MeasurementResult import MeasurementResult
+        >>> result = MeasurementResult.delete("<sample_name>", "<name>")
+
+        If the user hits EOF (*nix: Ctrl-D, Windows: Ctrl-Z+Return),
+        raise EOFError. On *nix systems, readline is used if available.
+        """
+        paths = MeasurementResult._find_paths_by(sample_name, name,
+                                                 ".pkl", date, delete_all)
+
+        time_locations = set()
+        for path in paths:
+            time_location = os.path.join(*(path.split(os.sep)[:-1]))
+            time_locations.add(time_location)
+
+        print(time_location)
+        for time_location in time_locations:
+            shutil.rmtree(time_location, ignore_errors=True)
+
+    @staticmethod
+    def load(sample_name, name, date='', return_all=False):
+        """
+        Finds all files with matching result name within the file structure
+        of ./data/ folder and prompts user to resolve any ambiguities.
 
         Returns:
             an instance of the child class containing the specific measurement
@@ -80,79 +108,84 @@ class MeasurementResult:
         On *nix systems, readline is used if available.
         """
 
-        if platform.system() is "Windows":
-            paths = find(name + '.pkl', 'data\\' + sample_name + '\\' + date)
-            sep = "\\"
-        else:
-            paths = find(name + '.pkl', 'data/' + sample_name + '/' + date)
-            sep = "/"
-        path = None
-        if len(paths) > 1:
-            dates = [datetime.strptime(path.split(sep)[2], "%b %d %Y") \
-                     for path in paths]
-            z = zip(dates, paths)
-            sorted_dates, sorted_paths = zip(*sorted(z))
-            paths = sorted_paths
+        paths = MeasurementResult._find_paths_by(sample_name, name, ".pkl", date, return_all)
+        results = []
 
-            if return_all:
-                dict_of_res = []
-                for idx, path in enumerate(paths):
-                    try:
-                        with open(path, "rb") as f:
-                            dict_of_res.append(pickle.load(f))
-                    except pickle.UnpicklingError as e:
-                        dict_of_res.append(e)
+        for idx, path in enumerate(paths):
+            try:
+                with open(path, "rb") as f:
+                    results.append(pickle.load(f))
+            except pickle.UnpicklingError as e:
+                results.append(e)
 
-                return dict_of_res
-            else:
-                for idx, file in enumerate(paths):
-                    print(idx, file)
-                print("More than one file found. Enter an index from listed above:")
-                index = input()
-                path = paths[int(index)]
-        elif len(paths) == 1:
-            path = paths[0]
-        else:
+        return results if return_all else results[0]
+
+    @staticmethod
+    def _find_paths_by(sample_name, name, extension, date="", return_all=False):
+        paths = find(name + extension, os.path.join('data', sample_name, date))
+
+        if len(paths) == 0:
             print("Measurement result '%s' for the sample '%s' not found" % (name, sample_name))
             return
 
-        with open(path, "rb") as f:
-            if not return_all:
-                return pickle.load(f)
-            else:
-                return [pickle.load(f)]
+        locale.setlocale(locale.LC_TIME, "C")
+        dates = [datetime.strptime(path.split(os.sep)[2], "%b %d %Y")
+                 for path in paths]
+        z = zip(dates, paths)
+        sorted_dates, sorted_paths = zip(*sorted(z))
+
+        if not return_all and len(paths)>1:
+            return MeasurementResult._prompt_user_to_choose(sorted_paths)
+
+        return sorted_paths
+
+    @staticmethod
+    def _prompt_user_to_choose(paths):
+        for idx, file in enumerate(paths):
+            print(idx, file)
+        print("More than one file found. Enter an index from listed above:")
+        index = input()
+        return [paths[int(index)]]
 
     def get_save_path(self):
 
-        sample_directory = 'data\\' + self._sample_name
+        if not os.path.exists("data"):
+            os.makedirs("data")
+
+        sample_directory = os.path.join('data', self._sample_name)
         if not os.path.exists(sample_directory):
             os.makedirs(sample_directory)
 
-        date_directory = "\\" + self.get_start_datetime().strftime("%b %d %Y")
-        if not os.path.exists(sample_directory + date_directory):
-            os.makedirs(sample_directory + date_directory)
+        locale.setlocale(locale.LC_TIME, "C")
+        date_directory = os.path.join(sample_directory,
+                                      self.get_start_datetime().strftime("%b %d %Y"))
+        if not os.path.exists(date_directory):
+            os.makedirs(date_directory)
 
-        time_directory = "\\" + self.get_start_datetime().strftime("%H-%M-%S") + " - " + self._name
-        if not os.path.exists(sample_directory + date_directory + time_directory):
-            os.makedirs(sample_directory + date_directory + time_directory)
+        time_directory = os.path.join(date_directory,
+                                      self.get_start_datetime().strftime("%H-%M-%S")
+                                      + " - " + self._name)
 
-        return sample_directory + date_directory + time_directory + "\\"
+        if not os.path.exists(time_directory):
+            os.makedirs(time_directory)
+
+        return time_directory
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        del d['_data_lock']
-        del d['_anim']
-        del d['_figure']
-        del d['_axes']
-        del d['_caxes']
-        del d['_exception_info']
+        d['_data_lock'] = None
+        d['_anim'] = None
+        d['_figure'] = None
+        d['_axes'] = None
+        d['_caxes'] = None
+        d['_exception_info'] = None
         return d
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._data_lock = Lock()
 
-    def save(self):
+    def save(self, plot_maximized = True):
         """
         This method may be overridden in a child class but super().save()
         must be called in the beginning of the overridden method.
@@ -168,18 +201,18 @@ class MeasurementResult:
         child methods should save additional files in their overridden methods,
         i.e. plot pictures
         """
-        fig, axes, caxes = self.visualize()
+        fig, axes, caxes = self.visualize(plot_maximized)
 
         with self._data_lock:
-            with open(self.get_save_path() + self._name + '.pkl', 'w+b') as f:
+            with open(os.path.join(self.get_save_path(), self._name + '.pkl'), 'w+b') as f:
                 pickle.dump(self, f)
-            with open(self.get_save_path() + self._name + '_raw_data.pkl', 'w+b') as f:
+            with open(os.path.join(self.get_save_path(), self._name + '_raw_data.pkl'), 'w+b') as f:
                 pickle.dump(self._data, f)
-            with open(self.get_save_path() + self._name + '_context.txt', 'w+') as f:
+            with open(os.path.join(self.get_save_path(), self._name + '_context.txt'), 'w+') as f:
                 f.write(self.get_context().to_string())
 
-        plt.savefig(self.get_save_path() + self._name + ".png", bbox_inches='tight')
-        plt.savefig(self.get_save_path() + self._name + ".pdf", bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(), self._name + ".png"), bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(), self._name + ".pdf"), bbox_inches='tight')
         plt.close(fig)
 
     def visualize(self, maximized=True):
@@ -200,8 +233,9 @@ class MeasurementResult:
                 except:
                     figManager.window.state('zoomed')
             except:
-                fig.set_size_inches(10,5)
-
+                fig.set_size_inches(10, 5)
+        else:
+            fig.set_size_inches(10, 5)
         return fig, axes, caxes
 
     def _yield_data(self):
@@ -234,7 +268,6 @@ class MeasurementResult:
                                              frames=self._yield_data,
                                              repeat=False, interval=100)
 
-
     def _prepare_figure(self):
         """
         This method must be implemented for each new measurement type.
@@ -249,14 +282,18 @@ class MeasurementResult:
             these axes are obtained by calling matplotlib.colorbar.make_axes(ax)
             and then may be used to updated colorbars for each subplot
         """
-        pass
+        fig, axes = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
+        caxes = None
+        return fig, axes, caxes
 
-    def _plot(self, axes, caxes):
+    def _plot(self, data):
         """
         This method must be implemented for each new measurement type.
 
         The axes and caxes are those created by _prepare_figure(...) method and
         should be used here to visualize the data
+
+        The data to plot is passed as an argument by FuncAnimation
         """
         pass
 
@@ -279,7 +316,7 @@ class MeasurementResult:
             clear_output()
             traceback.print_tb(self._exception_info[-1])
             print(*self._exception_info[:2])
-            
+
     def set_is_finished(self, is_finished):
         self._is_finished = is_finished
 
@@ -327,12 +364,12 @@ class MeasurementResult:
     @staticmethod
     def close_figure_by_window_name(window_name):
         try:
-            idx = int(where(array([manager.canvas.figure.canvas.get_window_title()\
-                                   for manager in matplotlib._pylab_helpers.Gcf\
-                                   .get_all_fig_managers()]) == window_name)[0][0])
+            idx = int(where(array([manager.canvas.figure.canvas.get_window_title() \
+                                   for manager in matplotlib._pylab_helpers.Gcf \
+                                  .get_all_fig_managers()]) == window_name)[0][0])
             plt.close(plt.get_fignums()[idx])
         except IndexError:
-            print("Figure with window name '%s' not found"%window_name)
+            print("Figure with window name '%s' not found" % window_name)
 
     def copy(self):
         with self._data_lock:
