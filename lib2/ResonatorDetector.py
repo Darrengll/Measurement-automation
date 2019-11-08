@@ -1,5 +1,5 @@
 from scipy import *
-from resonator_tools.circuit import notch_port
+from resonator_tools.circuit import notch_port, reflection_port
 from numpy import abs
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
@@ -7,20 +7,24 @@ from scipy.signal import savgol_filter
 
 class ResonatorDetector():
 
-    def __init__(self, frequencies=None, s_data=None, plot=True, fast=False):
+    def __init__(self, frequencies=None, s_data=None, plot=True, fast=False, type = None):
 
         self._plot = plot
+        self._fast = fast
+        self._type = type
         self.set_data(frequencies, s_data)
         # self._s_data_filtered = (savgol_filter(real(self._s_data), 21, 2)\
         #                         + 1j*savgol_filter(imag(self._s_data), 21, 2))
         # self._filtered_port = notch_port(frequencies, self._s_data_filtered)
-        self._fast = fast
+
 
     def set_data(self, frequencies, s_data):
         self._freqs = frequencies
         self._s_data = s_data
-        self._port = notch_port(frequencies, s_data)
-
+        if self._type == 'reflection':
+            self._port = reflection_port(frequencies, s_data)
+        else:
+            self._port = notch_port(frequencies, s_data)
 
     def set_plot(self, plot):
         self._plot = plot
@@ -60,7 +64,17 @@ class ResonatorDetector():
         fit_min_idx = argmin(abs(self._port.z_data_sim))
 
         fine_freqs = linspace(self._freqs[0], self._freqs[-1], 10000)
-        fine_model = self._port._S21_notch(fine_freqs,
+        if self._type == 'reflection':
+            fine_model = self._port._S11_directrefl(fine_freqs,
+                                           fr=self._port.fitresults["fr"],
+                                           Ql=self._port.fitresults["Ql"],
+                                           Qc=self._port.fitresults["Qc"],
+                                           a=self._port.fitresults["a"],
+                                           alpha=self._port.fitresults["alpha"],
+                                           delay=self._port.fitresults["delay"])
+
+        else:
+            fine_model = self._port._S21_notch(fine_freqs,
                                            fr=self._port.fitresults["fr"],
                                            Ql=self._port.fitresults["Ql"],
                                            Qc=self._port.fitresults["absQc"],
