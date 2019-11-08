@@ -22,8 +22,12 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
                              **dev_params):
         self._resonator_area = dev_params['vna'][0]["freq_limits"]
         self._adaptive = adaptive
+        if self._resonator_area[0] != self._resonator_area[1]:
+            detect_resonator = not adaptive
+        else:
+            detect_resonator = False
         super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
-                                     detect_resonator=not adaptive,
+                                     detect_resonator=detect_resonator,
                                      **dev_params)
 
     def set_swept_parameters(self, mw_src_frequencies, current_values=None,
@@ -76,10 +80,55 @@ class PowerTwoToneSpectroscopy(TwoToneSpectroscopyBase):
     def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
 
+    def set_fixed_parameters(self, sweet_spot_current=None, sweet_spot_voltage=None, adaptive=False,
+                                 **dev_params):
+            self._resonator_area = dev_params['vna'][0]["freq_limits"]
+            self._adaptive = adaptive
+            if self._resonator_area[0] != self._resonator_area[1]:
+                detect_resonator = not adaptive
+            else:
+                detect_resonator = False
+            super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
+                                         detect_resonator=detect_resonator,
+                                         **dev_params)
+
     def set_swept_parameters(self, mw_src_frequencies, power_values):
         swept_pars = {"Power [dBm]": (self._mw_src[0].set_power, power_values),
                       "Frequency [Hz]": (self._mw_src[0].set_frequency, mw_src_frequencies)}
         super().set_swept_parameters(**swept_pars)
+
+
+
+    def _adaptive_setter(self, value):
+        self._base_parameter_setter(value)
+
+        vna_parameters = self._fixed_pars["vna"][0]
+        vna_parameters["freq_limits"] = self._resonator_area
+
+        self._mw_src[0].set_output_state("OFF")
+        print("\rDetecting a resonator within provided frequency range of the VNA %s\
+                    " % (str(vna_parameters["freq_limits"])), flush=True, end="")
+        res_result = self._detect_resonator(vna_parameters, plot=False)
+
+        if (res_result is None):
+            print("Failed to fit resonator, trying to use last successful fit, power = ", power,
+                  " A")
+            if (self._last_resonator_result is None):
+                print("no successful fit is present, terminating")
+                raise ValueError("Couldn't find resonator!")
+            else:
+                res_result = self._last_resonator_result
+        else:
+            self._last_resonator_result = res_result
+        self._resonator_fits.append(res_result)
+
+        res_freq, res_amp, res_phase = self._last_resonator_result
+        print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
+                    degrees" % (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180), end="")
+        self._mw_src[0].set_output_state("ON")
+        vna_parameters["freq_limits"] = (res_freq, res_freq)
+        self._resonator_area = (res_freq - 20e6, res_freq + 20e6)
+        self._vna[0].set_parameters(vna_parameters)
 
 
 class AcStarkTwoToneSpectroscopy(TwoToneSpectroscopyBase):
