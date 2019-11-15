@@ -191,7 +191,7 @@ class Measurement:
                 self._last_swept_pars_values[name] = value
                 self._swept_pars[name][0](value)  # this is setter call, look carefully
 
-    def launch(self):
+    def launch(self, join = True):
 
         self._interrupted = False  # ensure
 
@@ -205,7 +205,8 @@ class Measurement:
 
         try:
             self._measurement_result.visualize_dynamic()
-            self.join()
+            if join:
+                self.join()
         except Exception as e:
             print("exception {}".format(e))
         finally:
@@ -228,6 +229,9 @@ class Measurement:
         finally:
             self._measurement_result.finalize()
             plt.close(figure_number)
+            
+    def stop(self):
+        self._interrupted = True
 
     def measure(self):
         self._measurement_result.set_is_finished(False)  # ensure

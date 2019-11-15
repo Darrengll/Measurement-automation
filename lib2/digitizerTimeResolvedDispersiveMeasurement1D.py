@@ -9,17 +9,13 @@ import lib2.IQPulseSequence
 
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
-from drivers.pyspcm import SPC_TM_NEG
-
 
 def _default_args2dict():
     print(inspect.stack()[0])
 
-
 class FOURIER_METHOD(Enum):
     SANK = auto()
     FFT = auto()
-
 
 class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
@@ -31,12 +27,14 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._basis = None
         self._ult_calib = False
         self._adc_parameters = None
-        self._n_samples_to_drop_by_dig_delay = None
-        self._n_samples_to_drop_in_end = None
+        self._n_samples_to_drop_by_dig_delay = 0
+        self._n_samples_to_drop_in_end = 0
         self._pulse_sequence_parameters = \
             {"modulating_window": "rectangular", "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
         self._fourier_method = FOURIER_METHOD.FFT
+
+        self._full_data = []
 
     def set_fixed_parameters(self, pulse_sequence_parameters, **dev_params):
         """
@@ -48,10 +46,16 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         """
         # TODO check carefully. All single device functions should be deleted?
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
-        self._measurement_result.get_context().get_pulse_sequence_parameters().update(pulse_sequence_parameters)
+
+        # Как это вообще работало, если в ContextBase нет такого метода get_pulse_sequence_parameters()?
+        # self._measurement_result.get_context().get_pulse_sequence_parameters().update(pulse_sequence_parameters)
         self._measurement_result._iter = 0
 
         super().set_fixed_parameters(**dev_params)
+        self._measurement_result.get_context().update(
+            {"calibration_results": self._q_awg[0]._calibration.get_optimization_results(),
+             "radiation_parameters": self._q_awg[0]._calibration.get_radiation_parameters()}
+        )
         # self._q_awg[0].setup_AM_and_carrier_from_calibration()
 
     def set_fourier_method(self, method: FOURIER_METHOD):
@@ -113,15 +117,14 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
     def set_ult_calib(self, value=False):
         self._ult_calib = value
 
-    def _single_mesurement(self):
+    def _single_measurement(self):
         dig_data = self._dig[0].measure(self._dig[0]._bufsize)[2 * self._n_samples_to_drop_by_dig_delay:-2 * self._n_samples_to_drop_in_end]
         dig_data = dig_data * self._dig[0].ch_amplitude / 128 / self._dig[0].n_avg
-        if self._dig[0].n_seg > 1:
-            a = np.arange(self._dig[0]._segment_size_optimal, len(dig_data), self._dig[0]._segment_size)
-            b = np.concatenate([a + i for i in range(0, self._dig[0]._segment_size - self._dig[0]._segment_size_optimal)])
-            dig_data = np.delete(dig_data, b)
         dataI = dig_data[0::2]
         dataQ = dig_data[1::2]
+
+        self._full_data.append(dig_data)  # save full data in case of more detailed investigation
+
         IQ = 0 + 1j * 0
         if self._fourier_method is FOURIER_METHOD.SANK:
             self.preset_Fourier_from_IQ(self._q_awg[0]._calibration._if_frequency, len(dataI),
@@ -140,13 +143,13 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
     def _recording_iteration(self):
 
         if self._ult_calib:
-            fg = self._single_mesurement()
+            fg = self._single_measurement()
             self._output_zero_sequence()
-            bg = self._single_mesurement()
+            bg = self._single_measurement()
             mean_data = fg - bg
             # print(fg, bg, mean_data)
         else:
-            mean_data = self._single_mesurement()
+            mean_data = self._single_measurement()
 
         if self._basis is None:
             return mean_data
@@ -225,8 +228,7 @@ class DigitizerDirectRabi(DigitizerTimeResolvedDirectMeasurement1D):
                             "q_awg": q_awg,
                             "dig": dig}
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
-        self._measurement_result = DispersiveRabiOscillationsResult(name,
-                                                                    sample_name)
+        self._measurement_result = DispersiveRabiOscillationsResult2(name, sample_name)
         self._sequence_generator = IQPulseBuilder.build_direct_rabi_sequences
         self._swept_parameter_name = "excitation_duration"
 
@@ -235,15 +237,65 @@ class DigitizerDirectRabi(DigitizerTimeResolvedDirectMeasurement1D):
 
     def _output_pulse_sequence(self, excitation_duration):
         # update a trigger delay of the digitizer
+        dig = self._dig[0]
         timedelay = self._pulse_sequence_parameters["awg_trigger_reaction_delay"] \
                     + excitation_duration + self._pulse_sequence_parameters["digitizer_delay"]
-        delay = int(timedelay * 1e-9 * self._dig[0].get_sample_rate()) + self._dig[0].pretrigger
-        self._n_samples_to_drop_by_dig_delay = delay % 32  # number of samples to drop from waveform in software
-        delay -= self._n_samples_to_drop_by_dig_delay  # digitizer delay must is dividable by 32
-        self._dig[0].set_trigger_delay(delay)
+        dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)
+        self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
 
-        segment_size = self._dig[0]._segment_size_optimal + self._n_samples_to_drop_by_dig_delay
-        self._n_samples_to_drop_in_end = 32 - segment_size % 32
-        segment_size += 32 - segment_size % 32  # completing requested signal length to the multiple of 32
+        dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
+        dig.setup_averaging_mode()
+        self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
 
         super()._output_pulse_sequence(excitation_duration)
+
+
+class DispersiveRabiOscillationsResult2(DispersiveRabiOscillationsResult):
+
+    def _model(self, t, A_r, A_i, T_R, Omega_R, offset_r, offset_i, phase1, phase2):
+        return -(A_r*np.cos(Omega_R*t+phase1)+1j*A_i*np.cos(Omega_R*t+phase2))*np.exp(-1/T_R*t)+offset_r+offset_i*1j
+
+    def _generate_fit_arguments(self, x, data):
+        amp_r, amp_i = np.ptp(np.real(data))/2, np.ptp(np.imag(data))/2
+        if abs(max(np.real(data)) - np.real(data[0])) < abs(np.real(data[0])-min(np.real(data))):
+            amp_r = -amp_r
+        if abs(max(np.imag(data)) - np.imag(data[0])) < abs(np.imag(data[0])-min(np.imag(data))):
+            amp_i = -amp_i
+        offset_r, offset_i = max(np.real(data))-abs(amp_r), max(np.imag(data))-abs(amp_i)
+
+        time_step = x[1]-x[0]
+        max_frequency = 1/time_step/2/5
+        min_frequency = 0.1
+        frequency = np.random.random(1)*(max_frequency-.1)+.1
+        p0 = [amp_r, amp_i, 1, frequency*2*np.pi, offset_r, offset_i, 0, 0]
+
+        bounds =([-abs(amp_r)*1.5, -abs(amp_i)*1.5, 0.1,
+                  min_frequency*2*np.pi, -10, -10, -np.pi, -np.pi],
+                 [abs(amp_r)*1.5, abs(amp_i)*1.5, 100,
+                  max_frequency*2*np.pi, 10, 10, np.pi, np.pi])
+        return p0, bounds
+
+    def _generate_annotation_string(self, opt_params, err):
+        return "$T_R=%.2f \pm %.2f \mu$s\n$\Omega_R/2\pi = %.2f \pm %.2f$ MHz\n$\Delta\phi = %.2f$ rad"%\
+                (opt_params[2], err[2], opt_params[3]/2/np.pi, err[3]/2/np.pi,
+                 (opt_params[6]-opt_params[7]) % (2*np.pi) - np.pi)
+
+    def get_pi_pulse_duration(self):
+        return 1/(self._fit_params[3]/2/np.pi)/2
+
+    def get_rabi_decay(self):
+        return (self._fit_params[2], self._fit_errors[2])
+
+    def get_rabi_frequency(self):
+        return (self._fit_params[3], self._fit_errors[3])
+
+    def get_basis(self):
+        fit = self._fit_params
+        A_r, A_i, offset_r, offset_i = fit[0], fit[1], fit[-2], fit[-1]
+        ground_state = -A_r+offset_r+1j*(-A_i+offset_i)
+        excited_state = A_r+offset_r+1j*(A_i+offset_i)
+        return np.array((ground_state, excited_state))
+
+    def get_betas(self):
+        return [self._fit_params[0] + 1j*self._fit_params[1],  # beta_II
+                self._fit_params[4] + 1j * self._fit_params[5]]  # beta_ZI or beta IZ depending on the qubit number in a qubit pair

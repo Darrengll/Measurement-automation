@@ -144,7 +144,6 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
         # obtaining frequencies (frequencies is duplicating)
         xf = np.fft.fftfreq(self.nfft, 1 / self._dig.get_sample_rate()) / 1e6
-
         self._start_idx = np.searchsorted(xf[:self.nfft // 2 - 1], self._freq_limits[0])
         self._end_idx = np.searchsorted(xf[:self.nfft // 2 - 1], self._freq_limits[1])
         self._frequencies = xf[self._start_idx:self._end_idx + 1]
@@ -201,7 +200,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
     def get_continuous_wave(self, k_ampl):
         duration = 1e9 * self._adc_parameters["dur_seg"]
-        return self.pulse_builder.add_sine_pulse(duration, amplitude=k_ampl).build()
+        return self.pulse_builder.add_sine_pulse(duration, amplitude_mult=k_ampl).build()
 
     def _prepare_measurement_result_data(self, parameter_names, parameters_values):
         measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
@@ -256,8 +255,8 @@ class WMPulseBuilder(IQPulseBuilder):
         freq_m = self._iqmx_calibration._if_frequency - delta_freq
         freq_p = self._iqmx_calibration._if_frequency + delta_freq
 
-        if_offsets = self._iqmx_calibration._if_offsets/2
-        if_amplitudes = self._iqmx_calibration._if_amplitudes/2
+        if_offsets = self._iqmx_calibration._if_offsets
+        if_amplitudes = self._iqmx_calibration._if_amplitudes
         sequence_m = IQPulseBuilder(self._iqmx_calibration).add_sine_pulse(duration, phase, amplitude, window,
                                                                            hd_amplitude,
                                                                            freq_m, if_offsets/2, if_amplitudes/2).build()
@@ -266,6 +265,6 @@ class WMPulseBuilder(IQPulseBuilder):
                                                                            freq_p, if_offsets/2, if_amplitudes/2).build()
         final_seq = sequence_m.direct_add(sequence_p)
 
-        self._pulse_seq_I = self._pulse_seq_I + final_seq._i
-        self._pulse_seq_Q = self._pulse_seq_Q + final_seq._q
+        self._pulse_seq_I += final_seq._i
+        self._pulse_seq_Q += final_seq._q
         return self

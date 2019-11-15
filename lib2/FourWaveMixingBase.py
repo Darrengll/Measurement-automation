@@ -175,7 +175,7 @@ class FourWaveMixingResult(MeasurementResult):
         if self._idx == []:
             max_order = 10
             con_eq = self.get_context().get_equipment()
-            central_freq = con_eq['iqawg'][0]['calibration'].get_radiation_parameters()['if_frequency'] / 1e6
+            central_freq = con_eq['q_awg'][0]['calibration'].get_radiation_parameters()['if_frequency'] / 1e6
             freqs = np.array([self._delta * (1 + 2 * i) for i in range(max_order)])  # , 220, 260, 300, 340, 380, 420])
             mfreqs = -freqs
             self._idx = np.searchsorted(data["frequency"], central_freq + freqs)
