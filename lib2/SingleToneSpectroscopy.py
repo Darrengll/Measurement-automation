@@ -4,12 +4,16 @@ Paramatric single-tone spectroscopy is perfomed with a Vector Network Analyzer
 passed to the SingleToneSpectroscopy class when it is created.
 """
 from numpy import *
+from scipy import fftpack
+
 from lib2.MeasurementResult import *
 from datetime import datetime as dt
 from matplotlib import pyplot as plt, colorbar
 from resonator_tools import circuit
 from lib2.Measurement import *
 from time import sleep
+
+from lib2.digitizerTimeResolvedDispersiveMeasurement1D import DigitizerTimeResolvedDirectMeasurement
 
 
 class SingleToneSpectroscopy(Measurement):
@@ -184,7 +188,6 @@ class SingleToneSpectroscopyResult(MeasurementResult):
             self._phas_cb.set_clim(self.min_phase, self.max_phase)
             plt.draw()
 
-
     def set_plot_range(self, min_abs, max_abs, min_phas=None, max_phas=None):
         self.max_phase = max_phas
         self.min_phase = min_phas
@@ -207,7 +210,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         return copy
 
     def _remove_delay(self, frequencies, s_data):
-        phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))
+        phases = unwrap(angle(s_data))
         k, b = polyfit(frequencies, phases[0], 1)
         phases = phases - k * frequencies - b
         corr_s_data = abs(s_data) * exp(1j * phases)
@@ -265,3 +268,73 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         d["_amp_cb"] = None
         d["_phas_cb"] = None
         return d
+
+
+# Not tested yet
+class SingleToneSpectroscopy2(DigitizerTimeResolvedDirectMeasurement):
+    """
+    Class provides all the necessary methods for single-tone spectroscopy with a digitizer,
+    IQ-mixers, an AWG and a RF generator.
+
+    must-have keywords for constructor:
+        dig = list of digitizer classes or internal aliases
+        q_iqawg = list of IQ AWG
+        q_lo = lost of RF generators
+        src = list of voltage/current sources classes or internal aliases
+
+        For internal aliases/classes see Measurement._devs_dict dictionary in lib2/Measurement.py
+    """
+
+    def __init__(self, name, sample_name, plot_update_interval=5, **devs_aliases_map):
+        self._src = None  # voltage/current sources list
+        super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
+        self._measurement_result = SingleToneSpectroscopyResult(name, sample_name)
+        self._frequencies = []
+        self._rf_generator_delay = 0
+        self._iqawg_sequence = None
+
+    def set_fixed_parameters(self, freq_limits, nop, **dev_params):
+        """
+        SingleToneSpectroscopy only requires vna parameters in format
+        {"bandwidth":int, ...}
+        """
+        super().set_fixed_parameters(None, dev_params["q_lo"], dev_params["q_iqawg"])
+        self._measurement_result.get_context().update({
+            "calibration_results": self._q_iqawg[0]._calibration.get_optimization_results(),
+            "radiation_parameters": self._q_iqawg[0]._calibration.get_radiation_parameters(),
+            "pulse_sequence_parameters": None
+        })
+        self._frequencies = linspace(*freq_limits, nop)
+        self._rf_generator_delay = dev_params["q_lo"][0]["frequency_switching_delay"]
+        self._Nfft = fftpack.next_fast_len(self._dig._segment_size)
+        self._iqawg_sequence = self._q_iqawg.get_pulse_builder().add_sine_pulse(int(self._Nfft / 1e9)).build()
+
+    def set_swept_parameters(self, swept_parameter):
+        """
+        SingleToneSpectroscopy only takes one swept parameter in format
+        {"parameter_name":(setter, values)}
+        """
+        super().set_swept_parameters(**swept_parameter)
+        par_name = list(swept_parameter.keys())[0]
+        par_setter, par_values = swept_parameter[par_name]
+        par_setter(par_values[0])
+        sleep(1)
+
+    def _recording_iteration(self):
+        self._q_iqawg.output_pulse_sequence()
+        trace = np.empty_like(self._frequencies, dtype=np.complex)
+        for i, freq in enumerate(self._frequencies):
+            self._q_lo.set_frequency(freq)
+            sleep(self._rf_generator_delay)
+            trace[i] = self._single_measurement()
+        return trace
+
+    def _prepare_measurement_result_data(self, parameter_names, parameters_values):
+        measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
+        measurement_data["Frequency [Hz]"] = self._frequencies
+        return measurement_data
+
+    def _finalize(self):
+        for src in self._src:
+            if((hasattr(src, "set_current")) and ( src._visainstrument.ask(":SOUR:FUNC?") == "VOLT\n" )):  # voltage src
+                src.set_voltage(0)

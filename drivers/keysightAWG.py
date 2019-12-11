@@ -39,7 +39,7 @@ class WaveformType(Enum):
 
 
 class KeysightAWG(Instrument):
-
+    MAX_OUTPUT_VOLTAGE = 1.0  # V
     def __init__(self, address):
         """Create a default Keysight AWG instrument"""
         Instrument.__init__(self, 'AWG', tags=['physical'])

@@ -133,6 +133,17 @@ class SPCM:
         self.AVG_ON = True  # Set the averaging flag on
         self.__handle_error()
 
+    def setup_multi_rec_STD(self, memsize, segmentsize, posttrigger):
+        """Setup Multiple Reconding Acquisition mode
+            Acquires many segments (N = memsize/segmentsize) and saves them in Spectrum memory"""
+        self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_MULTI)  # Enables Segment Statistic for standard acquisition
+        self.__write_to_reg_32(SPC_MEMSIZE, memsize)
+        self.__write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
+        self.__write_to_reg_32(SPC_POSTTRIGGER,
+                               posttrigger)  # Post trigger memory size (pretrigger  = segmentsize - posttrigger)
+        self.AVG_ON = False
+        self.__handle_error()
+
     def setup_channel(self, channelnum, amplitude):
         """Setup channels of the Digitizer
             Parameters:
@@ -201,17 +212,18 @@ class SPCM:
         if include_pretrigger:
             delay += self.pretrigger
         self._n_samples_to_drop_by_dig_delay = delay % 32  # number of samples to drop from waveform in software
-        delay -= self._n_samples_to_drop_by_dig_delay  # digitizer delay must is dividable by 32
+        delay -= self._n_samples_to_drop_by_dig_delay  # digitizer delay must be dividable by 32
         self.set_trigger_delay(delay)
 
-    def calc_and_set_segment_size(self, dur_seg=0, extra=0):
+    def calc_and_set_segment_size(self, dur_seg=0, extra=0, samples_drop=0):
         """
         !!! Must be called after the oversampling factor is set but before the mode is chosen
             set_parameters() handles this issue
         """
         if dur_seg == 0:
             dur_seg = self.dur_seg
-        self._segment_size = int(dur_seg * self.get_sample_rate()) + extra
+
+        self._segment_size = int(dur_seg * self.get_sample_rate()) + extra - samples_drop
         self._n_samples_to_drop_in_end = 32 - self._segment_size % 32
         self._segment_size += self._n_samples_to_drop_in_end  # completing requested signal length to the multiple of 32
         self._bufsize = self.n_seg * self._segment_size * 4 * len(self.channels)
@@ -334,6 +346,37 @@ class SPCM:
         self.setup_channels(channels, ampl)
         self.setup_SSA(memsize, posttrigger_mem)  # measure the signal and save in the card memory
 
+    def setup_multiple_recoding_mode(self, channels=None, ampl=None, num_segments=None, segment_size=None, pretrigger=None):
+        if channels is None:
+            channels = self.channels
+        if ampl is None:
+            ampl = self.ch_amplitude
+        if num_segments is None:
+            num_segments = self.n_seg
+        if segment_size is None:
+            segment_size = self._segment_size
+        if pretrigger is None:
+            pretrigger = self.pretrigger
+
+        posttrigger_mem = segment_size - pretrigger
+        memsize = num_segments * segment_size
+
+        # card driver does not throw error on exceeding the segment size
+        # see manual p.153
+        max_seg_size = self.__read_reg_64(SPC_PCIMEMSIZE) // 2 // len(channels)
+        if segment_size > max_seg_size:
+            raise CardError(f"Segment size {segment_size} exceeds maximal "
+                            f"segment size {max_seg_size} for {len(channels)} channels")
+
+        if segment_size % 32 > 0:
+            raise CardError(f"Segment size must be a multiple of 32")
+
+        self.setup_multi_rec_STD(memsize, segment_size, posttrigger_mem)
+        self.setup_channels(channels, ampl)
+        self.setup_internal_clock()
+        self.setup_ext0_trigger()
+        self.setup_sample_rate()
+
     def setup_averaging_mode(self, channels=None, ampl=None, num_segments=None, segment_size=None, pretrigger=None,
                              num_averages=None):
         if channels is None:
@@ -358,6 +401,8 @@ class SPCM:
         if segment_size > max_seg_size:
             raise CardError(f"Segment size {segment_size} exceeds maximal "
                             f"segment size {max_seg_size} for {len(channels)} channels")
+        if segment_size % 32 > 0:
+            raise CardError(f"Segment size must be a multiple of 32")
 
         self.setup_block_avg_STD(memsize, segment_size, posttrigger_mem, num_averages)
         self.setup_channels(channels, ampl)
@@ -391,6 +436,17 @@ class SPCM:
         self.setup_averaging_mode(channels, ampl, num_segments, segment_size, pretrigger, num_averages)
         data = self.measure(num_segments * segment_size * 4 * N)
         # print("Number of triggers detected is %d out of %d" % (self.get_trigger_counter(), num_pulses))
+        return data
+
+    def measure_multiple_recording_mode(self, channels, ampl, num_segments, segment_size, pretrigger):
+        if type(channels) is int:
+            N = 1
+            channels = [channels]
+        else:
+            N = len(channels)
+
+        self.setup_multiple_recoding_mode(channels, ampl, num_segments, segment_size, pretrigger)
+        data = self.measure(num_segments * segment_size * N)
         return data
 
     @staticmethod

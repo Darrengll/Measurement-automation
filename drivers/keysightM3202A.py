@@ -1,16 +1,15 @@
 from drivers.instrument import Instrument
 
-import sys
-sys.path.append('C:\Program Files (x86)\Keysight\SD1\Libraries\Python')
-
 import keysightSD1
 from keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, SD_TriggerBehaviors, SD_TriggerDirections
 from keysightSD1 import SD_WaveformTypes, SD_Waveshapes, SD_MarkerModes, SD_SyncModes, SD_Error
+from keysightSD1 import SD_ModulationTypes
 
 import numpy as np
 from scipy.interpolate import interp1d
 
 class KeysightM3202A(Instrument):
+    MAX_OUTPUT_VOLTAGE = 1.5  # V
 
     def __init__(self, name, slot, chassis=0):
         super().__init__(name, tags=['physical'])
@@ -23,10 +22,6 @@ class KeysightM3202A(Instrument):
         self.modulation_amplitudes = [0.0]*4
         self.offsets = [0.0] * 4
 
-        # synchronize all AWG queue's with internal clock
-        for channel in [1, 2, 3, 4]:
-            self.module.AWGqueueSyncMode(channel - 1, syncMode=1)  # sync with internal CLKsys
-
         # Shamil a.k.a. 'BATYA' code here
         self.waveforms = [None] * 4
         self.waveform_ids = [-1] * 4
@@ -38,19 +33,28 @@ class KeysightM3202A(Instrument):
         self.trigger_behaviours = [SD_TriggerBehaviors.TRIGGER_RISE] * 4  # rising edge by default
         self.trigger_output = True
         self.synchronized_channels = []
+        self.sync_mode = 0  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
 
         self._source_channels_group = []  # channels that are the source of the waveforms for dependent group
         self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms from _source_channels_group
         self._update_dependent_on_start = False
 
+        self._prescaler = 0
+
     def _handle_error(self, ret_val):
-        if( ret_val < 0 ):
+        if ret_val < 0 :
             print(ret_val)
             raise Exception
 
     def clear(self):
         # clear internal memory and AWG queues
         ret = self.module.waveformFlush()
+
+        # stop all modulations
+        for channel in [1, 2, 3, 4]:
+            self.module.modulationAmplitudeConfig(channel - 1, SD_ModulationTypes.AOU_MOD_OFF, 0)
+            self.module.modulationAngleConfig(channel - 1, SD_ModulationTypes.AOU_MOD_OFF, 0)
+            self.module.modulationIQconfig(channel - 1, 0)  # disable IQ modulation
         self._handle_error(ret)
 
     def synchronize_channels(self, *channels):
@@ -127,7 +131,7 @@ class KeysightM3202A(Instrument):
                 trgPXImask = 0b0
                 trgIOmask = 0b1
                 self.module.AWGqueueMarkerConfig(chan - 1, SD_MarkerModes.EVERY_CYCLE,
-                                                 trgPXImask, trgIOmask, 1, syncMode=1,  # trigger sync with internal CLKsys
+                                                 trgPXImask, trgIOmask, 1, syncMode=self.sync_mode,  # trigger sync with internal CLKsys
                                                  length=int(trig_length/10),  # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                                                  delay=0)
                 break  # first channel from group is enough to produce output marker
@@ -137,7 +141,7 @@ class KeysightM3202A(Instrument):
                 # deleting marker to the specified channel
                 trgIOmask = 0b1
                 self.module.AWGqueueMarkerConfig(chan - 1, SD_MarkerModes.DISABLED,
-                                                 0, 1, 1, syncMode=1,  # trigger synch with internal CLKsys
+                                                 0, 1, 1, syncMode=self.sync_mode,  # trigger synch with internal CLKsys
                                                  length=100,  # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                                                  delay=0)
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_IN)
@@ -196,7 +200,7 @@ class KeysightM3202A(Instrument):
         self.stop_modulation(channel)
         self.setup_carrier_signal(frequency, amplitude, phase, offset, channel)
 
-        # resetting phase for synchronization of multiple carrier signals
+        # resetting phase for synchronization of multiple carrier signals from internal Function Generator
         self.module.channelPhaseResetMultiple(sum([1 << (chan - 1) for chan in self.synchronized_channels]))
 
         self.start_AWG(channel)
@@ -213,14 +217,13 @@ class KeysightM3202A(Instrument):
         self.module.channelPhase(channel-1, phase/np.pi*180)
         self.module.channelOffset(channel-1, offset)
 
-    @staticmethod
-    def calc_sampling_rate(prescaler):
-        if prescaler == 0:
+    def get_sample_rate(self):
+        if self._prescaler == 0:
             fs = int(1e9)
-        elif prescaler == 1:
+        elif self._prescaler == 1:
             fs = int(2e8)
-        elif  prescaler > 1:
-            fs = int(100//prescaler*1e6)
+        elif self._prescaler > 1:
+            fs = int(100//self._prescaler*1e6)
         return fs
 
     def setup_amplitude_modulation(self, channel, waveform_id, array, deviationGain, prescaler):
@@ -261,8 +264,6 @@ class KeysightM3202A(Instrument):
                                               deviationGain)
 
     def load_waveform_to_channel(self, waveform, frequency, channel, waveshape_type=None):
-        waveform = np.array(waveform, dtype=np.float16, copy=True)
-
         if np.max(np.abs(waveform)) >= 1.5:
             raise Exception("signal maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
 
@@ -274,7 +275,7 @@ class KeysightM3202A(Instrument):
         # interpolating input waveform to the next step
         # that rescales waveform to fit frequency
         interpolation_method = "cubic" if frequency != 0 else "linear"
-        old_x = np.linspace(0, duration_initial, len(waveform))
+        old_x = np.linspace(0, duration_initial, len(waveform), endpoint=False)
         f_wave = interp1d(old_x, waveform, kind=interpolation_method)
 
         # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
@@ -284,7 +285,7 @@ class KeysightM3202A(Instrument):
         # duration = duration_initial*1e4 if duration_initial < 1e2 else 1e6  # here it is
 
         duration = duration_initial
-        new_x = np.arange(0, duration, 1.0)
+        new_x = np.linspace(0, duration, np.round(duration/self.get_sample_rate()*1e9), endpoint=False)
 
         # converting domain values in the function domain
         new_x_converted = np.remainder(new_x, duration_initial)
@@ -297,7 +298,7 @@ class KeysightM3202A(Instrument):
 
         waveform_array /= normalization # normalize waveform to (-1,1) interval
         self.repetition_frequencies[channel - 1] = frequency
-
+        waveform_array = np.array(waveform_array, dtype=np.float16, copy=True)
         self._load_array_into_AWG(waveform_array, channel, waveshape_type)
 
     def _load_array_into_AWG(self, waveform_array_normalized, channel, waveshape_type=None):
@@ -337,6 +338,7 @@ class KeysightM3202A(Instrument):
                                            0,  # 0 ns starting delay
                                            0,  # 0 - means infinite
                                            0)  # prescaler is 0
+        self._prescaler = 0
         self._handle_error(ret)
 
         # set amplitude in volts
@@ -349,9 +351,13 @@ class KeysightM3202A(Instrument):
 
         if ((not self.synchronized_channels) or (channel not in self.synchronized_channels)):
             ret = self.module.AWGstart(channel - 1)
+            self.module.AWGqueueSyncMode(channel - 1, syncMode=self.sync_mode)
             self._handle_error(ret)
         elif (channel in self.synchronized_channels):
-            channels_mask = sum([1 << (chan - 1) for chan in self.synchronized_channels])
+            channels_mask = 0
+            for chan in self.synchronized_channels:
+                channels_mask += 1 << (chan - 1)
+                self.module.AWGqueueSyncMode(chan - 1, syncMode=self.sync_mode)
             ret = self.module.AWGstartMultiple(channels_mask)
             self._handle_error(ret)
         else:
@@ -412,10 +418,13 @@ class KeysightM3202A(Instrument):
                 self._load_array_into_AWG(self.waveforms[source_chan-1], dependent_chan)
                 # print(self.waveforms[source_chan-1]*self.output_voltages[source_chan-1],self.output_voltages[dependent_chan-1]*self.waveforms[source_chan-1])
 
+    def get_prescaler(self):
+        self._prescaler
+
     def plot_waveforms(self):
         import matplotlib.pyplot as plt
         plt.figure()
         for i, waveform in enumerate(self.waveforms):
             if(waveform is not None):
-                plt.plot(waveform, label="CH"+str(i))
+                plt.plot(waveform, label="CH"+str(i+1))
         plt.legend()

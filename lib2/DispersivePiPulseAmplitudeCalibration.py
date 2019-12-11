@@ -30,15 +30,14 @@ class DispersivePiPulseAmplitudeCalibrationResult(VNATimeResolvedDispersiveMeasu
         if_amps = self._context.get_equipment()["q_awg"][0]["calibration"]._if_amplitudes
         self._x_axis_units = r"$\times$ cal values (%.2f %.2f)"%(if_amps[0], if_amps[1])
 
-    def _model(self, amplitude, A_r, A_i, pi_amplitude,
-               offset_r, offset_i):
-        return -(A_r+1j*A_i)*cos(pi*amplitude/pi_amplitude)+(offset_r+offset_i*1j)
+    def _model(self, amplitude, A_r, A_i, pi_amplitude, offset_r, offset_i):
+        return -(A_r + 1j * A_i) * cos(pi * amplitude / pi_amplitude) + (offset_r + offset_i * 1j)
 
     def _generate_fit_arguments(self, x, data):
         amp_r, amp_i = ptp(real(data))/2, ptp(imag(data))/2
-        if abs(max(real(data)) - real(data[0])) < abs(real(data[0])-min(real(data))):
+        if abs(max(real(data)) - real(data[0])) < abs(real(data[0]) - min(real(data))):
             amp_r = -amp_r
-        if abs(max(imag(data)) - imag(data[0])) < abs(imag(data[0])-min(imag(data))):
+        if abs(max(imag(data)) - imag(data[0])) < abs(imag(data[0]) - min(imag(data))):
             amp_i = -amp_i
         offset_r, offset_i = max(real(data))-abs(amp_r), max(imag(data))-abs(amp_i)
         amp_step = x[1]-x[0]

@@ -86,6 +86,7 @@ class CalibratedAWG():
 class IQAWG():
     def __init__(self, channel_I: AWGChannel, channel_Q: AWGChannel, triggered=False):
         self._channels = [channel_I, channel_Q]
+        self.MAX_OUTPUT_VOLTAGE = channel_I._host_awg.MAX_OUTPUT_VOLTAGE
         self._triggered = triggered
         self._calibration = None  # TODO: BUG CAN BE HERE (SHAMIL 23.04.2019)
 
@@ -164,13 +165,12 @@ class IQAWG():
         self._output_continuous_wave(0, 0, 0, cal._dc_offsets[0], 1, 0)
         self._output_continuous_wave(0, 0, 0, cal._dc_offsets[1], 2, 1)
 
-    def output_continuous_two_freq_IQ_waves(self, dfreq, prescaler=1, ampl_coef=1):
-        fs = KeysightM3202A.calc_sampling_rate(prescaler)  # Hz
+    def output_continuous_two_freq_IQ_waves(self, dfreq, ampl_coefs=(2, 2)):
+        fs = self._channels[0]._host_awg.get_sample_rate()  # Hz
         N = fs / dfreq
-        array_mod = (cos(linspace(0, 4 * pi, 2 * N, endpoint=False)) - 1) / 2
+        array_mod = cos(linspace(0, 2 * pi, N, endpoint=False))
         self._channels[0]._host_awg.synchronize_channels(*[channel._channel_number for channel in self._channels])
-        modulation_coeff = 2.
-        self.output_modulated_IQ_waves(array_mod, modulation_coeff, prescaler, ampl_coef)
+        self.output_modulated_IQ_waves(array_mod, self._channels[0]._host_awg._prescaler, ampl_coefs)
 
     def change_amplitudes_of_cont_IQ_waves(self, ampl_coef):
         cal = self._calibration
@@ -349,7 +349,7 @@ class IQAWG():
             duration = pulse_sequence.get_duration()
             end_idx = length
 
-        frequency = 1 / duration * 1e9
+        frequency = 1 / (duration+1) * 1e9
         self._channels[0].output_arbitrary_waveform(pulse_sequence \
                                                     .get_I_waveform()[:end_idx], frequency,
                                                     asynchronous=True)

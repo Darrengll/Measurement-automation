@@ -7,9 +7,9 @@ from IPython.display import clear_output
 class IQCalibrationData():
 
     def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,
-        if_frequency, sideband_to_maintain, ssb_power, waveform_resolution, dc_offsets,
-        dc_offsets_open, if_offsets, if_amplitudes, if_phase, spectral_values,
-        optimization_time, end_date):
+                 if_frequency, sideband_to_maintain, ssb_power, waveform_resolution, dc_offsets,
+                 dc_offsets_open, if_offsets, if_amplitudes, if_phase, spectral_values,
+                 optimization_time, end_date):
 
         self._mixer_id = mixer_id
         self._iq_attenuation = iq_attenuation
@@ -19,6 +19,13 @@ class IQCalibrationData():
         self._ssb_power = ssb_power
         self._sideband_to_maintain = sideband_to_maintain
         self._waveform_resolution = waveform_resolution
+
+        self._sideband_to_maintain_freq = None
+        if self._sideband_to_maintain == "right":
+            self._sideband_to_maintain_freq = self._lo_frequency + self._if_frequency
+        elif self._sideband_to_maintain == "left":
+            self._sideband_to_maintain_freq = self._lo_frequency - self._if_frequency
+
 
         self._dc_offsets = dc_offsets
         self._dc_offsets_open = dc_offsets_open
@@ -37,12 +44,14 @@ class IQCalibrationData():
             parameters, results: tuple
         """
         return dict(dc_offsets=self._dc_offsets, dc_offset_open=self._dc_offsets_open,
-            if_offsets=self._if_offsets, if_amplitudes=self._if_amplitudes,
-                if_phase=self._if_phase), self._spectral_values
+                    if_offsets=self._if_offsets, if_amplitudes=self._if_amplitudes,
+                    if_phase=self._if_phase), self._spectral_values
 
     def get_radiation_parameters(self):
         return dict(lo_frequency=self._lo_frequency, lo_power=self._lo_power,
-            if_frequency=self._if_frequency, ssb_power=self._ssb_power, sideband_to_maintain=self._sideband_to_maintain, waveform_resolution=self._waveform_resolution)
+                    if_frequency=self._if_frequency, ssb_power=self._ssb_power,
+                    sideband_to_maintain=self._sideband_to_maintain, waveform_resolution=self._waveform_resolution,
+                    sideband_to_maintain_freq=self._sideband_to_maintain_freq)
 
     def get_mixer_parameters(self):
         return dict(mixer_id=self._mixer_id, iq_attenuation=self._iq_attenuation)
@@ -59,14 +68,14 @@ class IQCalibrationData():
 
 class IQCalibrator():
 
-    def __init__(self, awg, sa, lo, mixer_id, iq_attenuation,
+    def __init__(self, iqawg, sa, lo, mixer_id, iq_attenuation,
                  sideband_to_maintain="left", sidebands_to_suppress=6,
                  optimized_awg_calls = True):
         """
         IQCalibrator is a class that allows you to calibrate automatically an IQ mixer to obtain a Single Sideband (SSB)
         with desired parameters.
-        awg:
-            reference to the AWG object
+        iqawg:
+            reference to the IQAWG object
         sa:
             reference to the Spectrum Analyzer object
         lo:
@@ -74,11 +83,15 @@ class IQCalibrator():
         mixer_id: str
             name of a mixer
         iq_attenuation:
-        sideband_to_maintain="left":
-        sidebands_to_suppress=6:
-        optimized_awg_calls=True:
+        sideband_to_maintain : str
+            "left","right" - which 1 order sideband to maximize (lo is center)
+        sidebands_to_suppress : int
+            number of closest sidebands to the 'sideband_to_maintain' that will be accounted for
+            and minimized in loss function
+        optimized_awg_calls : bool
+            TODO: what is this parameter?
         """
-        self._awg = awg
+        self._iqawg = iqawg
         self._sa = sa
         self._lo = lo
         self._mixer_id = mixer_id
@@ -126,7 +139,7 @@ class IQCalibrator():
         """
 
         def loss_function_dc_offsets(dc_offsets):
-            self._awg.output_continuous_IQ_waves(frequency=0,
+            self._iqawg.output_continuous_IQ_waves(frequency=0,
                 amplitudes=(0,0), relative_phase=0, offsets=dc_offsets,
                 waveform_resolution=waveform_resolution,
                 optimized = self._optimized_awg_calls)
@@ -145,7 +158,6 @@ class IQCalibrator():
             return answer
 
         def loss_function_dc_offsets_open(dc_offset_open):
-
             self._awg.output_continuous_IQ_waves(frequency=0,
                 amplitudes=(0,0), relative_phase=0, offsets=(dc_offset_open,)*2,
                 waveform_resolution=waveform_resolution,
@@ -193,8 +205,8 @@ class IQCalibrator():
             self._sa.prepare_for_stb();self._sa.sweep_single();self._sa.wait_for_stb()
             data = self._sa.get_tracedata()
 
-            diff_rect = 0.2
-            amp_rect = 0.8
+            diff_rect = 0.2*self._awg.MAX_OUTPUT_VOLTAGE
+            amp_rect = 0.9*self._awg.MAX_OUTPUT_VOLTAGE
 
             answer = None
             if (abs(abs(amp1)-abs(amp2)) < diff_rect) and (abs(amp1) < amp_rect) and (abs(amp1) < amp_rect):

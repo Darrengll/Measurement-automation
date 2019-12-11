@@ -7,17 +7,17 @@ from numpy import *
 from lib.iq_mixer_calibration import IQCalibrationData
 
 from itertools import cycle, islice
-
+#from numba import jit
 
 class PulseSequence():
     def __init__(self, waveform_resolution):
-        self._waveform = ndarray(1)
+        self._waveform = np.empty(0)
         self._waveform_resolution = waveform_resolution
         self._pulses = []
 
     def append_pulse(self, points):
         if len(points) > 1:
-            self._waveform = concatenate((self._waveform[:-1], points))
+            self._waveform = concatenate((self._waveform, points))
         else:
             # We ingore pulses of zero length
             return
@@ -256,8 +256,8 @@ class IQPulseBuilder():
 
         N_time_steps = int(round(duration / self._waveform_resolution))
 
-        self._pulse_seq_I.append_pulse(zeros(N_time_steps + 1) + vdc1)
-        self._pulse_seq_Q.append_pulse(zeros(N_time_steps + 1) + vdc2)
+        self._pulse_seq_I.append_pulse(zeros(N_time_steps) + vdc1)
+        self._pulse_seq_Q.append_pulse(zeros(N_time_steps) + vdc2)
         return self
 
     def add_zero_pulse(self, duration, dc_offsets=None):
@@ -274,10 +274,11 @@ class IQPulseBuilder():
             if dc_offsets is None else dc_offsets
 
         N_time_steps = int(round(duration / self._waveform_resolution))
-        self._pulse_seq_I.append_pulse(zeros(N_time_steps + 1) + vdc1)
-        self._pulse_seq_Q.append_pulse(zeros(N_time_steps + 1) + vdc2)
+        self._pulse_seq_I.append_pulse(zeros(N_time_steps) + vdc1)
+        self._pulse_seq_Q.append_pulse(zeros(N_time_steps) + vdc2)
         return self
 
+    #@jit(nopython=True)
     def add_sine_pulse(self, duration, phase=0, amplitude_mult=1,
                        window="rectangular", hd_amplitude=0,
                        frequency=None, if_offsets=None, if_amplitudes=None):
@@ -328,11 +329,11 @@ class IQPulseBuilder():
             2 * pi * frequency / 1e9
 
         N_time_steps = round(duration / self._waveform_resolution)
+
         duration = N_time_steps * self._waveform_resolution
 
-        phase += (self._pulse_seq_I.total_points() - 1) * self._waveform_resolution * frequency
-
-        points = linspace(0, duration, N_time_steps + 1)
+        phase += self._pulse_seq_I.total_points() * self._waveform_resolution * frequency
+        points = linspace(0, duration, N_time_steps, endpoint=False)  # divide duration into N_time_steps intervals
         carrier_I = if_amp1 * exp(1j * (frequency * points + if_phase + phase))
         carrier_Q = if_amp2 * exp(1j * (frequency * points + phase))
 
@@ -352,8 +353,8 @@ class IQPulseBuilder():
             return window, derivative
 
         def hahn():
-            window = sin(pi * linspace(0, N_time_steps, N_time_steps + 1) / N_time_steps) ** 2
-            if( N_time_steps > 0 ):
+            window = sin(pi * linspace(0, N_time_steps, N_time_steps, endpoint=False) / N_time_steps) ** 2
+            if N_time_steps > 0 :
                 derivative = gradient(window, self._waveform_resolution)
                 derivative[0] = derivative[-1] = 0
             else:
@@ -385,7 +386,7 @@ class IQPulseBuilder():
         pulse_ax = pulse_string[1]
         pulse_angle = eval(pulse_string.replace(pulse_ax, "1"))  # in pi's
         if window is "rectangular" or pulse_ax is "I":
-            pulse_time = pulse_duration*abs(pulse_angle)
+            pulse_time = pulse_duration * abs(pulse_angle)
         else:
             pulse_time = pulse_duration
             pulse_amplitude = abs(pulse_angle) * pulse_amplitude
@@ -463,7 +464,7 @@ class IQPulseBuilder():
             Used instead of the corresponding parameter from self._iqmx_calibration if provided
         """
         total_time_steps = round(total_duration / self._waveform_resolution)
-        current_time_steps = self._pulse_seq_I.total_points() - 1
+        current_time_steps = self._pulse_seq_I.total_points()
         residual_time_steps = total_time_steps - current_time_steps
         # from time import sleep
         # print(residual_time_steps,flush=True)
@@ -518,7 +519,7 @@ class IQPulseBuilder():
     def build_direct_rabi_sequences(pulse_sequence_parameters, **pbs):
         exc_pb = pbs['q_pbs'][0]
         awg_trigger_reaction_delay = \
-            pulse_sequence_parameters["awg_trigger_reaction_delay"]
+            pulse_sequence_parameters["start_delay"]
         repetition_period = \
             pulse_sequence_parameters["repetition_period"]
         excitation_duration = \
@@ -529,6 +530,8 @@ class IQPulseBuilder():
             pulse_sequence_parameters["modulating_window"]
 
         frequency = exc_pb._iqmx_calibration.get_radiation_parameters()["if_frequency"] / 1e9
+
+        # calculate phase in order for both signals to end with the same phase (starting phase depends on duration)
         starting_phase = 2 * pi * (1 - frequency * excitation_duration % 1)
         exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
             .add_sine_pulse(excitation_duration,
@@ -558,7 +561,7 @@ class IQPulseBuilder():
         pulses_n = len(pulse_types)
 
         excitation_durations = list(islice(cycle(pulse_sequence_parameters["excitation_durations"]), pulses_n))
-        # ONLY POSITIVE ALLOWED,  + [0.0] - me
+        # ONLY POSITIVE ALLOWED,  + [0.0] - for convenience of iteration
         after_pulse_delays = list(islice(cycle(pulse_sequence_parameters["after_pulse_delays"]), pulses_n-1)) + [0.0]
         for i, delay_after in enumerate(after_pulse_delays):
             if delay_after < 0:
@@ -567,12 +570,14 @@ class IQPulseBuilder():
         # in you need change several pulses positions relative to the default setup
         pulse_shifts = pulse_sequence_parameters["pulse_shifts"]
         if len(pulse_shifts) != pulses_n:
-            raise ValueError(f"Number of 'pulse shifts': {pulse_shifts} \n"
-                             f"is not equal to the number of the pulse_types: {pulse_types}")
+            raise ValueError(f"len of 'pulse shifts': {pulse_shifts} \n"
+                             f"is not equal to the len of the 'pulse_types': {pulse_types}")
 
-        # force overlapping suequence
-        force_overlapping = pulse_sequence_parameters["force_overlapping"]
         amplitudes = list(islice(cycle(pulse_sequence_parameters["excitation_amplitudes"]), pulses_n))
+        if "phase_shifts" in pulse_sequence_parameters:
+            phase_shifts = list(islice(cycle(pulse_sequence_parameters["phase_shifts"]), pulses_n))
+        else:
+            phase_shifts = [0] * pulses_n
         window = pulse_sequence_parameters["modulating_window"]
         d_freq = pulse_sequence_parameters["d_freq"]
 
@@ -582,6 +587,7 @@ class IQPulseBuilder():
 
         params_zipped = list(
             zip(amplitudes,
+                phase_shifts,
                 excitation_durations,
                 pulse_types)
         )
@@ -597,20 +603,14 @@ class IQPulseBuilder():
         so, the behaviour of the pulse summation is forced to be the same 
         during the whole sweep by the assignment below.
         '''
-        is_overlapping = force_overlapping
-
         pb0 = exc_pb
         # pulse sequence is separated into positive and negative sequences
         pb0._iqmx_calibration._if_offsets /= 2
         pb0._iqmx_calibration._dc_offsets /= 2
-        if is_overlapping:  # to guarantee voltage to be in "linear" region
-            pb0._iqmx_calibration._if_amplitudes /= 2
         pb_p = deepcopy(pb0)
         pb_m = deepcopy(pb0)
         pb0._iqmx_calibration._if_offsets *= 2
         pb0._iqmx_calibration._dc_offsets *= 2
-        if is_overlapping:
-            pb0._iqmx_calibration._if_amplitudes *= 2
 
         ''' 
         Calculating delays between pulses in 
@@ -622,7 +622,10 @@ class IQPulseBuilder():
         '''
         # position of the first pulse in positive frequency group
         p_pulse_shifts = [pulse_shift for pulse_shift, pulse_type in zip(pulse_shifts, pulse_types) if pulse_type == "P"]
-        first_p_position = start_delay + p_pulse_shifts[0]  # start position of the first positive frequency pulse
+        if len(p_pulse_shifts) > 0: # start position of the first positive frequency pulse
+            first_p_position = start_delay + p_pulse_shifts[0]
+        else:  # there is only negative pulses present
+            first_p_position = 0
         for i, pulse_type in enumerate(pulse_types):
             if (pulse_type == "N") and (i < (pulses_n-1)):
                 first_p_position += excitation_durations[i] + after_pulse_delays[i]
@@ -630,9 +633,13 @@ class IQPulseBuilder():
                 break
             elif (pulse_type == "N") and (i == (pulses_n-1)):  # only "N" pulses are present
                 first_p_position = 0
+
         # same in negative frequency group
         m_pulse_shifts = [pulse_shift for pulse_shift, pulse_type in zip(pulse_shifts, pulse_types) if pulse_type == "N"]
-        first_m_position = start_delay + m_pulse_shifts[0]  # start position of the first negative frequency pulse
+        if len(m_pulse_shifts) > 0:
+            first_m_position = start_delay + m_pulse_shifts[0]  # start position of the first negative frequency pulse
+        else:  # there is only positive pulses present
+            first_m_position = 0
 
         for i, pulse_type in enumerate(pulse_types):
             if (pulse_type == "P") and (i < (pulses_n-1)):
@@ -676,14 +683,17 @@ class IQPulseBuilder():
                 negative_between_positive_duration += excitation_durations[i] + after_pulse_delays[i]
 
         # delay after last pulses set to zero
-        m_distances[-1] = 0
-        p_distances[-1] = 0
+        if len(m_pulse_shifts) > 0:
+            m_distances[-1] = 0
+        if len(p_pulse_shifts) > 0:
+            p_distances[-1] = 0
 
         # +1 is intended, the reason is to let digitizer to finish sampling and
         # do not miss next trigger signal.
         # Due to this fact the trigger signal frequency
         # is not equal to d_freq. In fact it is less that d_freq on a bit this can be seen on spectral analyzer.
-        n_pulse_groups = int(10*envelope_duration/repetition_period)
+        envelopes_in_pulse_group = pulse_sequence_parameters["envelopes_in_pulse_group"]
+        n_pulse_groups = int(envelopes_in_pulse_group*envelope_duration/repetition_period)
 
         if abs(envelope_duration % repetition_period) > 1:
             raise ValueError("pulse repetition frequency has to be multiple of the peaks frequency difference")
@@ -705,12 +715,13 @@ class IQPulseBuilder():
             p_idx = 0
             m_idx = 0
 
-            for amplitude, excitation_duration, pulse_type in params_zipped:
+            for amplitude, phase_shift, excitation_duration, pulse_type in params_zipped:
                 if pulse_type == "P":
                     pulse_freq = freq + d_freq
                     pb_p = pb_p.add_sine_pulse(excitation_duration,
                                                window=window,
                                                frequency=pulse_freq,
+                                               phase=phase_shift,
                                                amplitude_mult=amplitude)\
                         .add_zero_pulse(p_distances[p_idx])
                     p_idx += 1
@@ -719,6 +730,7 @@ class IQPulseBuilder():
                     pb_m = pb_m.add_sine_pulse(excitation_duration,
                                                window=window,
                                                frequency=pulse_freq,
+                                               phase=phase_shift,
                                                amplitude_mult=amplitude) \
                         .add_zero_pulse(m_distances[m_idx])
                     m_idx += 1
@@ -1834,7 +1846,7 @@ class IQPulseBuilder():
     @staticmethod
     def build_dispersive_shift_joint_sequences_multiplex(pulse_sequence_parameters, **pbs):
 
-        awg_trigger_reaction_delay_q1 = \
+        awg_trigger_reaction_delay = \
             pulse_sequence_parameters["awg_trigger_reaction_delay"]
         readout_duration = \
             pulse_sequence_parameters["readout_duration"]
