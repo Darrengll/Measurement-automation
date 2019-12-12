@@ -618,6 +618,7 @@ class SPCM:
         # Generation of an array of indexes to cut at the beginning
         if samples_per_segment_to_cut_at_beginning > 0:
             first_idxs = np.arange(0, len(data), every)
+            # to cut data from every channel
             times_at_beginning = n_channels * samples_per_segment_to_cut_at_beginning
             idxs_at_beginning = np.concatenate([first_idxs + i for i in range(0, times_at_beginning)])
         else:

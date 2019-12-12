@@ -17,10 +17,10 @@ class KeysightM3202A(Instrument):
         self.module = keysightSD1.SD_AOU()
         self.module_id = self.module.openWithSlotCompatibility("M3202A", chassis, slot,
                                                                compatibility=keysightSD1.SD_Compatibility.LEGACY)
-        self.clear()  # clear internal memory and AWG queues
         self.amplitudes = [0.0] * 4
-        self.modulation_amplitudes = [0.0]*4
+        self.deviation_gains = [0.0] * 4
         self.offsets = [0.0] * 4
+        self.clear()  # clear internal memory and AWG queues
 
         # Shamil a.k.a. 'BATYA' code here
         self.waveforms = [None] * 4
@@ -52,6 +52,7 @@ class KeysightM3202A(Instrument):
 
         # stop all modulations
         for channel in [1, 2, 3, 4]:
+            self.deviation_gains[channel - 1] = 0
             self.module.modulationAmplitudeConfig(channel - 1, SD_ModulationTypes.AOU_MOD_OFF, 0)
             self.module.modulationAngleConfig(channel - 1, SD_ModulationTypes.AOU_MOD_OFF, 0)
             self.module.modulationIQconfig(channel - 1, 0)  # disable IQ modulation
@@ -116,7 +117,7 @@ class KeysightM3202A(Instrument):
         else:
             raise NotImplementedError("trig_mode argument can be only 'ON' or 'OFF' ")
 
-        # if channel is equal to -1, then output trigger is disabled for all synchronized channels
+        # if channel is equal to -1, then output trigger is configured for all synchronized channels
         if (channel == - 1) or (channel in self.synchronized_channels):
             channels_to_config = self.synchronized_channels
         else:
@@ -251,7 +252,7 @@ class KeysightM3202A(Instrument):
 
     def stop_modulation(self, channel):
         deviationGain = 0
-        self.modulation_amplitudes[channel-1] = 0
+        self.deviation_gains[channel - 1] = 0
         self.module.modulationAmplitudeConfig(channel - 1, keysightSD1.SD_ModulationTypes.AOU_MOD_OFF, deviationGain)
 
     def change_amplitude_of_carrier_signal(self, amplitude, channel, ampl_coef=1):
@@ -259,7 +260,7 @@ class KeysightM3202A(Instrument):
         self.module.channelAmplitude(channel - 1, self.output_voltages[channel - 1])
 
     def start_modulation_AM(self, channel, deviationGain):
-        self.modulation_amplitudes[channel-1] = deviationGain
+        self.deviation_gains[channel - 1] = deviationGain
         self.module.modulationAmplitudeConfig(channel - 1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM,
                                               deviationGain)
 
@@ -421,10 +422,11 @@ class KeysightM3202A(Instrument):
     def get_prescaler(self):
         self._prescaler
 
-    def plot_waveforms(self):
+    def plot_waveforms(self, voltage_output=False):
         import matplotlib.pyplot as plt
         plt.figure()
         for i, waveform in enumerate(self.waveforms):
             if(waveform is not None):
-                plt.plot(waveform, label="CH"+str(i+1))
+                mult = self.output_voltages[i] if voltage_output else 1
+                plt.plot(waveform*mult, label="CH"+str(i+1))
         plt.legend()

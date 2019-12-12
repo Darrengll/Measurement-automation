@@ -216,8 +216,21 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         data_cut = data_cut * dig.ch_amplitude / 128 / dig.n_avg
         # dataI = data_cut[0::2]
         # dataQ = data_cut[1::2]
-        dataI = np.concatenate((data_cut[0::2], np.zeros(32)))
-        dataQ = np.concatenate((data_cut[1::2], np.zeros(32)))
+
+        # append 32 zero after every segment with several steps
+        # first, reshaping data arrays into segments, then append 32 zeros to every segment
+        # and finally flatten the result
+        dataI = np.append(
+            data_cut[0::2].reshape(dig.n_seg, round(data_cut.shape[0]/2/dig.n_seg)),
+            np.zeros((dig.n_seg, 32)),
+            axis=1
+        ).flatten()
+
+        dataQ = np.append(
+            data_cut[1::2].reshape(dig.n_seg, round(data_cut.shape[0] / 2 / dig.n_seg)),
+            np.zeros((dig.n_seg, 32)),
+            axis=1
+        ).flatten()
 
         if self.__cut is True:
             # cutting out parts of signals that do not carry any
@@ -275,8 +288,6 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         # dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
         dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay, samples_drop=32)  # HOTFIX FOR TRIGGER
         dig.setup_averaging_mode()
-        # self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
-        self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end() - 32  # HOTFIX FOR TRIGGER
 
         q_pbs = [q_iqawg.get_pulse_builder() for q_iqawg in self._q_iqawg]
 

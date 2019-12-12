@@ -328,7 +328,7 @@ class IQPulseBuilder():
         frequency = 2 * pi * self._iqmx_calibration.get_radiation_parameters()["if_frequency"] / 1e9 if frequency is None else \
             2 * pi * frequency / 1e9
 
-        N_time_steps = round(duration / self._waveform_resolution)
+        N_time_steps = np.round(duration / self._waveform_resolution)
 
         duration = N_time_steps * self._waveform_resolution
 
@@ -405,7 +405,7 @@ class IQPulseBuilder():
             global_phase += pi * pulse_angle
             pulse_time = 0
         else:
-            raise ValueError("Axis of %s is not allowed. Check your sequence." % (pulse_str))
+            raise ValueError("Axis of %s is not allowed. Check your sequence." % (pulse_string))
         return self
 
     # """
@@ -533,6 +533,7 @@ class IQPulseBuilder():
 
         # calculate phase in order for both signals to end with the same phase (starting phase depends on duration)
         starting_phase = 2 * pi * (1 - frequency * excitation_duration % 1)
+
         exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
             .add_sine_pulse(excitation_duration,
                             window=window,

@@ -120,7 +120,7 @@ class IQAWG():
         return IQPulseBuilder(self._calibration)
 
     def output_continuous_IQ_waves(self, frequency, amplitudes, relative_phase,
-        offsets, waveform_resolution, optimized = True):
+        offsets, waveform_resolution, optimized=True):
         """
         Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
         on both of the I and Q channels
@@ -147,7 +147,7 @@ class IQAWG():
         self._output_continuous_wave(frequency, amplitudes[1], 0,
             offsets[1], waveform_resolution, 2, asynchronous = False)
 
-    def output_IQ_waves_from_calibration(self, optimized = True):
+    def output_IQ_waves_from_calibration(self, optimized=True):
         cal = self._calibration
         self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[0],
                                      cal._if_phase[0], cal._if_offsets[0],

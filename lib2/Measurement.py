@@ -29,7 +29,7 @@ class Measurement:
 
     """
     Measurement._devs_dict - dictionary with the following structure:
-    {"internal_device_alias": [ list_of_possible_VISA_aliases, [device_module, "device_class"], ...}
+    {"this_API_internal_device_alias": [ list_of_possible_VISA_aliases, [device_module, "device_class"], ...}
         "internal_devise_alias" : str 
             device name alias for usage in lib2 library.
         list_of_possible_VISA_aliases : list of str() 
