@@ -50,8 +50,7 @@ class IQCalibrationData():
     def get_radiation_parameters(self):
         return dict(lo_frequency=self._lo_frequency, lo_power=self._lo_power,
                     if_frequency=self._if_frequency, ssb_power=self._ssb_power,
-                    sideband_to_maintain=self._sideband_to_maintain, waveform_resolution=self._waveform_resolution,
-                    sideband_to_maintain_freq=self._sideband_to_maintain_freq)
+                    sideband_to_maintain=self._sideband_to_maintain, waveform_resolution=self._waveform_resolution)
 
     def get_mixer_parameters(self):
         return dict(mixer_id=self._mixer_id, iq_attenuation=self._iq_attenuation)
@@ -158,7 +157,7 @@ class IQCalibrator():
             return answer
 
         def loss_function_dc_offsets_open(dc_offset_open):
-            self._awg.output_continuous_IQ_waves(frequency=0,
+            self._iqawg.output_continuous_IQ_waves(frequency=0,
                 amplitudes=(0,0), relative_phase=0, offsets=(dc_offset_open,)*2,
                 waveform_resolution=waveform_resolution,
                 optimized = self._optimized_awg_calls)
@@ -179,7 +178,7 @@ class IQCalibrator():
         def loss_function_if_offsets(if_offsets, args):
             if_amplitudes = args[0]
             phase = args[1]
-            self._awg.output_continuous_IQ_waves(frequency=if_frequency,
+            self._iqawg.output_continuous_IQ_waves(frequency=if_frequency,
                 amplitudes=if_amplitudes, relative_phase=phase, offsets=if_offsets,
                 waveform_resolution=waveform_resolution,
                 optimized = self._optimized_awg_calls)
@@ -198,15 +197,15 @@ class IQCalibrator():
             amp1, amp2 = if_amplitudes
             if_offsets = args[0]
             phase = args[1]
-            self._awg.output_continuous_IQ_waves(frequency=if_frequency,
+            self._iqawg.output_continuous_IQ_waves(frequency=if_frequency,
                 amplitudes=if_amplitudes, relative_phase=phase, offsets=if_offsets,
                 waveform_resolution=waveform_resolution,
                 optimized = self._optimized_awg_calls)
             self._sa.prepare_for_stb();self._sa.sweep_single();self._sa.wait_for_stb()
             data = self._sa.get_tracedata()
 
-            diff_rect = 0.2*self._awg.MAX_OUTPUT_VOLTAGE
-            amp_rect = 0.9*self._awg.MAX_OUTPUT_VOLTAGE
+            diff_rect = 0.2*self._iqawg.MAX_OUTPUT_VOLTAGE
+            amp_rect = 0.9*self._iqawg.MAX_OUTPUT_VOLTAGE
 
             answer = None
             if (abs(abs(amp1)-abs(amp2)) < diff_rect) and (abs(amp1) < amp_rect) and (abs(amp1) < amp_rect):
@@ -235,7 +234,7 @@ class IQCalibrator():
         def loss_function_if_phase(phase, args):
             if_offsets = args[0]
             if_amplitudes = args[1]
-            self._awg.output_continuous_IQ_waves(frequency=if_frequency,
+            self._iqawg.output_continuous_IQ_waves(frequency=if_frequency,
                 amplitudes=if_amplitudes, relative_phase=phase, offsets=if_offsets,
                 waveform_resolution=waveform_resolution,
                 optimized = self._optimized_awg_calls)

@@ -99,8 +99,9 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         self._end_idx = np.searchsorted(xf, self._freq_limits[1])
         self._frequencies = xf[self._start_idx:self._end_idx + 1]
 
+        # to provide 'set_sideband_order()' functionality
         self._measurement_result._d_freq = pulse_sequence_parameters["d_freq"]
-        self._measurement_result._center_freq = q_iqawg_params[0]["calibration"]._sideband_to_maintain_freq
+        self._measurement_result._if_freq = q_iqawg_params[0]["calibration"]._if_frequency
 
     def sweep_power(self, powers):
         self.set_swept_parameters(**{"Powers, dB": (self._set_power, powers)})
@@ -308,6 +309,21 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
     def set_target_freq_2D(self, freq):
         self._measurement_result._target_freq_2D = freq
 
+    def set_sideband_order(self, order):
+        """
+        Set order to visualize during measurement process
+
+        Parameters
+        ----------
+        order : int
+            order of the sideband produced during mixing
+
+        Returns
+        -------
+
+        """
+        self._measurement_result.set_sideband_order(order)
+
 
 class PulseMixingDigitizerResult(MeasurementResult):
 
@@ -327,7 +343,7 @@ class PulseMixingDigitizerResult(MeasurementResult):
         self._cut = True
 
         self._d_freq = None
-        self._center_freq = None
+        self._if_freq = None
 
     def set_sideband_order(self, order):
         """
@@ -341,7 +357,7 @@ class PulseMixingDigitizerResult(MeasurementResult):
         -------
 
         """
-        self._target_freq_2D = self._center_freq + order*self._d_freq
+        self._target_freq_2D = -(self._if_freq + order*self._d_freq)
 
     def set_parameter_name(self, parameter_name):
         self._parameter_name = parameter_name
