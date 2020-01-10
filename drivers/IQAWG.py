@@ -88,7 +88,7 @@ class IQAWG():
         self._channels = [channel_I, channel_Q]
         self.MAX_OUTPUT_VOLTAGE = channel_I._host_awg.MAX_OUTPUT_VOLTAGE
         self._triggered = triggered
-        self._calibration = None  # TODO: BUG CAN BE HERE (SHAMIL 23.04.2019)
+        self._calibration: IQCalibrationData = None  # TODO: BUG CAN BE HERE (SHAMIL 23.04.2019)
 
     def set_parameters(self, parameters):
         """
@@ -145,7 +145,7 @@ class IQAWG():
         self._output_continuous_wave(frequency, amplitudes[0], relative_phase,
             offsets[0], waveform_resolution, 1, asynchronous = optimized)
         self._output_continuous_wave(frequency, amplitudes[1], 0,
-            offsets[1], waveform_resolution, 2, asynchronous = False)
+            offsets[1], waveform_resolution, 2, asynchronous=False)
 
     def output_IQ_waves_from_calibration(self, optimized=True):
         cal = self._calibration

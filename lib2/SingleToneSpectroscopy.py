@@ -7,9 +7,7 @@ from numpy import *
 from scipy import fftpack
 
 from lib2.MeasurementResult import *
-from datetime import datetime as dt
-from matplotlib import pyplot as plt, colorbar
-from resonator_tools import circuit
+from matplotlib import colorbar
 from lib2.Measurement import *
 from time import sleep
 

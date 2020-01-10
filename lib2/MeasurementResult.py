@@ -216,8 +216,7 @@ class MeasurementResult:
 
     def visualize(self, maximized=True):
         """
-        Generates the required plots to visualize the measurement result. Should
-        be implemented for each subclass.
+        Generates the required plots to visualize the measurement result.
         """
         fig, axes, caxes = self._prepare_figure()
         self._figure = fig
@@ -280,10 +279,16 @@ class MeasurementResult:
         caxes: array of colorbar axes
             these axes are obtained by calling matplotlib.colorbar.make_axes(ax)
             and then may be used to updated colorbars for each subplot
+
+        Examples
+        ------------------------
+        # from VNATimeResolvedDispersiveMeasurement1D.py
+            fig, axes = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
+            fig.canvas.set_window_title(self._name)
+            axes = ravel(axes)
+            return fig, axes, (None, None)
         """
-        fig, axes = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
-        caxes = None
-        return fig, axes, caxes
+        raise NotImplementedError
 
     def _plot(self, data):
         """
@@ -293,8 +298,46 @@ class MeasurementResult:
         should be used here to visualize the data
 
         The data to plot is passed as an argument by FuncAnimation
+
+        Examples
+        ---------------
+        # from VNATimeResolvedDispersiveMeasurement1D.py
+
+        axes = self._axes
+        axes = dict(zip(self._data_formats_used, axes))
+        if "data" not in data.keys():
+            return
+
+        X, Y_raw = self._prepare_data_for_plot(data)
+
+        for idx, name in enumerate(self._data_formats_used):
+            Y = self._data_formats[name][0](Y_raw)
+            Y = Y[Y != 0]
+            ax = axes[name]
+            if self._lines[idx] is None or not self._dynamic:
+                ax.clear()
+                ax.grid()
+                ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+                self._lines[idx], = ax.plot(X[:len(Y)], Y, "C%d" % idx, ls=":", marker="o",
+                                            markerfacecolor='none',
+                                            markersize=self._data_points_marker_size)
+                ax.set_xlim(X[0], X[-1])
+                ax.set_ylabel(self._data_formats[name][1])
+            else:
+                self._lines[idx].set_xdata(X[:len(Y)])
+                self._lines[idx].set_ydata(Y)
+                ax.relim()
+                ax.autoscale_view()
+
+        xlabel = self._parameter_names[0][0].upper() + \
+                 self._parameter_names[0][1:].replace("_", " ") + \
+                 " [%s]" % self._x_axis_units
+
+        axes["imag"].set_xlabel(xlabel)
+        plt.tight_layout(pad=2)
+        self._plot_fit(axes)
         """
-        pass
+        raise NotImplementedError
 
     def finalize(self):
         """

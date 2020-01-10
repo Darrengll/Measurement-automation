@@ -1,13 +1,8 @@
 # <type>: (If applied, this commit will...) <subject> (Max 50 char)
 # |<----  Using a Maximum Of 50 Characters  ---->|
-Fix multiple segments 32 samples drop
 
 # Explain why this change is being made
 # |<----   Try To Limit Each Line to a Maximum Of 72 Characters  ---->|
-Append 32 zero samples to EVERY segment.
-Before fix, only the last segment was appended with
-32 zero samples.
-Minor style changes made to few other files.
 
 # Provide links or keys to any relevant tickets, 
 # articles or other resources
@@ -37,36 +32,6 @@ Minor style changes made to few other files.
 # For more information about this template, check out
 # https://gist.github.com/adeekshith/cd4c95a064977cdc6c50
 # |<----   Try To Limit Each Line to a Maximum Of 72 Characters  ---->|
-commit_template.txt
-    style
-        minor changes
-
-IQAWG.py
-    style
-        minor changes
-
-KeysightM3202A.py
-    refactor
-    style
-    docs
-
-Spectrum_m4x.py
-    docs
-        added little comment
-
-IQPulseSequence.py
-    fix
-        fixed variable name in exception that
-        was never raised before
-
-Measurement.py
-    style
-
-pulseMixingDigitizer.py
-    fix
-    Append 32 zero samples to EVERY segment.
-    Before fix, only the last segment was appended with
-    32 zero samples.
 
 # --- MUST READ ABOUT COMMITING STYLE ---
 # check commit idioms here: 

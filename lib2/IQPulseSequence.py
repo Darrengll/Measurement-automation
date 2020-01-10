@@ -533,6 +533,7 @@ class IQPulseBuilder():
 
         # calculate phase in order for both signals to end with the same phase (starting phase depends on duration)
         starting_phase = 2 * pi * (1 - frequency * excitation_duration % 1)
+        # starting_phase = 0
 
         exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
             .add_sine_pulse(excitation_duration,

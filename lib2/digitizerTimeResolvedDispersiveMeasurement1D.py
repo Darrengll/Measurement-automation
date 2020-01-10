@@ -9,6 +9,7 @@ from drivers.keysightM3202A import KeysightM3202A
 import inspect
 import lib2.IQPulseSequence
 from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
+from drivers.Spectrum_m4x import SPCM
 
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
@@ -18,11 +19,6 @@ def _default_args2dict():
     print(inspect.stack()[0])
 
 
-class FOURIER_METHOD(Enum):
-    SANK = auto()
-    FFT = auto()
-
-
 class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=1):
@@ -30,7 +26,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         # mandatory names for devices:
         self._q_iqawg = None
         self._q_lo = None
-        self._dig = None
+        self._dig: list[SPCM] = None
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval=plot_update_interval)
         self._sequence_generator = None
@@ -42,13 +38,13 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._pulse_sequence_parameters = \
             {"modulating_window": "rectangular", "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
-        self._fourier_method = FOURIER_METHOD.FFT
 
         # for debug purposes
         self.dataI = []
         self.dataQ = []
 
-    def set_fixed_parameters(self, pulse_sequence_parameters, q_lo_params=[], q_iqawg_params=[], dig_params=[]):
+    def set_fixed_parameters(self, pulse_sequence_parameters, freq_limits = (0,50e6),
+                             q_lo_params=[], q_iqawg_params=[], dig_params=[]):
         """
         :param dev_params:
             Minimum expected keys and elements expected in each:
@@ -81,38 +77,6 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             "pulse_sequence_parameters": pulse_sequence_parameters
         })
 
-    def set_fourier_method(self, method: FOURIER_METHOD):
-        self._fourier_method = method
-
-    def get_fourier_method(self):
-        return self._fourier_method
-
-    def preset_Fourier_from_IQ(self, freq, segment_length, sample_rate):
-        w = 2 * np.pi * freq
-        t_total = segment_length / sample_rate
-        t = np.linspace(0, t_total, segment_length)
-        self._sin_t = np.sin(w * t)
-        self._cos_t = np.cos(w * t)
-
-    def get_Fourier_from_IQ(self, dataI, dataQ):
-        """
-        Computes a Fourier transform at a single freqiency from a complex signal z(t) = I(t) + 1j * Q(t)
-        Took from 'Sank 2014' dissertation.
-
-        Parameters
-        ----------
-        dataI: np.array, mV
-        dataQ: np.array, mV
-        freq: float, Hz
-
-        Returns
-        -------
-            I + 1j * Q
-        """
-        I = np.sum(dataI * self._cos_t + dataQ * self._sin_t)
-        Q = np.sum(dataQ * self._cos_t - dataI * self._sin_t)
-        return (I + 1j * Q) / len(dataI)
-
     def set_basis(self, basis):
         d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
         relation = d_real / d_imag
@@ -141,26 +105,32 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._ult_calib = value
 
     def _single_measurement(self):
-        dig_data = self._dig[0].measure(self._dig[0]._bufsize)[2 * self._n_samples_to_drop_by_dig_delay:-2 * self._n_samples_to_drop_in_end]
-        dig_data = dig_data.astype(float) / 128 / self._dig[0].n_avg * self._dig[0].ch_amplitude
-        dataI = dig_data[0::2]
-        dataQ = dig_data[1::2]
+        dig = self._dig[0]
+        dig_data = dig.measure(dig._bufsize)
+        # convertion to mV is according to
+        # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
+        # p.81
+        dig_data = dig_data.astype(float) / dig.n_avg / 128 * dig.ch_amplitude
 
-        IQ = 0 + 1j * 0
-        if self._fourier_method is FOURIER_METHOD.SANK:
-            self.preset_Fourier_from_IQ(self._q_iqawg[0]._calibration._if_frequency, len(dataI),
-                                        self._dig[0].get_sample_rate())
-            IQ = self.get_Fourier_from_IQ(dataI, dataQ)
-        elif self._fourier_method is FOURIER_METHOD.FFT:
-            freq = np.fft.fftfreq(len(dataI)) * self._dig[0].get_sample_rate()
-            freq = np.fft.fftshift(freq)
-            signal = np.fft.fftshift(np.fft.fft(dataI + 1j * dataQ))
-            idx = np.searchsorted(freq, -self._q_iqawg[0]._calibration._if_frequency)
-            IQ = signal[idx] / len(dataI)
+        data_i = dig_data[0::2]
+        data_i = data_i.reshape(dig.n_seg, round(dig_data.shape[0] / 2 / dig.n_seg))
+        data_i = data_i[:, self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
+        data_i = data_i.flatten()
+
+        data_q = dig_data[1::2]
+        data_q = data_q.reshape(dig.n_seg, round(dig_data.shape[0] / 2 / dig.n_seg))
+        data_q = data_q[:, self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
+        data_q = data_q.flatten()
+
+        freq = np.fft.fftfreq(len(data_i), d=1/self._dig[0].get_sample_rate())
+        freq = np.fft.fftshift(freq)
+        signal = np.fft.fftshift(np.fft.fft(data_i + 1j * data_q))
+        idx = np.searchsorted(freq, -self._q_iqawg[0]._calibration._if_frequency)
+        IQ = signal[idx] / len(data_i)
 
         # save full data in case of more detailed investigation
-        self.dataI.append(dataI)
-        self.dataQ.append(dataQ)
+        self.dataI.append(data_i)
+        self.dataQ.append(data_q)
         return IQ
 
     def _recording_iteration(self):
@@ -169,7 +139,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             self._output_zero_sequence()
             bg = self._single_measurement()
             mean_data = fg - bg
-            # print(fg, bg, mean_data)
+            # print(fg, bg, mean_data).
         else:
             mean_data = self._single_measurement()
 
@@ -238,7 +208,7 @@ class DigitizerDirectRabi(DigitizerTimeResolvedDirectMeasurement):
                             "q_iqawg": q_iqawg,
                             "dig": dig}
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
-        self._measurement_result = DispersiveRabiOscillationsResult(name, sample_name)
+        self._measurement_result = DigitizerRabiResult(name, sample_name)
         self._sequence_generator = IQPulseBuilder.build_direct_rabi_sequences
 
     def sweep_excitation_durations(self, excitation_durations):
@@ -249,7 +219,7 @@ class DigitizerDirectRabi(DigitizerTimeResolvedDirectMeasurement):
         self._output_pulse_sequence()
 
 
-class DispersiveRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DResult):
+class DigitizerRabiResult(VNATimeResolvedDispersiveMeasurement1DResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
@@ -278,8 +248,8 @@ class DispersiveRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DRes
         return p0, bounds
 
     def _generate_annotation_string(self, opt_params, err):
-        return f"$T_R={opt_params[2]*1e-3:.2f}\pm{err[2]*1e-3:.2f}~\mu$s\n" \
-               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm{err[3] * 1e3 / 2 / np.pi:.2f}$ MHz\n" \
+        return f"$T_R={opt_params[2]*1e-3:.2f}\pm {err[2]*1e-3:.2f}~\mu$s\n" \
+               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz\n" \
                f"$\Delta\phi={np.mod(opt_params[6] - opt_params[7], 2 * np.pi) - np.pi:.2f}$ rad"
 
     def _prepare_data_for_plot(self, data):

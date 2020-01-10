@@ -3,12 +3,10 @@ from importlib import reload
 import numpy as np
 from scipy import fftpack
 from drivers.Spectrum_m4x import SPCM
-from lib2.Measurement import Measurement
 from lib2.MeasurementResult import ContextBase, MeasurementResult
 from matplotlib import pyplot as plt, colorbar
 
 import lib2.IQPulseSequence
-from scipy import stats
 
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
@@ -33,10 +31,10 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         q_lo, q_iqawg, dig: arrays with references
             references to LO source, AWG and the digitizer
         """
-        devs_aliases = {"q_lo": q_lo, "q_iqawg": q_iqawg, "dig": dig}
-        super().__init__(name, sample_name, devs_aliases, plot_update_interval=1)
-
+        devs_aliases_map = {"q_lo": q_lo, "q_iqawg": q_iqawg, "dig": dig}
+        super().__init__(name, sample_name, devs_aliases_map, plot_update_interval=1)
         self._measurement_result = PulseMixingDigitizerResult(name, sample_name)
+
         self._measurement_result.get_context()._comment = comment
         self._sequence_generator = IQPulseBuilder.build_wave_mixing_pulses
         self._pulse_sequence_parameters = {
@@ -52,11 +50,13 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
 
         # Fourier and measurement parameters
         # see purpose in 'self.set_fixed_parameters()'
-        self._freq_limits = None
-        self._nfft = None
-        self._start_idx = None
-        self._end_idx = None
+        self._freq_limits = None  # tuple with frequency limits
+        self._nfft = None  # number of FFT points
         self._frequencies = None
+        # self._frequencies[self._start_idx-1]  < self._freq_limits[0] <= self._frequencies[self._start_idx]
+        self._start_idx = None
+        # self._frequencies[self._end_idx-1]  < self._freq_limits[1] <= self._frequencies[self._end_idx]
+        self._end_idx = None
 
         # for debug purposes
         self.dataI = []
@@ -210,18 +210,22 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
     def _recording_iteration(self):
         dig = self._dig[0]
         data = dig.measure(dig._bufsize).astype(float)
+
         # deleting extra samples from segments
         data_cut = SPCM.extract_useful_data(data, 2, dig._segment_size, dig.get_how_many_samples_to_drop_in_front(),
                                             dig.get_how_many_samples_to_drop_in_end())
-        data_cut = data_cut * dig.ch_amplitude / 128 / dig.n_avg
-        # dataI = data_cut[0::2]
-        # dataQ = data_cut[1::2]
+        # convertion to mV is according to
+        # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
+        # p.81
+        data_cut = data_cut.astype(float) / dig.n_avg / 128 * dig.ch_amplitude
 
-        # append 32 zero after every segment with several steps
-        # first, reshaping data arrays into segments, then append 32 zeros to every segment
+        # append 32 zero after every segment with several steps, they were deleted
+        # in order to allow SPCM to receive every single trigger signal
+        # this lines are reviving those missed samples and fills them with zeros.
+        # First, reshaping data arrays into segments, then append 32 zeros to every segment
         # and finally flatten the result
         dataI = np.append(
-            data_cut[0::2].reshape(dig.n_seg, round(data_cut.shape[0]/2/dig.n_seg)),
+            data_cut[0::2].reshape(dig.n_seg, round(data_cut.shape[0] / 2 / dig.n_seg)),
             np.zeros((dig.n_seg, 32)),
             axis=1
         ).flatten()
@@ -242,9 +246,9 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
             readout_duration = self._pulse_sequence_parameters["readout_duration"]  # ns
 
             # the whole pulse sequence + readout duration after is exctracted untouched
-            # supplied by sequence generator function
+            # supplied during the last call to 'self._sequence_generator' function
             first_pulse_start = self._pulse_sequence_parameters["first_pulse_start"]
-            # supplied by sequence generator function
+            # supplied during the last call to 'self._sequence_generator' function
             last_pulse_end = self._pulse_sequence_parameters["last_pulse_end"]
             desired_intervals = [(first_pulse_start, last_pulse_end + readout_duration)]
 
@@ -340,8 +344,6 @@ class PulseMixingDigitizerResult(MeasurementResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
-        # self._context = ContextBase(comment=input('Enter your comment: '))
-        self._context = ContextBase()
         self._is_finished = False
         self._idx = []
         self._midx = []
@@ -614,26 +616,29 @@ class PulseMixingDigitizerResult(MeasurementResult):
 
         XX, YY, Z_re, Z_im, last_trace_y = self._prepare_re_n_im_for_plot2D(data)
 
-        remax = np.max((np.max(Z_re[Z_re != 0]), -np.min(Z_re[Z_re != 0])))
-        # remin = np.min(Z_re[Z_re != 0])
-        immax = np.max((np.max(Z_im[Z_im != 0]), -np.min(Z_im[Z_im != 0])))
-        # immin = np.min(Z_im[Z_im != 0])
-        # remin = np.quantile(Z_re[Z_re != 0], 0.1)
+        re_nonempty = Z_re[Z_re != 0]
+        im_nonempty = Z_im[Z_im != 0]
+        # re_mean = np.mean(re_nonempty)
+        # im_mean = np.mean(im_nonempty)
+        # re_deviation = np.ptp(re_nonempty)/2
+        # im_deviation = np.ptp(im_nonempty)/2
+        re_max = max(np.max(re_nonempty), -np.min(re_nonempty))
+        im_max = max(np.max(im_nonempty), -np.min(re_nonempty))
         step_X = XX[1] - XX[0]
         step_Y = YY[1] - YY[0]
         extent = [XX[0] - 1 / 2 * step_X, XX[-1] + 1 / 2 * step_X,
                   YY[0] - 1 / 2 * step_Y, YY[-1] + 1 / 2 * step_Y]
         re_map = ax_map_re.imshow(Z_re, origin='lower', cmap="RdBu_r",
-                                      aspect='auto', vmax=remax,
-                                      vmin=-remax, extent=extent)
+                                      aspect='auto', vmax=re_max,
+                                      vmin=-re_max, extent=extent)
         cax_re.cla()
         plt.colorbar(re_map, cax=cax_re)
         cax_re.tick_params(axis='y', right=False, left=True,
                              labelleft=True, labelright=False, labelsize='10')
 
         phase_map = ax_map_im.imshow(Z_im, origin='lower', cmap="RdBu_r",
-                                         aspect='auto', vmax=immax,
-                                         vmin=-immax, extent=extent)
+                                         aspect='auto', vmax=im_max,
+                                         vmin=-im_max, extent=extent)
         cax_im.cla()
         plt.colorbar(phase_map, cax=cax_im)
         cax_im.tick_params(axis='y', right=False, left=True,

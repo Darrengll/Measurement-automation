@@ -1,9 +1,7 @@
-from datetime import datetime as dt
-from matplotlib import pyplot as plt, colorbar
-import numpy as np
+from matplotlib import colorbar
 from numpy.core.numeric import inf
 
-from lib2.digitizerWithPowerSweepMeasurementBase import DigitizerWithPowerSweepMeasurementBase
+from lib2.powerSweepMeasurementBase import DigitizerWithPowerSweepMeasurementBase
 from lib2.MeasurementResult import *
 from lib2.Measurement import *
 

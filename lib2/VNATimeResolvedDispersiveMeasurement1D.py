@@ -67,7 +67,6 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
 
         return true_arr
 
-
     def _fit_complex_curve(self, X, data):
         p0, bounds = self._generate_fit_arguments(X, data)
         try:
@@ -108,7 +107,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
 
             return result, sqrt(diag(sigma ** 2 * pinv(result.jac.T.dot(result.jac))))
 
-    def fit(self, verbose=True):
+    def fit(self):
 
         meas_data = self.get_data()
         # hotfix. KeyError happens sometimes. Due to the fact that
@@ -173,7 +172,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
         xlabel = self._parameter_names[0][0].upper() + \
                  self._parameter_names[0][1:].replace("_", " ") + \
                  " [%s]" % self._x_axis_units
-        # axes["phase"].set_xlabel(xlabel)
+
         axes["imag"].set_xlabel(xlabel)
         plt.tight_layout(pad=2)
         self._plot_fit(axes)
@@ -200,11 +199,9 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
             # print(h_pos, v_pos)
             # print(self._anno[idx])
 
-
-
     def _plot_fit(self, axes, do_fit=True):
         if do_fit:
-            self.fit(verbose=False)
+            self.fit()
         if self._fit_params is None:
             return
 

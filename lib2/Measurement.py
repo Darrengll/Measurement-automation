@@ -43,30 +43,29 @@ class Measurement:
             device_module.device_class(...) constructor
     """
     _devs_dict = \
-        {'vna1': [["PNA-L", "PNA-L1"], [agilent_PNA_L, "Agilent_PNA_L"]],
-         'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
-         'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
-         'vna4': [["ZNB"], [znb, "Znb"]],
-         'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
-         'exg': [["EXG"], [E8257D, "EXG"]],
-         'psg2': [['PSG'], [E8257D, "EXG"]],
-         'mxg': [["MXG"], [E8257D, "MXG"]],
-         'psg1': [["psg1"], [E8257D, "EXG"]],
-         'awg1': [["AWG", "AWG1"], [keysightAWG, "KeysightAWG"]],
-         'awg2': [["AWG_Vadik", "AWG2"], [keysightAWG, "KeysightAWG"]],
-         'awg3': [["AWG3"], [keysightAWG, "KeysightAWG"]],
-         'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
-         # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
-         'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
-         'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok3': [["GS210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'k6220': [["k6220"], [k6220, "K6220"]]
-         }
-
+        {    'vna1': [["PNA-L", "PNA-L1"], [agilent_PNA_L, "Agilent_PNA_L"]],
+    'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
+    'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
+    'vna4': [["ZNB"], [znb, "Znb"]],
+    'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
+    'exg': [["EXG"], [E8257D, "EXG"]],
+    'psg2': [['PSG'], [E8257D, "EXG"]],
+    'mxg': [["MXG"], [E8257D, "MXG"]],
+    'psg1': [["psg1"], [E8257D, "EXG"]],
+    'awg1': [["AWG", "AWG1"], [keysightAWG, "KeysightAWG"]],
+    'awg2': [["AWG_Vadik", "AWG2"], [keysightAWG, "KeysightAWG"]],
+    'awg3': [["AWG3"], [keysightAWG, "KeysightAWG"]],
+    'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
+    # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
+    'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
+    'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+    'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+    'yok3': [["GS210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+    'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+    'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+    'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+    'k6220': [["k6220"], [k6220, "K6220"]]
+    }
 
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
         """
@@ -176,8 +175,8 @@ class Measurement:
 
     def set_swept_parameters(self, **swept_pars):
         """
-        swept_pars :{'par1': (setter1, [value1, value2, ...]),
-                     'par2': (setter2, [value1, value2, ...]), ...}
+        swept_pars = {'par1_name': (par1_setter_func, [par1_val1, par1_val1 ]),
+                      'par2_name': (par2_setter_func, par2_values_list), ...}
         """
         self._swept_pars = swept_pars
         self._swept_pars_names = list(swept_pars.keys())
@@ -191,7 +190,7 @@ class Measurement:
                 self._last_swept_pars_values[name] = value
                 self._swept_pars[name][0](value)  # this is setter call, look carefully
 
-    def launch(self, join = True):
+    def launch(self, join=True, visualize=True):
 
         self._interrupted = False  # ensure
 
@@ -204,7 +203,8 @@ class Measurement:
         t.start()
 
         try:
-            self._measurement_result.visualize_dynamic()
+            if visualize:
+                self._measurement_result.visualize_dynamic()
             if join:
                 self.join()
         except Exception as e:
@@ -244,7 +244,6 @@ class Measurement:
             self._measurement_result.set_is_finished(True)
 
     def _record_data(self):
-
         par_names = self._swept_pars_names
         done_iterations = 0
         start_time = self._measurement_result.get_start_datetime()
@@ -261,6 +260,8 @@ class Measurement:
             # This should be implemented in child classes:
             data = self._recording_iteration()
 
+            # dynamically allocating memory for the measurement based on
+            # the returned data dimensions
             if done_iterations == 0:
                 try:
                     self._raw_data = zeros(raw_data_shape + [len(data)], dtype=complex_)
@@ -269,8 +270,7 @@ class Measurement:
             self._raw_data[idx_group] = data
 
             # This may need to be extended in child classes:
-            measurement_data = \
-                self._prepare_measurement_result_data(par_names, parameters_values)
+            measurement_data = self._prepare_measurement_result_data(par_names, parameters_values)
             self._measurement_result.set_data(measurement_data)
 
             done_iterations += 1
@@ -310,6 +310,7 @@ class Measurement:
     def set_measurement_result(self, measurement_result: MeasurementResult):
         self._measurement_result = measurement_result
 
+    # virtual method
     def _recording_iteration(self):
         """
         This method must be overridden for each new measurement type.

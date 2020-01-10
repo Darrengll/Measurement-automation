@@ -1,8 +1,10 @@
-from drivers.pyspcm import *
 import numpy as np
 from scipy import fftpack
 from scipy.fftpack import fft, fftfreq
 import matplotlib.pyplot as plt
+from enum import Enum
+
+from drivers.pyspcm import *
 
 
 class CardError(Exception):
@@ -13,9 +15,22 @@ class CardTimeoutError(TimeoutError):
     pass
 
 
+class SPCM_MODE(Enum):
+    STANDARD = "STANDARD"
+    MULTIMODE = "MULTIMODE"
+    AVERAGING = "AVERAGE"
+    UNDEFINED = "UNDEFINED"
+
+
+class SPCM_TRIGGER(Enum):
+    AUTOTRIG = "AUTOTIG"
+    EXT0 = "EXT0"
+
+
 class SPCM:
     DC, AC = 0, 1
     AVG_ON = False
+    MODEL_NAME = "M4X.2212-X4"
 
     def __init__(self, path):
         self.hCard = spcm_hOpen(create_string_buffer(b'/dev/spcm0'))
@@ -24,37 +39,63 @@ class SPCM:
         self.__antialiasing = 0
         self.__acdc = self.AC
 
-        self._segment_size = 0
-        self._bufsize = 0
+        self._segment_size: int = None
+        self._bufsize: int = 0
         self._trigger_mode = SPC_TM_POS
-        self._n_samples_to_drop_by_dig_delay = 0
-        self._n_samples_to_drop_in_end = 0
+        self._n_samples_to_drop_by_dig_delay: int = 0
+        self._n_samples_to_drop_in_end: int = 0
+
+        self.channels: list[int] = []
+        self.ch_amplitude: int = 0
+        self.dur_seg: int = 0
+        self.n_avg: int = 0
+        self.n_seg: int = 0
+        self.pretrigger: int = 0
+        self.mode: SPCM_MODE = SPCM_MODE.STANDARD
+        self.trigger_source: SPCM_TRIGGER = SPCM_TRIGGER.AUTOTRIG
 
     def __del__(self):
         self.close()
 
     def set_parameters(self, pars_dict):
-        self._n_samples_to_drop_by_dig_delay = 0
-        self._n_samples_to_drop_in_end = 0
         if "oversampling_factor" in pars_dict:
             self.set_oversampling_factor(pars_dict["oversampling_factor"])
-        if ("channels" in pars_dict and
-                "ch_amplitude" in pars_dict and
-                "dur_seg" in pars_dict and
-                "n_avg" in pars_dict and
-                "n_seg" in pars_dict and
-                "pretrigger" in pars_dict):
-            self.dur_seg = pars_dict["dur_seg"]
+        if "channels" in pars_dict:
             self.channels = pars_dict["channels"]
-            self.n_seg = pars_dict["n_seg"]
-            self.calc_and_set_segment_size(self.dur_seg)
-            self.pretrigger = pars_dict["pretrigger"]
+        if "ch_amplitude" in pars_dict:
             self.ch_amplitude = pars_dict["ch_amplitude"]
+        if "dur_seg" in pars_dict:
+            self.dur_seg = pars_dict["dur_seg"]
+        if "n_avg" in pars_dict:
             self.n_avg = pars_dict["n_avg"]
-            self.setup_averaging_mode(pars_dict["channels"], pars_dict["ch_amplitude"],
-                                      pars_dict["n_seg"], self._segment_size,
-                                      pars_dict["pretrigger"],
-                                      pars_dict["n_avg"])
+        if "n_seg" in pars_dict:
+            self.n_seg = pars_dict["n_seg"]
+        if "pretrigger" in pars_dict:
+            self.pretrigger = pars_dict["pretrigger"]
+        if "mode" in pars_dict:
+            self.mode = pars_dict["mode"]
+        if "trig_source" in pars_dict:
+            self.trigger_source = pars_dict["trig_source"]
+
+        # this two variables will be set by the subsequent function call
+        self._n_samples_to_drop_by_dig_delay = 0
+        self._n_samples_to_drop_in_end = 0
+
+        # calculates and sets
+        # segment measurement length in samples
+        # based on duration of the segment requested by user
+        self.calc_and_set_segment_size(self.dur_seg)
+
+        if self.mode == SPCM_MODE.STANDARD:
+            self.setup_standard_mode()
+        elif self.mode == SPCM_MODE.MULTIMODE:
+            self.setup_multiple_recoding_mode()
+        elif self.mode == SPCM_MODE.AVERAGING:
+            self.setup_averaging_mode()
+        elif self.mode == SPCM_MODE.UNDEFINED:
+            # mode was intentionally left underfined so the real mode of
+            # operation will be decided later by the measurement class
+            pass
 
     def close(self):
         spcm_vClose(self.hCard)
@@ -263,14 +304,20 @@ class SPCM:
         # print("Sample rate is set to %d Hz\nOversampling factor is %d" % (setsamplerate, oversamplingfactor))
 
     def get_sample_rate(self):
+        """
+        Returns
+        -------
+        samplerate : float
+            samplerate in Hz
+        """
         return self.__samplerate
 
     def set_trigger_mode(self, mode):
         self._trigger_mode = mode
 
     def setup_ext0_trigger(self):
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 200)  # 0-level is < 1000 mV
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 700)  # 1-level is > 2000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 1000)  # 0-level is < 1000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 1200)  # 1-level is > 2000 mV
         self.__write_to_reg_32(SPC_TRIG_EXT0_MODE,
                                self._trigger_mode)  # trigger on the rising edge (voltage crosses 0-level barrier)
         self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_EXT0)  # Enable the external triggel
@@ -332,15 +379,27 @@ class SPCM:
         else:
             return np.frombuffer(pcData, dtype=np.int8)
 
-    def setup_standard_mode(self, channels, ampl, memsize, pretrigger):
+    def setup_standard_mode(self, channels=None, ampl=None, memsize=None, pretrigger=None):
+        if channels is None:
+            channels = self.channels
+        if ampl is None:
+            ampl = self.ch_amplitude
+        if memsize is None:
+            memsize = self._segment_size
+        if pretrigger is None:
+            pretrigger = self.pretrigger
+
+        # if function was not invoked from 'set_parameters'
+        self.mode = SPCM_MODE.STANDARD
+
+        self.n_seg = 1
+        self.n_avg = 1
+
         if type(channels) is int:
-            N = 1
             channels = [channels]
-        else:
-            N = len(channels)
 
         posttrigger_mem = memsize - pretrigger  # memory allocated for a signal after the trigger
-        self.setup_auto_trigger()
+        self.setup_trigger_source()
         self.setup_pxi_clock()
         self.setup_sample_rate()
         self.setup_channels(channels, ampl)
@@ -358,6 +417,9 @@ class SPCM:
         if pretrigger is None:
             pretrigger = self.pretrigger
 
+        # if function was not invoked from 'set_parameters'
+        self.mode = SPCM_MODE.MULTIMODE
+
         posttrigger_mem = segment_size - pretrigger
         memsize = num_segments * segment_size
 
@@ -374,7 +436,7 @@ class SPCM:
         self.setup_multi_rec_STD(memsize, segment_size, posttrigger_mem)
         self.setup_channels(channels, ampl)
         self.setup_internal_clock()
-        self.setup_ext0_trigger()
+        self.setup_trigger_source()
         self.setup_sample_rate()
 
     def setup_averaging_mode(self, channels=None, ampl=None, num_segments=None, segment_size=None, pretrigger=None,
@@ -391,6 +453,8 @@ class SPCM:
             pretrigger = self.pretrigger
         if num_averages is None:
             num_averages = self.n_avg
+        # if function was not invoked from 'set_parameters'
+        self.mode = SPCM_MODE.AVERAGING
 
         posttrigger_mem = segment_size - pretrigger
         memsize = num_segments * segment_size
@@ -407,10 +471,45 @@ class SPCM:
         self.setup_block_avg_STD(memsize, segment_size, posttrigger_mem, num_averages)
         self.setup_channels(channels, ampl)
         self.setup_pxi_clock()
-        self.setup_ext0_trigger()
+        self.setup_trigger_source()
         self.setup_sample_rate()
 
+    def set_trigger_source(self, trig_source):
+        """
+        You may use this function as well as 'set_fixed_parameters' dictionary
+
+        Parameters
+        ----------
+        trig_source : str
+        "EXT" - ext0 from front panel
+        "AUTO" - autotrigger
+
+        Returns
+        -------
+        None
+        """
+        if trig_source == "EXT":
+            self.trigger_source = SPCM_TRIGGER.EXT0
+        elif trig_source == "AUTO":
+            self.trigger_source = SPCM_TRIGGER.AUTOTRIG
+
+    def setup_trigger_source(self):
+        if self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
+            self.setup_auto_trigger()
+        elif self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
+            self.setup_ext0_trigger()
+
     def measure(self, bufsize):
+        """
+
+        Parameters
+        ----------
+        bufsize
+
+        Returns
+        -------
+        data : np.ndarray
+        """
         self.start_card()
         self.wait_for_card()  # wait till the end of a measurement
         data = self.obtain_data(bufsize)  # download data from the card
