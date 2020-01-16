@@ -7,7 +7,9 @@ from numpy import *
 from lib.iq_mixer_calibration import IQCalibrationData
 
 from itertools import cycle, islice
-#from numba import jit
+
+from typing import Dict, List
+
 
 class PulseSequence():
     def __init__(self, waveform_resolution):
@@ -278,7 +280,6 @@ class IQPulseBuilder():
         self._pulse_seq_Q.append_pulse(zeros(N_time_steps) + vdc2)
         return self
 
-    #@jit(nopython=True)
     def add_sine_pulse(self, duration, phase=0, amplitude_mult=1,
                        window="rectangular", hd_amplitude=0,
                        frequency=None, if_offsets=None, if_amplitudes=None):
@@ -328,7 +329,7 @@ class IQPulseBuilder():
         frequency = 2 * pi * self._iqmx_calibration.get_radiation_parameters()["if_frequency"] / 1e9 if frequency is None else \
             2 * pi * frequency / 1e9
 
-        N_time_steps = np.round(duration / self._waveform_resolution)
+        N_time_steps = int(np.round(duration / self._waveform_resolution))
 
         duration = N_time_steps * self._waveform_resolution
 
@@ -517,6 +518,17 @@ class IQPulseBuilder():
 
     @staticmethod
     def build_direct_rabi_sequences(pulse_sequence_parameters, **pbs):
+        """
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict[str,float]
+        pbs : Dict[str,List[IQPulseBuilder]]
+
+        Returns
+        -------
+
+        """
         exc_pb = pbs['q_pbs'][0]
         awg_trigger_reaction_delay = \
             pulse_sequence_parameters["start_delay"]
@@ -550,21 +562,27 @@ class IQPulseBuilder():
         Parameters
         ----------
         pulse_sequence_parameters : dict[str, Union[int,str]]
-        pbs : dict[str,list[IQPulseBuilder]]
+        pbs : Dict[str, List[IQPulseBuilder]]
 
         Returns
         -------
         seqs : dict[str,list[IQPulseSequence]]
         """
-        exc_pb = pbs['q_pbs'][0]
+        exc_pb = pbs["q_pbs"][0]
         start_delay = pulse_sequence_parameters["start_delay"]
         repetition_period = pulse_sequence_parameters["repetition_period"]
         pulse_types = pulse_sequence_parameters["pulse_sequence"]
         pulses_n = len(pulse_types)
 
+        # repeatedly extends 'excitation_durations' list to the length that equals the number of pulses
         excitation_durations = list(islice(cycle(pulse_sequence_parameters["excitation_durations"]), pulses_n))
-        # ONLY POSITIVE ALLOWED,  + [0.0] - for convenience of iteration
+
+        # repeatedly extends 'excitation_durations' list to the length that equals the number of pulses
+        # + [0.0] - for convenience of iteration
         after_pulse_delays = list(islice(cycle(pulse_sequence_parameters["after_pulse_delays"]), pulses_n-1)) + [0.0]
+        # check for non-negative pulse delays
+        # negative pulse delays are implemented as 'pulse_shifts' parameters in
+        # pulse_sequence_parameters
         for i, delay_after in enumerate(after_pulse_delays):
             if delay_after < 0:
                 raise ValueError(f"'after_pulse_delays[{i}] is negative")
@@ -580,11 +598,12 @@ class IQPulseBuilder():
             phase_shifts = list(islice(cycle(pulse_sequence_parameters["phase_shifts"]), pulses_n))
         else:
             phase_shifts = [0] * pulses_n
+
         window = pulse_sequence_parameters["modulating_window"]
         d_freq = pulse_sequence_parameters["d_freq"]
-
         freq = exc_pb._iqmx_calibration.get_radiation_parameters()["if_frequency"]  # Hz
 
+        # period when phases between two frequencies first time reach 2 pi
         envelope_duration = 1/d_freq*1e9  # ns
 
         params_zipped = list(
@@ -610,113 +629,118 @@ class IQPulseBuilder():
         pb0._iqmx_calibration._if_offsets /= 2
         pb0._iqmx_calibration._dc_offsets /= 2
         pb_p = deepcopy(pb0)
-        pb_m = deepcopy(pb0)
+        pb_n = deepcopy(pb0)
         pb0._iqmx_calibration._if_offsets *= 2
         pb0._iqmx_calibration._dc_offsets *= 2
 
         ''' 
-        Calculating delays between pulses in 
+        Calculating positions of the
         positive and negative frequency pulse groups respectively.
         No overlapping between pulses within the same frequency group is supported.
         ==> all pulse delays in the same frequency group MUST BE >= 0 
-        
         Also pulses shifts is not cumulative (previous pulses shifts do not influence current pulse position)
         '''
-        # position of the first pulse in positive frequency group
-        p_pulse_shifts = [pulse_shift for pulse_shift, pulse_type in zip(pulse_shifts, pulse_types) if pulse_type == "P"]
-        if len(p_pulse_shifts) > 0: # start position of the first positive frequency pulse
-            first_p_position = start_delay + p_pulse_shifts[0]
-        else:  # there is only negative pulses present
-            first_p_position = 0
-        for i, pulse_type in enumerate(pulse_types):
-            if (pulse_type == "N") and (i < (pulses_n-1)):
-                first_p_position += excitation_durations[i] + after_pulse_delays[i]
-            elif (pulse_type == "P") and (i != (pulses_n-1)):
-                break
-            elif (pulse_type == "N") and (i == (pulses_n-1)):  # only "N" pulses are present
-                first_p_position = 0
 
-        # same in negative frequency group
-        m_pulse_shifts = [pulse_shift for pulse_shift, pulse_type in zip(pulse_shifts, pulse_types) if pulse_type == "N"]
-        if len(m_pulse_shifts) > 0:
-            first_m_position = start_delay + m_pulse_shifts[0]  # start position of the first negative frequency pulse
-        else:  # there is only positive pulses present
-            first_m_position = 0
+        ''' Calculating positions for positive and negative pulses respectively '''
+        # amount of positive pulses
+        positive_n = len([pulse_type for pulse_type in pulse_types if pulse_type == "P"])
+        p_positions = np.zeros(positive_n)  # start positions of the "P" pulses
+        p_positions[0] += start_delay
+        i = 0  # index through all pulses
+        for p_idx in range(len(p_positions)):
+            # flag indicates that it is time to break from inner cycle
+            # and start calculating next "P" pulse position
+            next_p_idx = False
 
-        for i, pulse_type in enumerate(pulse_types):
-            if (pulse_type == "P") and (i < (pulses_n-1)):
-                first_m_position += excitation_durations[i] + after_pulse_delays[i]
-            elif (pulse_type == "N") and (i < (pulses_n-1)):
-                break
-            elif (pulse_type == "P" and i == (pulses_n-1)):  # only "P" pulses are present
-                first_m_position = 0
+            # cycling over all pulses (starting where ended last time)
+            while (i < pulses_n) and (not next_p_idx):
+                # adding idle time for all negative pulses before the 'p_idx' positive pulse
+                if pulse_types[i] == "N":
+                    p_positions[p_idx] += excitation_durations[i] + after_pulse_delays[i]
+                # if we meet 'p_idx' positive pulse
+                elif pulse_types[i] == "P":
+                    next_p_idx = True
+                    # adding 'p_idx' pulse shift value
+                    p_positions[p_idx] += pulse_shifts[i]
 
-        # indexes to iterate over each pulse group
-        p_idx = 0
-        m_idx = 0
-        # duration of negative pulses that constitutes delay between positive pulses
-        negative_between_positive_duration = 0
-        # duration of positive pulses that constitutes delay between negative pulses
-        positive_between_negative_duration = 0
+                    # if there is at least 1 more "P" pulse
+                    if (p_idx + 1) < len(p_positions):
+                        # add previously accumulated result for next positive pulse start position
+                        # add current pulse excitation duration as well
+                        p_positions[p_idx + 1] = p_positions[p_idx] + excitation_durations[i]
+                i += 1
 
-        # calculating distances between pulses
-        p_distances = [0.0 for pulse_type in pulse_types if pulse_type == "P"]
-        m_distances = [0.0 for pulse_type in pulse_types if pulse_type == "N"]
-        for i in range(pulses_n):
-            if pulse_types[i] == "P":
-                p_distances[p_idx] = after_pulse_delays[i] - p_pulse_shifts[p_idx]
-                if (p_idx+1) < len(p_pulse_shifts):
-                    p_distances[p_idx] += p_pulse_shifts[p_idx+1]
-                if p_idx > 0:
-                    p_distances[p_idx-1] += negative_between_positive_duration
-                negative_between_positive_duration = 0  # start accumulating from 0
-                p_idx += 1
+        # amount of negative pulses
+        negative_n = len([pulse_type for pulse_type in pulse_types if pulse_type == "N"])
+        n_positions = np.zeros(negative_n)  # start positions of the "N" pulses
+        n_positions[0] += start_delay
+        i = 0  # index through all pulses
+        for n_idx in range(len(n_positions)):
+            # flag indicates that it is time to break from inner cycle
+            # and start calculating next "N" pulse position
+            next_n_idx = False
 
-                positive_between_negative_duration += excitation_durations[i] + after_pulse_delays[i]
-            elif pulse_types[i] == "N":
-                m_distances[m_idx] = after_pulse_delays[i] - m_pulse_shifts[m_idx]
-                if (m_idx+1) < len(m_pulse_shifts):
-                    m_distances[m_idx] += m_pulse_shifts[m_idx + 1]
-                if m_idx > 0:
-                    m_distances[m_idx - 1] += positive_between_negative_duration
-                positive_between_negative_duration = 0  # start accumulating from 0
-                m_idx += 1
+            # cycling over all pulses (starting where ended last time)
+            while (i < pulses_n) and (not next_n_idx):
+                # adding idle time for all positive pulses before the 'n_idx' negative pulse
+                if pulse_types[i] == "P":
+                    n_positions[n_idx] += excitation_durations[i] + after_pulse_delays[i]
+                # if we meet 'n_idx' positive pulse
+                elif pulse_types[i] == "N":
+                    next_n_idx = True
+                    # adding 'n_idx' pulse shift value
+                    n_positions[n_idx] += pulse_shifts[i]
 
-                negative_between_positive_duration += excitation_durations[i] + after_pulse_delays[i]
+                    # if there is at least 1 more "N" pulse
+                    if (n_idx + 1) < len(n_positions):
+                        # add previously accumulated result for next negative pulse start position
+                        # add current pulse excitation duration as well
+                        n_positions[n_idx + 1] = n_positions[n_idx] + excitation_durations[i]
+                i += 1
 
-        # delay after last pulses set to zero
-        if len(m_pulse_shifts) > 0:
-            m_distances[-1] = 0
-        if len(p_pulse_shifts) > 0:
-            p_distances[-1] = 0
+        ''' Checking distances between pulses in the same group. They has to be non-negative '''
+        # exctract positive and negative excitation durations
+        p_excitation_durations = []
+        n_excitation_durations = []
+        for pulse_type, excitation_duration in zip(pulse_types, excitation_durations):
+            if pulse_type == "P":
+                p_excitation_durations.append(excitation_duration)
+            elif pulse_type == "N":
+                n_excitation_durations.append(excitation_duration)
 
-        # +1 is intended, the reason is to let digitizer to finish sampling and
-        # do not miss next trigger signal.
-        # Due to this fact the trigger signal frequency
-        # is not equal to d_freq. In fact it is less that d_freq on a bit this can be seen on spectral analyzer.
+        # differences between start positions of successive "P" pulses
+        p_diffs = np.diff(p_positions)
+        n_diffs = np.diff(n_positions)
+
+        # delay (zero time) between successive pulses inside their groups
+        p_delays = p_diffs - p_excitation_durations[:-1]
+        n_delays = n_diffs - n_excitation_durations[:-1]
+
+        # check that pulses from the same group do not overlap
+        if p_delays.any() < 0 or n_delays.any() < 0:
+            raise ValueError("pulses from the same frequency group found to be overlapping on each other")
+
         envelopes_in_pulse_group = pulse_sequence_parameters["envelopes_in_pulse_group"]
         n_pulse_groups = int(envelopes_in_pulse_group*envelope_duration/repetition_period)
 
-        if abs(envelope_duration % repetition_period) > 1:
+        # restriction: envelope duration has to be multiple of the repetition period
+        if abs(envelope_duration % repetition_period) > 1e-5:  # all values in ns
             raise ValueError("pulse repetition frequency has to be multiple of the peaks frequency difference")
 
         ''' constructing pulses '''
-        # flag for 'first cycle only operations'
-        is_first_cycle = True
+        # appending zero values for simplicity for code in cycle
+        p_delays = np.concatenate((p_delays, [0.0]))
+        n_delays = np.concatenate((n_delays, [0.0]))
+
+        # print(p_positions, p_delays)
+        # print(n_positions, n_delays)
 
         for i in range(n_pulse_groups):
-            pb_p = pb_p.add_zero_pulse(first_p_position)
-            pb_m = pb_m.add_zero_pulse(first_m_position)
-
-            # this parameter is needed by digitizer in order to properly perform
-            # software filtering (the exact pulses start position is needed)
-            if is_first_cycle:
-                pulse_sequence_parameters.update(first_pulse_start=min(pb_p.get_duration(), pb_m.get_duration()))
-
             # indexes to iterate over each pulse frequency group
             p_idx = 0
-            m_idx = 0
-
+            n_idx = 0
+            pb_p = pb_p.add_zero_pulse(p_positions[0])
+            pb_n = pb_n.add_zero_pulse(n_positions[0])
             for amplitude, phase_shift, excitation_duration, pulse_type in params_zipped:
                 if pulse_type == "P":
                     pulse_freq = freq + d_freq
@@ -725,28 +749,30 @@ class IQPulseBuilder():
                                                frequency=pulse_freq,
                                                phase=phase_shift,
                                                amplitude_mult=amplitude)\
-                        .add_zero_pulse(p_distances[p_idx])
+                        .add_zero_pulse(p_delays[p_idx])
                     p_idx += 1
                 elif pulse_type == "N":
                     pulse_freq = freq - d_freq
-                    pb_m = pb_m.add_sine_pulse(excitation_duration,
+                    pb_n = pb_n.add_sine_pulse(excitation_duration,
                                                window=window,
                                                frequency=pulse_freq,
                                                phase=phase_shift,
                                                amplitude_mult=amplitude) \
-                        .add_zero_pulse(m_distances[m_idx])
-                    m_idx += 1
-
-            # this parameter is needed by digitizer in order to properly perform
-            # software filtering (the exact pulses end position is needed)
-            if is_first_cycle:
-                pulse_sequence_parameters.update(last_pulse_end=max(pb_m.get_duration(), pb_p.get_duration()))
-                is_first_cycle = False
+                        .add_zero_pulse(n_delays[n_idx])
+                    n_idx += 1
 
             pb_p = pb_p.add_zero_until((i+1)*repetition_period)
-            pb_m = pb_m.add_zero_until((i+1)*repetition_period)
+            pb_n = pb_n.add_zero_until((i+1)*repetition_period)
 
-        return {'q_seqs': [pb_p.build().direct_add(pb_m.build())]}
+        # this parameters are needed by digitizer in order to properly perform
+        # software filtering (the exact pulses end positions is needed)
+        pulse_sequence_parameters.update(
+            first_pulse_start=min(p_positions[0], n_positions[0]),
+            last_pulse_end=max(p_positions[-1] + p_excitation_durations[-1],
+                               n_positions[-1] + n_excitation_durations[-1])
+        )
+        # print("pulses are set")
+        return {'q_seqs': [pb_p.build().direct_add(pb_n.build())]}
 
     @staticmethod
     def build_direct_rabi_sequences_AM(pulse_sequence_parameters, **pbs):

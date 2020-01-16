@@ -9,7 +9,8 @@ from drivers.keysightM3202A import KeysightM3202A
 import inspect
 import lib2.IQPulseSequence
 from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
-from drivers.Spectrum_m4x import SPCM
+from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
+from drivers.IQAWG import IQAWG
 
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
@@ -24,7 +25,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=1):
 
         # mandatory names for devices:
-        self._q_iqawg = None
+        self._q_iqawg: list[IQAWG] = None
         self._q_lo = None
         self._dig: list[SPCM] = None
         super().__init__(name, sample_name, devs_aliases_map,
@@ -62,14 +63,17 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         # TODO check carefully. All single device functions should be deleted?
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
 
-        # Как это вообще работало, если в ContextBase нет такого метода get_pulse_sequence_parameters()?
-        # self._measurement_result.get_context().get_pulse_sequence_parameters().update(pulse_sequence_parameters)
-        self._measurement_result._iter = 0
-
         # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
         dev_params = {"q_lo": q_lo_params,
                       "q_iqawg": q_iqawg_params,
                       "dig": dig_params}
+        # for all child experiments this parameters are default for
+        # digitizer acquisition mode
+        if "mode" not in dig_params[0]:
+            dig_params[0]["mode"] = SPCM_MODE.AVERAGING
+        if "trig_source" not in dig_params:
+            dig_params[0]["trig_source"] = SPCM_TRIGGER.EXT0
+
         super().set_fixed_parameters(**dev_params)
         self._measurement_result.get_context().update({
             "calibration_results": self._q_iqawg[0]._calibration.get_optimization_results(),
@@ -199,143 +203,3 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         if 'q_z_seqs' in seqs.keys():
             for (seq, dev) in zip(seqs['q_z_seqs'], self._q_z_awg):
                 dev.output_pulse_sequence(seq, asynchronous=False)
-
-
-class DigitizerDirectRabi(DigitizerTimeResolvedDirectMeasurement):
-    def __init__(self, name, sample_name, plot_update_interval=1,
-                 q_lo=[], q_iqawg=[], dig=[]):
-        devs_aliases_map = {"q_lo": q_lo,
-                            "q_iqawg": q_iqawg,
-                            "dig": dig}
-        super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
-        self._measurement_result = DigitizerRabiResult(name, sample_name)
-        self._sequence_generator = IQPulseBuilder.build_direct_rabi_sequences
-
-    def sweep_excitation_durations(self, excitation_durations):
-        super().set_swept_parameters(**{"excitation duration": (self._set_duration, excitation_durations)})
-
-    def _set_duration(self, excitation):
-        self._pulse_sequence_parameters["excitation_duration"] = excitation
-        self._output_pulse_sequence()
-
-
-class DigitizerRabiResult(VNATimeResolvedDispersiveMeasurement1DResult):
-
-    def __init__(self, name, sample_name):
-        super().__init__(name, sample_name)
-        self._x_axis_units = "ns"
-
-    def _model(self, t, A_r, A_i, T_R, Omega_R, offset_r, offset_i, phase1, phase2):
-        return -(A_r * np.cos(Omega_R * t + phase1) + 1j * A_i * np.cos(Omega_R * t + phase2)) * np.exp(-1 / T_R * t)\
-               + offset_r + 1j * offset_i
-
-    def _generate_fit_arguments(self, x, data):
-        amp_r, amp_i = np.ptp(np.real(data))/2, np.ptp(np.imag(data))/2
-        if np.abs(np.max(np.real(data)) - np.real(data[0])) < np.abs(np.real(data[0]) - np.min(np.real(data))):
-            amp_r = -amp_r
-        if np.abs(np.max(np.imag(data)) - np.imag(data[0])) < np.abs(np.imag(data[0]) - np.min(np.imag(data))):
-            amp_i = -amp_i
-        offset_r, offset_i = np.max(np.real(data)) - np.abs(amp_r), np.max(np.imag(data)) - np.abs(amp_i)
-
-        time_step = x[1] - x[0]
-        max_frequency = 1 / time_step / 10
-        min_frequency = 1e-4
-        frequency = np.random.random(1) * (max_frequency - min_frequency) + min_frequency
-        p0 = [amp_r, amp_i, 1000, frequency * 2 * np.pi, offset_r, offset_i, 0, 0]
-
-        bounds = ([-np.abs(amp_r) * 1.5, -np.abs(amp_i) * 1.5, 100, min_frequency * 2 * np.pi, -10, -10, -np.pi, -np.pi],
-                  [np.abs(amp_r) * 1.5, np.abs(amp_i) * 1.5, 100000, max_frequency * 2 * np.pi, 10, 10, np.pi, np.pi])
-        return p0, bounds
-
-    def _generate_annotation_string(self, opt_params, err):
-        return f"$T_R={opt_params[2]*1e-3:.2f}\pm {err[2]*1e-3:.2f}~\mu$s\n" \
-               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz\n" \
-               f"$\Delta\phi={np.mod(opt_params[6] - opt_params[7], 2 * np.pi) - np.pi:.2f}$ rad"
-
-    def _prepare_data_for_plot(self, data):
-        return data[self._parameter_names[0]], data["data"]
-
-    def get_pi_pulse_duration(self):
-        return np.pi / self._fit_params[3] # ns
-
-    def get_rabi_decay(self):
-        return (self._fit_params[2] * 1e-3, self._fit_errors[2] * 1e-3)
-
-    def get_rabi_frequency(self):
-        return (self._fit_params[3] * 1e-3, self._fit_errors[3] * 1e-3)
-
-    def get_basis(self):
-        fit = self._fit_params
-        A_r, A_i, offset_r, offset_i = fit[0], fit[1], fit[-4], fit[-3]
-        ground_state = -A_r+offset_r+1j*(-A_i+offset_i)
-        excited_state = A_r+offset_r+1j*(A_i+offset_i)
-        return np.array((ground_state, excited_state))
-
-    def get_betas(self):
-        return [self._fit_params[0] + 1j*self._fit_params[1],  # beta_II
-                self._fit_params[4] + 1j * self._fit_params[5]]  # beta_ZI or beta IZ depending on the qubit number in a qubit pair
-
-
-class DigitizerDirectRabiAmplitudeCalibration(DigitizerTimeResolvedDirectMeasurement):
-    def __init__(self, name, sample_name, plot_update_interval=1,
-                 q_lo=[], q_iqawg=[], dig=[]):
-        devs_aliases_map = {"q_lo": q_lo,
-                            "q_iqawg": q_iqawg,
-                            "dig": dig}
-        super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
-        self._measurement_result = DispersivePiPulseAmplitudeCalibrationResult(name, sample_name)
-        self._sequence_generator = IQPulseBuilder.build_direct_rabi_sequences
-
-    def sweep_amplitude(self, amplitudes):
-        super().set_swept_parameters(**{"amplitude": (self._set_amplitude, amplitudes)})
-
-    def _set_amplitude(self, amplitude):
-        self._pulse_sequence_parameters["excitation_amplitude"] = amplitude
-        self._output_pulse_sequence()
-
-
-class DispersivePiPulseAmplitudeCalibrationResult(VNATimeResolvedDispersiveMeasurement1DResult):
-
-    def __init__(self, name, sample_name):
-        super().__init__(name, sample_name)
-        self._x_axis_units = "ratio"
-
-    def _model(self, amplitude, A_r, A_i, pi_amplitude, offset_r, offset_i, phase_r, phase_i):
-        return -(A_r * np.cos(np.pi * amplitude / pi_amplitude + phase_r)
-                 + 1j * A_i * np.cos(np.pi * amplitude / pi_amplitude + phase_i)) + (offset_r + 1j * offset_i)
-
-    def _generate_fit_arguments(self, x, data):
-        amp_r, amp_i = np.ptp(np.real(data)) / 2, np.ptp(np.imag(data)) / 2
-        if np.abs(np.max(np.real(data)) - np.real(data[0])) < np.abs(np.real(data[0]) - np.min(np.real(data))):
-            amp_r = -amp_r
-        if np.abs(np.max(np.imag(data)) - np.imag(data[0])) < np.abs(np.imag(data[0]) - np.min(np.imag(data))):
-            amp_i = -amp_i
-        offset_r, offset_i = np.max(np.real(data)) - np.abs(amp_r), np.max(np.imag(data)) - np.abs(amp_i)
-        amp_step = x[1] - x[0]
-        min_pi_pulse_amp = amp_step * 2 * 5
-        max_pi_pulse_amp = (x[-1] - x[0]) * 2 * 10
-        pi_pulse_amp = np.random.random(1) * (max_pi_pulse_amp - min_pi_pulse_amp) + min_pi_pulse_amp
-        bounds = ([-np.abs(amp_r)*1.5,  -np.abs(amp_i)*1.5, min_pi_pulse_amp,   -10, -10, -np.pi, -np.pi],
-                  [np.abs(amp_r)*1.5,   np.abs(amp_i)*1.5,  max_pi_pulse_amp,   10, 10, np.pi, np.pi])
-        p0 = [amp_r, amp_i, pi_pulse_amp, offset_r, offset_i, 0, 0]
-        return p0, bounds
-    #
-    # def _prepare_data_for_plot(self, data):
-    #     return data["amplitude multiplier"], data["data"]
-
-    def _generate_annotation_string(self, opt_params, err):
-        return f"$(\pi) = {opt_params[2]:.2f} \pm {err[2]:.2f}$ a.u.\n" \
-               f"$\Delta\phi={np.mod(opt_params[5] - opt_params[6], 2 * np.pi) - np.pi:.2f}$ rad"
-
-    def get_pi_pulse_amplitude(self):
-        return self._fit_params[2]
-
-    def _prepare_data_for_plot(self, data):
-        return data[self._parameter_names[0]], data["data"]
-
-    def get_basis(self):
-        fit = self._fit_params
-        A_r, A_i, offset_r, offset_i = fit[0], fit[1], fit[-4], fit[-3]
-        ground_state = -A_r + offset_r + 1j * (-A_i + offset_i)
-        excited_state = A_r + offset_r + 1j * (A_i + offset_i)
-        return np.array((ground_state, excited_state))

@@ -41,6 +41,9 @@ class DigVNA(Measurement):
         self._iqawg_amplitudes: Tuple[int, int] = None
         # bandiwdth of the VNA being faked in Hz
         self._bandwidth: float = None
+        # index in 'fftshift'ed array of the IF frequency
+        # this is set once and for all during call of 'set_fixed_parameters'
+        self._sideband_freq_idx: float = None
 
     def set_fixed_parameters(self, lo_params=None, iqawg_params=None, dig_params=None,
                              bandwidth=1e3, iqawg_amplitudes=(1, 1)):
@@ -94,13 +97,12 @@ class DigVNA(Measurement):
         data = dig.measure(dig._bufsize).astype(float)
         data_cut = SPCM.extract_useful_data(data, 2, dig._segment_size, dig.get_how_many_samples_to_drop_in_front(),
                                             dig.get_how_many_samples_to_drop_in_end())
-        data_cut = (2 * (data_cut / dig.n_avg + 128) / 255 - 1) * dig.ch_amplitude
+        data_cut = data_cut / dig.n_avg / 128 * dig.ch_amplitude
         dataI = data_cut[::2]
         dataQ = data_cut[1::2]
 
         fft_data = np.fft.fftshift(np.fft.fft(dataI + 1j * dataQ, self._nfft)) / self._nfft
         yf = fft_data[self._start_idx:self._end_idx + 1]
-        self._measurement_result._iter += 1
         return yf
 
 
@@ -109,3 +111,5 @@ class DigVNA(Measurement):
 class DigVNAResult(MeasurementResult):
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
+
+

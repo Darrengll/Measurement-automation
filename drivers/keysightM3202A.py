@@ -286,7 +286,7 @@ class KeysightM3202A(Instrument):
         # duration = duration_initial*1e4 if duration_initial < 1e2 else 1e6  # here it is
 
         duration = duration_initial
-        new_x = np.linspace(0, duration, np.round(duration/self.get_sample_rate()*1e9), endpoint=False)
+        new_x = np.linspace(0, duration, int(np.round(duration/self.get_sample_rate()*1e9)), endpoint=False)
 
         # converting domain values in the function domain
         new_x_converted = np.remainder(new_x, duration_initial)

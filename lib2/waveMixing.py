@@ -1,9 +1,10 @@
+import warnings
 from copy import deepcopy
 from importlib import reload
 import numpy as np
 from scipy import fftpack
 from drivers.Spectrum_m4x import SPCM
-from lib2.MeasurementResult import ContextBase, MeasurementResult
+from lib2.MeasurementResult import MeasurementResult
 from matplotlib import pyplot as plt, colorbar
 
 import lib2.IQPulseSequence
@@ -11,13 +12,13 @@ import lib2.IQPulseSequence
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
 
-import lib2.digitizerTimeResolvedDispersiveMeasurement1D
+import lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements
 
-reload(lib2.digitizerTimeResolvedDispersiveMeasurement1D)
-from lib2.digitizerTimeResolvedDispersiveMeasurement1D import DigitizerTimeResolvedDirectMeasurement
+reload(lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements)
+from lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements import DigitizerTimeResolvedDirectMeasurement
 
 
-class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
+class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
     def __init__(self, name, sample_name, comment, q_lo=None, q_iqawg=None, dig=None):
         """
         Parameters
@@ -33,7 +34,7 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         """
         devs_aliases_map = {"q_lo": q_lo, "q_iqawg": q_iqawg, "dig": dig}
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval=1)
-        self._measurement_result = PulseMixingDigitizerResult(name, sample_name)
+        self._measurement_result = PulseMixingResult(name, sample_name)
 
         self._measurement_result.get_context()._comment = comment
         self._sequence_generator = IQPulseBuilder.build_wave_mixing_pulses
@@ -47,28 +48,39 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
 
         # whether or not to nullify parts of data that apriory contain only noise
         self.__cut = True
+        self.__cut_pulses = False
 
         # Fourier and measurement parameters
         # see purpose in 'self.set_fixed_parameters()'
         self._freq_limits = None  # tuple with frequency limits
         self._nfft = None  # number of FFT points
         self._frequencies = None
-        # self._frequencies[self._start_idx-1]  < self._freq_limits[0] <= self._frequencies[self._start_idx]
+        # index in self._frequencies that is closest to the START of the desired
+        # frequencies interval stored into 'self._freq_limits'
         self._start_idx = None
-        # self._frequencies[self._end_idx-1]  < self._freq_limits[1] <= self._frequencies[self._end_idx]
+        # index in self._frequencies that is closest to the END of the desired
+        # frequencies interval stored into 'self._freq_limits'
         self._end_idx = None
 
         # for debug purposes
         self.dataI = []
         self.dataQ = []
 
-    def _cut_input_data(self, cut=True):
+    def data_cutting_config(self, cut=True, cut_pulses=False):
         """
-        Sets whether or not to exclide noisy signal from the measurement
+        Sets whether or not to exclude noisy signal from the measurement
 
         Parameters
         ----------
         cut : bool
+            If True data values that do not belong to pulse interval or readout intervals
+            will be set to data.mean() values.
+            Pulse interval and readout values will stay untouched.
+
+        cut_pulses : bool
+            Considered only if cut == True.
+            If True pulse intervals will be set to signal average as well.
+            Only readout data will remain untouched.
 
         Returns
         -------
@@ -76,8 +88,7 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         """
         # TODO: need to delete after transferring data processing into result class
         self.__cut = cut
-
-        self._measurement_result._cut = True
+        self.__cut_pulses = cut_pulses
 
     def set_fixed_parameters(self, pulse_sequence_parameters, freq_limits=(0, 50e6), q_lo_params=None,
                              q_iqawg_params=None, dig_params=None):
@@ -95,8 +106,13 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         trace_len = self._dig[0].n_seg * (self._dig[0]._segment_size - self._dig[0]._n_samples_to_drop_in_end)
         self._nfft = fftpack.helper.next_fast_len(trace_len)
         xf = fftpack.fftshift(fftpack.fftfreq(self._nfft, 1 / self._dig[0].get_sample_rate()))
-        self._start_idx = np.searchsorted(xf, self._freq_limits[0])
-        self._end_idx = np.searchsorted(xf, self._freq_limits[1])
+        self._start_idx = np.abs(xf - self._freq_limits[0]).argmin()
+        self._end_idx = np.abs(xf - self._freq_limits[1]).argmin()
+
+        # checking indexes for consistency
+        if self._end_idx < self._start_idx:
+            raise ValueError("freq_limits has wrong notation")
+
         self._frequencies = xf[self._start_idx:self._end_idx + 1]
 
         # to provide 'set_sideband_order()' functionality
@@ -217,7 +233,7 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         # convertion to mV is according to
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
         # p.81
-        data_cut = data_cut.astype(float) / dig.n_avg / 128 * dig.ch_amplitude
+        data_cut = data_cut / dig.n_avg / 128 * dig.ch_amplitude
 
         # append 32 zero after every segment with several steps, they were deleted
         # in order to allow SPCM to receive every single trigger signal
@@ -250,7 +266,13 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
             first_pulse_start = self._pulse_sequence_parameters["first_pulse_start"]
             # supplied during the last call to 'self._sequence_generator' function
             last_pulse_end = self._pulse_sequence_parameters["last_pulse_end"]
-            desired_intervals = [(first_pulse_start, last_pulse_end + readout_duration)]
+
+            if self.__cut_pulses:  # if it is configured to cut out excitation pulses
+                desired_intervals = [(last_pulse_end, last_pulse_end + readout_duration)]
+                # print(f"cut pulses intervals: {desired_intervals}")
+            else:  # excitation pulses are remain untouched
+                desired_intervals = [(first_pulse_start, last_pulse_end + readout_duration)]
+                # print(f"NO cut pulses intervals: {desired_intervals}")
 
             def belongs(t, intervals):
                 ret = False
@@ -265,8 +287,8 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
             avgQ = np.mean(dataQ)
 
             for i, t in enumerate(sampling_points_times):
-                t_loc = t % repetition_period
-                if belongs(t_loc, desired_intervals):
+                t_inside_pulse = t % repetition_period
+                if belongs(t_inside_pulse, desired_intervals):
                     sampling_points_times_mask[i] = 1
 
             # the rest of the signal is equalized to the average value
@@ -277,7 +299,7 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         self.dataI.append(dataI)
         self.dataQ.append(dataQ)
 
-        fft_data = fftpack.fftshift(fftpack.fft(dataI + 1j * dataQ, self._nfft)) / self._nfft
+        fft_data = fftpack.fftshift(fftpack.fft(dataI + 1j * dataQ, self._nfft)) / self._nfft #np.sqrt
         yf = fft_data[self._start_idx:self._end_idx + 1]
         self._measurement_result._iter += 1
         return yf
@@ -340,7 +362,7 @@ class PulseMixingDigitizer(DigitizerTimeResolvedDirectMeasurement):
         self._measurement_result.set_sideband_order(order)
 
 
-class PulseMixingDigitizerResult(MeasurementResult):
+class PulseMixingResult(MeasurementResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
@@ -353,7 +375,6 @@ class PulseMixingDigitizerResult(MeasurementResult):
         self._target_freq_2D = None
         self._delta = 0
         self._iter = 0
-        self._cut = True
 
         self._d_freq = None
         self._if_freq = None
@@ -655,7 +676,12 @@ class PulseMixingDigitizerResult(MeasurementResult):
         ax_trace.axis("tight")
 
     def _prepare_data_for_plot1D(self, data):
-        power_data = 20 * np.log10(np.abs(data["data"]) * 1e3 / np.sqrt(50e-3))
+        # divide by zero is regularly encountered here
+        # due to the fact the during the measurement process
+        # data["data"] mostly contain zero values that are repetitively
+        # filled with measurement results
+
+        power_data = 20 * np.log10(np.abs(data["data"]) * 1e-3 / np.sqrt(50e-3))
 
         if self._XX is None and self._YY is None:
             self._XX, self._YY = data[self._parameter_names[0]], data["frequency"]

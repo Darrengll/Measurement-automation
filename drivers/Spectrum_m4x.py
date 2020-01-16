@@ -1,3 +1,16 @@
+'''
+We are using
+Spectrum m4x2212-x4
+https://spectrum-instrumentation.com/en/m4x2212-x4
+
+manual:
+https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
+
+datasheet:
+https://spectrum-instrumentation.com/sites/default/files/download/m4x22_datasheet_english.pdf
+'''
+
+
 import numpy as np
 from scipy import fftpack
 from scipy.fftpack import fft, fftfreq
@@ -137,14 +150,49 @@ class SPCM:
         error_reg = int32()
         error_value = int32()
         err = spcm_dwGetErrorInfo_i32(self.hCard, byref(error_reg), byref(error_value), error_text)
-        if err == ERR_TIMEOUT:
-            raise TimeoutError("Execution exceeded the allowed timeout. Reset the Spectrum card")
-        elif err is not ERR_OK:
+        if err is not ERR_OK:
             raise CardError(error_text.value)
 
+    def __handle_timeout(self, ret):
+        """
+        This function checks the return value of any low-level driver
+        function that waits for card to respond
+        and generates an exception in case timeout is exceeded.
+
+        This is the proper way to handle timeout error
+        according to content of page 47 of the device manual.
+
+        TODO: test this function
+
+        Parameters
+        ----------
+        ret : int
+            return value of the function that waits for the card state.
+
+        Returns
+        -------
+        ret : int
+            Returns argument in case of success.
+            Raises an exception otherwise.
+
+        Examples
+        -------
+        self.__handle_timeout(
+                self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)  # Wait till the card completes the current run
+            )
+        """
+        if ret == ERR_TIMEOUT:
+            raise TimeoutError("Execution exceeded the allowed timeout. Reset the Spectrum card")
+        return ret
+
     def set_timeout(self, timeout):
-        """Set time overflow in the digitizer"""
-        self.__write_to_reg_32(SPC_TIMEOUT, timeout)  # timeout is set to 1 second
+        """
+        Set time overflow in the digitizer
+
+        timeout : int
+            timeout in ms?
+        """
+        self.__write_to_reg_32(SPC_TIMEOUT, timeout)
 
     def setup_SSA(self, memsize, posttrigger_mem):
         """ Setup Standart Single Aquisition mode
@@ -336,9 +384,11 @@ class SPCM:
 
     def wait_for_card(self):
         """Wait until the card completes the current run"""
-        self.set_timeout(10 * 60000)
+        self.set_timeout(0)
         try:
-            self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)  # Wait till the card completes the current run
+            self.__handle_timeout(
+                self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)  # Wait till the card completes the current run
+            )
         except KeyboardInterrupt:
             self.stop_card()
         finally:
@@ -347,7 +397,9 @@ class SPCM:
     def wait_for_trigger(self):
         """Wait until the first trigger"""
         self.set_timeout(1000)
-        self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITTRIGGER)
+        self.__handle_timeout(
+            self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITTRIGGER)
+        )
         self.__handle_error()
 
     def stop_card(self):
@@ -476,7 +528,8 @@ class SPCM:
 
     def set_trigger_source(self, trig_source):
         """
-        You may use this function as well as 'set_fixed_parameters' dictionary
+        You may use this function as an alternative to
+        'self.set_parameters'
 
         Parameters
         ----------
@@ -496,7 +549,7 @@ class SPCM:
     def setup_trigger_source(self):
         if self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
             self.setup_auto_trigger()
-        elif self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
+        elif self.trigger_source == SPCM_TRIGGER.EXT0:
             self.setup_ext0_trigger()
 
     def measure(self, bufsize):
@@ -716,7 +769,7 @@ class SPCM:
         every = n_channels * segment_size
         # Generation of an array of indexes to cut at the beginning
         if samples_per_segment_to_cut_at_beginning > 0:
-            first_idxs = np.arange(0, len(data), every)
+            first_idxs = np.arange(0, len(data), every, dtype=np.int)
             # to cut data from every channel
             times_at_beginning = n_channels * samples_per_segment_to_cut_at_beginning
             idxs_at_beginning = np.concatenate([first_idxs + i for i in range(0, times_at_beginning)])
