@@ -109,8 +109,11 @@ class MeasurementResult:
         """
 
         paths = MeasurementResult._find_paths_by(sample_name, name, ".pkl", date, return_all)
-        results = []
 
+        if paths is None:
+            return
+
+        results = []
         for idx, path in enumerate(paths):
             try:
                 with open(path, "rb") as f:
@@ -118,7 +121,7 @@ class MeasurementResult:
             except pickle.UnpicklingError as e:
                 results.append(e)
 
-        return results if return_all else results[0]
+        return results[0] if len(results) == 1 and not return_all else results
 
     @staticmethod
     def _find_paths_by(sample_name, name, extension, date="", return_all=False):

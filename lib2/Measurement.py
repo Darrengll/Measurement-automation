@@ -7,6 +7,7 @@ from threading import Thread
 
 from lib2.MeasurementResult import MeasurementResult
 from lib2.ResonatorDetector import *
+from lib2.GlobalParameters import *
 from itertools import product
 from functools import reduce
 from operator import mul
@@ -24,7 +25,6 @@ class Measurement:
     The class contains methods to help with the implementation of measurement classes.
 
     """
-    logger = LoggingServer.getInstance('')
     _actual_devices = {}
     _log = []
     _devs_dict = \
@@ -75,8 +75,11 @@ class Measurement:
         if key is not recognised, do not return an error
 
         """
-        Measurement.logger.debug("Measurement " + name + " init")
-        Measurement.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
+
+        self._logger = LoggingServer.getInstance('')
+
+        self._logger.debug("Measurement " + name + " init")
+        self._logger.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
         
         self._interrupted = False
         self._name = name

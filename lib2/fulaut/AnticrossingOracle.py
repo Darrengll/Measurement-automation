@@ -5,7 +5,7 @@ from importlib import reload
 import lib2.ResonatorDetector
 reload(lib2.ResonatorDetector)
 from lib2.ResonatorDetector import *
-from lib2.LoggingServer import *
+from loggingserver import LoggingServer
 from lib2.GlobalParameters import *
 
 import scipy
@@ -32,7 +32,7 @@ class AnticrossingOracle():
         self._minimum_points_between_zeroes = 5
         self._minimum_points_around_zero = 5
         self._distance_from_intersection = 2
-        self._logger = LoggingServer.getInstance()
+        self._logger = LoggingServer.getInstance("")
         self._fast = True
         self._fast_res_detect = fast_res_detect
         self._noisy_data = False
@@ -54,9 +54,9 @@ class AnticrossingOracle():
         if "fqmax_above" in self._hints:
             q_freq_range = slice(mean_freq, 12.1e9, 100e6)
         elif "fqmax_below" in self._hints:
-            q_freq_range = slice(4, mean_freq, 100e6)
+            q_freq_range = slice(1, mean_freq, 100e6)
         else:
-            q_freq_range = slice(4e9, 12.1e9, 100e6)
+            q_freq_range = slice(1e9, 12.1e9, 100e6)
 
         g_range = slice(20e6, 40.1e6, 20e6/5)
         Ns = 3
@@ -104,7 +104,7 @@ class AnticrossingOracle():
             if loss<0.05:
                 break
 
-        res_freq, g, period, sweet_spot_cur, q_freq, fd = best_fitresult.x
+        res_freq, g, period, sweet_spot_cur, q_freq, d = best_fitresult.x
 
         if self._plot:
             plt.figure()
@@ -148,20 +148,17 @@ class AnticrossingOracle():
 
         self._data = data["data"]
 
-
         data = self._data
 
         #convert data to delay -- works for reflection AND trasmission
-        #data = self._sts_result._remove_delay(freqs, data)
+        data = self._sts_result._remove_delay(freqs, data)
         unwrapped_phase = unwrap(angle(data), axis=1)
         filter_window = data.shape[1] // 10
         if filter_window % 2 == 0:
             filter_window += 1
         filter_polyorder = 3
-        self._filtered_uphase = filtered_uphase = savgol_filter(unwrapped_phase,
-                                                                filter_window,
-                                                                filter_polyorder,
-                                                                axis=1)
+        self._filtered_uphase = filtered_uphase = savgol_filter(unwrapped_phase, filter_window,
+                                                                filter_polyorder, axis = 1)
         self._delay = delay = abs(diff(self._filtered_uphase, axis = 1))
 
         res_freqs = []
@@ -185,7 +182,7 @@ class AnticrossingOracle():
 
         # Taking delay peaks higher than half of the distance between the median
         # transmission level and the highest point for all 2D data
-        threshold = (delay.max() - \
+        threshold = (delay.max() -
                     0.5*(delay.max() - median(delay)))/100
 
         res_points = []
@@ -197,7 +194,7 @@ class AnticrossingOracle():
             extrema_inhdices = extrema_inhdices[row[extrema_inhdices] > threshold]
 
             if len(extrema_inhdices) > 0:
-                if GlobalParameters().resonator_types['reflection'] == True:
+                if GlobalParameters.resonator_types['reflection'] == True:
                     RD = ResonatorDetector(freqs, data[idx], plot=False,
                                        fast=self._fast_res_detect, type='reflection')
                 else:

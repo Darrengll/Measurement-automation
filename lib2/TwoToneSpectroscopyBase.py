@@ -64,7 +64,7 @@ class TwoToneSpectroscopyBase(Measurement):
 
     def _detect_resonator(self, vna_parameters, plot=False):
         vna = self._vna[0]
-        vna.set_nop(300)
+        vna.set_nop(vna_parameters["resonator_detection_nop"])
         vna.set_freq_limits(*vna_parameters["freq_limits"])
         vna.set_power(vna_parameters["power"])
         vna.set_bandwidth(vna_parameters["resonator_detection_bandwidth"])

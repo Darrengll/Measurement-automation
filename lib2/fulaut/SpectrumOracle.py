@@ -58,9 +58,9 @@ class SpectrumOracle():
 
         period_grid = period, period, 1
         sws_grid = sweet_spot_cur - 0.05 * period, sweet_spot_cur + 0.05 * period, 11
-        freq_grid = q_freq * 0.7, q_freq * 1.3, 50
-        d_grid = .1, .9, 30
-        alpha_grid = 90e-3, 150e-3, 20
+        freq_grid = 2, 10, 160
+        d_grid = .1, .9, 10
+        alpha_grid = 100e-3, 150e-3, 10
 
         slices = []
         self._grids = (period_grid, sws_grid, freq_grid, d_grid, alpha_grid)
@@ -88,33 +88,6 @@ class SpectrumOracle():
 
     def get_start_datetime(self):
         return self._datetime
-
-    @staticmethod
-    def _find_paths_by(sample_name, name, extension, date="", return_all=False):
-        paths = find(name + extension, os.path.join('data', sample_name, date))
-
-        if len(paths) == 0:
-            print("Measurement result '%s' for the sample '%s' not found" % (name, sample_name))
-            return
-
-        locale.setlocale(locale.LC_TIME, "C")
-        dates = [datetime.strptime(path.split(os.sep)[2], "%b %d %Y")
-                 for path in paths]
-        z = zip(dates, paths)
-        sorted_dates, sorted_paths = zip(*sorted(z))
-
-        if not return_all and len(paths)>1:
-            return MeasurementResult._prompt_user_to_choose(sorted_paths)
-
-        return sorted_paths
-
-    @staticmethod
-    def _prompt_user_to_choose(paths):
-        for idx, file in enumerate(paths):
-            print(idx, file)
-        print("More than one file found. Enter an index from listed above:")
-        index = input()
-        return [paths[int(index)]]
 
     def launch(self):
 
@@ -151,7 +124,8 @@ class SpectrumOracle():
                            opt_params_very_coarse[2] + 101e-3,
                            10e-3)
         d_slice = slice(opt_params_very_coarse[3] - 0.1,
-                        opt_params_very_coarse[3] + 0.101, 0.02)
+                        opt_params_very_coarse[3] + 0.101,
+                        0.02)
 
         self._refine_freq_slice = freq_slice
         self._iterations = (self._grids[1][2] + 1) * 21 * 11
@@ -238,7 +212,7 @@ class SpectrumOracle():
         all_chosen = concatenate([points for points in chosen_points if points.size > 0])
         result = minimize(self._cost_function_fine_fast, best_solution,
                           args=(self._y_scan_area_size, all_chosen), method="Nelder-Mead")
-        # best_solution = result.x
+        best_solution = result.x
 
         self._fine_opt_params = best_solution
         self._fine_frequency = best_solution[2]
@@ -338,8 +312,7 @@ class SpectrumOracle():
         self._counter += 1
         #         print(params)
 
-        distances = abs(
-            self._qubit_spectrum(points[:, 0], *params) - points[:, 1])
+        distances = abs(self._qubit_spectrum(points[:, 0], *params) - points[:, 1])
         chosen = distances < y_scan_area_size
         distances_chosen = distances[chosen]
         chosen_points = points[chosen]
@@ -357,8 +330,8 @@ class SpectrumOracle():
             #           ", chosen points:", total_nop)
         else:
             mean_distance = distances_chosen.sum() ** 2 / len(chosen_points)
-            # bin = round(len(self._parameter_values) * 0.1, 0)
-            total_nop = round(len(distances_chosen) / 1, 0) * 1
+            bin = round(len(self._parameter_values) * 0.1, 0)
+            total_nop = round(len(distances_chosen) / bin, 0) * bin
 
             self._coarse_brute_candidates.append(params)
             self._coarse_brute_nop_ranking.append(1 / total_nop)

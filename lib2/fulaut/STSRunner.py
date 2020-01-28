@@ -1,5 +1,6 @@
 from lib2.SingleToneSpectroscopy import *
 from lib2.fulaut.AnticrossingOracle import *
+from lib2.GlobalParameters import GlobalParameters
 from loggingserver import LoggingServer
 from datetime import datetime
 
@@ -20,9 +21,9 @@ class STSRunner():
             self._ro_awg = awgs["ro_awg"]
             self._q_awg = awgs["q_awg"]
             self._open_only_readout_mixer()
-            self._vna_power = -25
+            self._vna_power = GlobalParameters.spectroscopy_readout_power+20
         else:
-            self._vna_power = -50
+            self._vna_power = GlobalParameters.spectroscopy_readout_power
 
         self._vna_parameters = {"bandwidth": 500,
                                 "nop": 101,
@@ -34,7 +35,7 @@ class STSRunner():
         self._launch_datetime = datetime.today()
         self._cur_src[0].set_appropriate_range(max(abs(self._currents)))
 
-        self._logger = LoggingServer.getInstance()
+        self._logger = LoggingServer.getInstance('fulaut')
 
     def run(self):
 
@@ -53,7 +54,10 @@ class STSRunner():
         else:
             self._iterate_STS()
 
-        ao = AnticrossingOracle("transmon", self._sts_result, plot=True)
+        ao = AnticrossingOracle("transmon", self._sts_result,
+                                plot=True,
+                                fast_res_detect=False,
+                                hints = GlobalParameters.anticrossing_oracle_hits)
         res_points = ao.get_res_points()
         params, loss = ao.launch()
 
@@ -79,7 +83,7 @@ class STSRunner():
         while (counter < 3):
 
             self._perform_STS()
-            ao = AnticrossingOracle("transmon", self._sts_result, plot=True)
+            ao = AnticrossingOracle("transmon", self._sts_result, plot=True, fast_res_detect=False)
             res_points = ao.get_res_points()
 
             self._logger.debug("Scan: " + str(self._scan_area / 1e6))
@@ -103,7 +107,7 @@ class STSRunner():
 
         self._vna_parameters["nop"] = 101
         self._perform_STS()
-        ao = AnticrossingOracle("transmon", self._sts_result, plot=True)
+        ao = AnticrossingOracle("transmon", self._sts_result, plot=True, fast_res_detect=False)
         period = ao._find_period()
 
         N_periods = ptp(self._currents) / period
@@ -112,6 +116,10 @@ class STSRunner():
         if N_periods > 1:
             self._currents = \
                 (self._currents - mean(self._currents)) / N_periods*1.5 + mean(self._currents)
+            self._currents = linspace(self._currents[0], self._currents[-1], 201)
+
+            self._vna_parameters["nop"] = 201
+            self._vna_parameters["bandwidth"] = 200
             self._perform_STS()
         elif N_periods < 1:
             if max(abs(self._currents)) > 1e-3:

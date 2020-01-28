@@ -1,11 +1,11 @@
 from lib2.TwoToneSpectroscopy import *
 from lib2.fulaut.SpectrumOracle import *
-from lib2.fulaut.GlobalParameters import *
+from lib2.GlobalParameters import GlobalParameters
 from lib2.fulaut.qubit_spectra import *
 
 from datetime import datetime
 
-from lib2.LoggingServer import *
+from loggingserver import LoggingServer
 
 class TTSRunner():
 
@@ -20,25 +20,27 @@ class TTSRunner():
         self._res_limits = res_limits
         self._tts_name = "%s-two-tone" % qubit_name
         self._fit_p0 = fit_p0
-        self._logger = LoggingServer.getInstance()
-        self._which_sweet_spot = GlobalParameters.which_sweet_spot[qubit_name]
+        self._logger = LoggingServer.getInstance('fulaut')
+        self._which_sweet_spot = GlobalParameters().which_sweet_spot[qubit_name]
 
         if awgs is not None:
             self._ro_awg = awgs["ro_awg"]
             self._q_awg = awgs["q_awg"]
             self._open_mixers()
-            self._vna_power = -25
+            self._vna_power = GlobalParameters.spectroscopy_readout_power + 20
         else:
-            self._vna_power = -50
+            self._vna_power = GlobalParameters.spectroscopy_readout_power
 
-        self._vna_parameters = {"bandwidth": 200,
+        self._vna_parameters = {"bandwidth": 25,
                                 "freq_limits": self._res_limits,
-                                "nop": 10,
+                                "nop": 1,
                                 "power": self._vna_power,
                                 "averages": 1,
-                                "sweep_type": "LIN"}
+                                "sweep_type": "LIN",
+                                "resonator_detection_nop": 501,
+                                "resonator_detection_bandwidth":100}
 
-        self._mw_src_parameters = {"power": -5}
+        self._mw_src_parameters = {"power": GlobalParameters.spectroscopy_excitation_power}
 
         res_freq, g, period, sweet_spot, max_q_freq, d = self._fit_p0
 
@@ -47,9 +49,9 @@ class TTSRunner():
         else:
             center = sweet_spot
 
-        self._currents = linspace(center - period / 4,
-                                  center + period / 4,
-                                  101)
+        self._currents = linspace(center - period / 2,
+                                  center + period / 2,
+                                  201)
 
         min_q_freq = \
             transmon_spectrum(sweet_spot + period / 2, period, sweet_spot, max_q_freq, d)
@@ -62,10 +64,10 @@ class TTSRunner():
         #     mw_limits = (expected_q_freq-1.5e9, res_freq-1e9)
         # else:
         #     mw_limits = (res_freq-0.1e9, expected_q_freq+1e9)
+        self._logger.debug("Starting two-tone for fqmin: %.3f and fqmax: %.3f"%(min_q_freq, max_q_freq))
+        mw_limits = (min_q_freq-2e9, max_q_freq+.25e9)
 
-        mw_limits = (expected_q_freq - .7e9, expected_q_freq + 0.5e9)
-
-        self._mw_src_frequencies = linspace(*mw_limits, 201)
+        self._mw_src_frequencies = linspace(*mw_limits, 401)
 
         self._tts_result = None
         self._launch_datetime = datetime.today()
@@ -85,22 +87,31 @@ class TTSRunner():
         else:
             self._perform_TTS()
 
-        so = SpectrumOracle("transmon",
-                            self._tts_result,
-                            self._fit_p0[2:], plot=True)
-        params = so.launch()
-        self._logger.debug("Two-tone fit: %s" % str(params))
-        if known_results is None:
-            print("Saving...", end="")
-            self._tts_result.save()
-        print("\n")
+        if hasattr(self._tts_result, "_fit_params"):
+            return self._tts_result._fit_params
 
-        return params
+        try:
+            so = SpectrumOracle("transmon",
+                                self._tts_result,
+                                self._fit_p0[2:], plot=True)
+            params = period, sweet_spot, max_q_freq, d, alpha = so.launch()
+
+        except:
+            self._logger.warn("Two-tone fit failed")
+            self._tts_result._name += "_fit-fail"
+            self._tts_result.save()
+            raise ValueError("Fit was unsuccessful")
+        else:
+            self._logger.debug("Two-tone fit: %s" % str(params))
+            if known_results is None or not hasattr(self._tts_result, "_fit_params"):
+                self._tts_result._fit_params = params
+                self._tts_result.save()
+            print("\n")
+
+            return params
 
     def _perform_TTS(self):
 
-        f_res, g, period, sweet_spot, max_q_freq, d = \
-            self._fit_p0
 
         self._TTS = FluxTwoToneSpectroscopy("%s-two-tone" % self._qubit_name,
                                       self._sample_name,
@@ -123,7 +134,7 @@ class TTSRunner():
         self._ro_awg.output_continuous_IQ_waves(frequency=0,
                                                 amplitudes=(0, 0),
                                                 relative_phase=0,
-                                                offsets=(.5, .5),
+                                                offsets=(1, 1),
                                                 waveform_resolution=1)
 
         self._q_awg.output_continuous_IQ_waves(frequency=0,
