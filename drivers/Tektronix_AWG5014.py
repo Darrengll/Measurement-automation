@@ -134,7 +134,7 @@ class Tektronix_AWG5014(Instrument):
                     self.set_marker_voltages(marker_id, marker_low, 1)
                 else:
                     marker_waveform[:] = 1
-                    self.set_marker_voltages(marker_id, 0, marker_high)
+                    self.set_marker_voltages(marker_id, -1, marker_high)
             else:
                 # marker_mid = (marker_low+marker_high)/2
                 # marker_copy = marker_waveform.copy()
@@ -162,8 +162,8 @@ class Tektronix_AWG5014(Instrument):
                     host_channel_waveform = self._waveforms[host_channel - 1]
                 else:
                     host_channel_waveform = np.zeros((len(marker_waveform)))
-
-                self.set_waveform(host_channel_waveform * 2, \
+                norm = self._amplitudes[channel - 1] / 2
+                self.set_waveform(host_channel_waveform /norm, \
                                   repetition_rate, host_channel)
                 self.set_output(1, host_channel)
                 self.run()
