@@ -8,6 +8,23 @@ from operator import itemgetter
 
 from lib2.fulaut.qubit_spectra import *
 
+import fnmatch
+import os
+import pickle
+from threading import Lock
+from datetime import datetime
+
+from IPython.display import clear_output
+import locale
+
+def find(pattern, path):
+    result = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                result.append(os.path.join(root, name))
+    return result
+
 
 class SpectrumOracle():
     """
@@ -41,7 +58,7 @@ class SpectrumOracle():
 
         period_grid = period, period, 1
         sws_grid = sweet_spot_cur - 0.05 * period, sweet_spot_cur + 0.05 * period, 11
-        freq_grid = q_freq * 0.7, q_freq * 1.3, 50
+        freq_grid = 2, 10, 160
         d_grid = .1, .9, 10
         alpha_grid = 100e-3, 150e-3, 10
 
@@ -64,6 +81,13 @@ class SpectrumOracle():
         self._fine_brute_candidates = []
         self._fine_brute_nop_ranking = []
         self._fine_brute_distance_ranking = []
+
+
+    def set_start_datetime(self, datetime):
+        self._datetime = datetime
+
+    def get_start_datetime(self):
+        return self._datetime
 
     def launch(self):
 
@@ -100,7 +124,8 @@ class SpectrumOracle():
                            opt_params_very_coarse[2] + 101e-3,
                            10e-3)
         d_slice = slice(opt_params_very_coarse[3] - 0.1,
-                        opt_params_very_coarse[3] + 0.101, 0.02)
+                        opt_params_very_coarse[3] + 0.101,
+                        0.02)
 
         self._refine_freq_slice = freq_slice
         self._iterations = (self._grids[1][2] + 1) * 21 * 11
@@ -130,6 +155,7 @@ class SpectrumOracle():
         result = minimize(self._cost_function_coarse, opt_params_coarse,
                           args=(self._y_scan_area_size, chosen_points), method="Nelder-Mead")
         opt_params_coarse = result.x
+        self._opt_params_coarse = opt_params_coarse
 
         # extrema = self._argrelextrema2D(loss).T
         # self._candidate_freqs = mgrid[freq_slice][extrema[0]]
@@ -286,8 +312,7 @@ class SpectrumOracle():
         self._counter += 1
         #         print(params)
 
-        distances = abs(
-            self._qubit_spectrum(points[:, 0], *params) - points[:, 1])
+        distances = abs(self._qubit_spectrum(points[:, 0], *params) - points[:, 1])
         chosen = distances < y_scan_area_size
         distances_chosen = distances[chosen]
         chosen_points = points[chosen]
@@ -305,8 +330,8 @@ class SpectrumOracle():
             #           ", chosen points:", total_nop)
         else:
             mean_distance = distances_chosen.sum() ** 2 / len(chosen_points)
-            # bin = round(len(self._parameter_values) * 0.1, 0)
-            total_nop = round(len(distances_chosen) / 1, 0) * 1
+            bin = round(len(self._parameter_values) * 0.1, 0)
+            total_nop = round(len(distances_chosen) / bin, 0) * bin
 
             self._coarse_brute_candidates.append(params)
             self._coarse_brute_nop_ranking.append(1 / total_nop)
@@ -497,3 +522,98 @@ class SpectrumOracle():
             if equals.size != 0:
                 both_axes_extrema.append(point)
         return array(both_axes_extrema)
+
+
+    def visualize(self):
+        self._fine_opt_params[2] = self._fine_opt_params[2] / 1e9
+
+        plt.subplot(2, 1, 1)
+
+        x = self._parameter_values
+        freqs = self._frequencies
+        x_plot = concatenate(
+            (x - (x[1] - x[0]) / 2, x[-1:] + (x[1] - x[0]) / 2))
+        freqs_plot = concatenate((freqs - (freqs[1] - freqs[0]) / 2,
+                                  freqs[-1:] + (freqs[1] - freqs[0]) / 2))
+
+        plt.pcolormesh(x_plot, freqs_plot, abs(self._Z).T)
+        plt.plot(self._points[:, 0], self._points[:, 1], 'r.')
+        z = plt.colorbar()
+        plt.xlabel('Current [A]')
+        plt.ylabel('Frequency [GHz]')
+        z.set_label('S21', rotation=90)
+        plt.gcf().set_size_inches(10, 10)
+
+        plt.subplot(2, 1, 2)
+
+        plt.plot(self._points[:, 0], self._points[:, 1], ".")
+        plt.plot([self._grids[1][0]], [mean(self._points[:, 1])],
+                 "|", markersize=100)
+        plt.plot([self._grids[1][1]], [mean(self._points[:, 1])],
+                 "|", markersize=100)
+        plt.plot(self._parameter_values,
+                 self._qubit_spectrum(self._parameter_values,
+                                      *self._opt_params_coarse), ":")
+        plt.plot(self._parameter_values,
+                 self._qubit_spectrum(self._parameter_values,
+                                      *self._fine_opt_params[:-1]))
+        plt.plot(self._parameter_values,
+                 self._qubit_spectrum(self._parameter_values,
+                                      *self._fine_opt_params[:-1]) -
+                 self._fine_opt_params[-1])
+        plt.plot(self._parameter_values,
+                 self._qubit_spectrum(self._parameter_values,
+                                      *self._fine_opt_params[:-1]) - 2 *
+                 self._fine_opt_params[-1])
+        plt.plot(self._parameter_values,
+                 self._qubit_spectrum(self._parameter_values,
+                                      *self._fine_opt_params[:-1]) - 3 *
+                 self._fine_opt_params[-1])
+        plt.xlabel('Current [A]')
+        plt.ylabel('Frequency [GHz]')
+        plt.gcf().set_size_inches(10, 10)
+
+        plt.tight_layout()
+        plt.show()
+
+        data = {'extracted points': self._points, 'parameters':self._parameter_values, 'fine opt parameters': self._fine_opt_params, 'opt params coarse':self._opt_params_coarse}
+        self._data = data
+
+    def save(self):
+
+        self.visualize()
+        name = self._tts_result._name+ "-oracle-fit"
+        with open(os.path.join(self.get_save_path(), name + '.pkl'), 'w+b') as f:
+            pickle.dump(self, f)
+        with open(os.path.join(self.get_save_path(), name + '_raw_data.pkl'), 'w+b') as f:
+            pickle.dump(self._data, f)
+        with open(os.path.join(self.get_save_path(), name + '_context.txt'), 'w+') as f:
+            f.write(str(self._fine_opt_params))
+
+        plt.savefig(os.path.join(self.get_save_path(), name + ".png"), bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(), name + ".pdf"), bbox_inches='tight')
+        plt.close()
+
+    def get_save_path(self):
+
+        if not os.path.exists("data"):
+            os.makedirs("data")
+
+        sample_directory = os.path.join('data', self._tts_result._sample_name)
+        if not os.path.exists(sample_directory):
+            os.makedirs(sample_directory)
+
+        locale.setlocale(locale.LC_TIME, "C")
+        date_directory = os.path.join(sample_directory,
+                                      self._tts_result.get_start_datetime().strftime("%b %d %Y"))
+        if not os.path.exists(date_directory):
+            os.makedirs(date_directory)
+
+        time_directory = os.path.join(date_directory,
+                                      self._tts_result.get_start_datetime().strftime("%H-%M-%S")
+                                      + " - " + self._tts_result._name+"-oracle-fit")
+
+        if not os.path.exists(time_directory):
+            os.makedirs(time_directory)
+
+        return time_directory
