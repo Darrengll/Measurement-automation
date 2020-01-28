@@ -67,8 +67,8 @@ class MXG(Instrument):
         if "sweep_trg_src" in keys:
             self.set_freq_sweep()
 
-        if "freq_limits" in keys:
-            self.set_freq_limits(parameters_dict["freq_limits"])
+        if "frequencies" in keys:
+            self.set_freq_limits(parameters_dict["frequencies"])
         if "nop" in keys:
             self.set_nop(parameters_dict["nop"])
 
@@ -159,9 +159,9 @@ class MXG(Instrument):
         # STEP - interval and number of pts | LIST - list ought to be loaded
         self.write(":LIST:TYPE STEP")
 
-    def set_freq_limits(self, freq_limits):
-        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz")) # TODO: rename
-        self.write(":FREQuency:STOP %f%s" % (freq_limits[-1], "Hz"))
+    def set_freq_limits(self, frequencies):
+        self.write(":FREQuency:STARt %f%s" % (frequencies[0], "Hz"))
+        self.write(":FREQuency:STOP %f%s" % (frequencies[-1], "Hz"))
 
     def do_set_nop(self, nop):
         self.write(":SWEep:POINts %i" % (nop))
