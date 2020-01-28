@@ -18,6 +18,7 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         self._last_resonator_result = None
         self._resonator_fits = []
 
+
     def set_fixed_parameters(self, sweet_spot_current=None, sweet_spot_voltage=None, adaptive=False,
                              **dev_params):
         self._resonator_area = dev_params['vna'][0]["freq_limits"]
@@ -72,8 +73,17 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
                     degrees" % (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180), end="")
         self._mw_src[0].set_output_state("ON")
         vna_parameters["freq_limits"] = (res_freq, res_freq)
-        self._resonator_area = (res_freq - 20e6, res_freq + 20e6)
+        self._resonator_area = (res_freq - ptp(self._resonator_area)/2,
+                                res_freq + ptp(self._resonator_area)/2)
         self._vna[0].set_parameters(vna_parameters)
+
+
+    # def _recording_iteration(self):
+    #     res_freq, res_amp, res_phase = self._resonator_fits[-1]
+    #     data = super()._recording_iteration()
+    #     # print("----", data, res_amp*exp(-1j*res_phase))
+    #
+    #     return data / res_amp*exp(-1j*res_phase)
 
 class PowerTwoToneSpectroscopy(TwoToneSpectroscopyBase):
 
@@ -85,7 +95,7 @@ class PowerTwoToneSpectroscopy(TwoToneSpectroscopyBase):
             self._resonator_area = dev_params['vna'][0]["freq_limits"]
             self._adaptive = adaptive
             if self._resonator_area[0] != self._resonator_area[1]:
-                detect_resonator = not adaptive
+                detect_resonator = adaptive
             else:
                 detect_resonator = False
             super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
@@ -163,8 +173,7 @@ class AcStarkTwoToneSpectroscopy(TwoToneSpectroscopyBase):
             print("\rDetecting a resonator within provided frequency range of the VNA %s\
                     " % (str(vna_parameters["freq_limits"])), flush=True, end="")
 
-            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=False,
-                                                                  bandwidth_factor=2)
+            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=False)
             print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
                     degrees" % (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180), end="")
         else:
