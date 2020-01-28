@@ -13,6 +13,7 @@ from operator import mul
 from matplotlib import pyplot as plt
 import sys
 from numpy import zeros, complex_
+from lib2.GlobalParameters import *
 
 from loggingserver import LoggingServer
 
@@ -82,6 +83,10 @@ class Measurement:
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
         self._resonator_detector = ResonatorDetector()
+        if GlobalParameters().resonator_types['reflection'] == True:
+            self._resonator_detector = ResonatorDetector(type= 'reflection')
+        else:
+            self._resonator_detector = ResonatorDetector(type = 'transmission')
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""
@@ -304,8 +309,8 @@ class Measurement:
             vna.sweep_single()
             vna.wait_for_stb()
             frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
-            vna.autoscale_all()
-            self._resonator_detector.set_data(frequencies, sdata)
+            # vna.autoscale_all()
+            self._resonator_detector.set_data(frequencies, sdata*exp(2*pi*1j*frequencies*50e-9))
             self._resonator_detector.set_plot(plot)
             result = self._resonator_detector.detect()
 
