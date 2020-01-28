@@ -5,7 +5,6 @@ from lib2.VNATimeResolvedDispersiveMeasurement2D import *
 class DispersiveRamseyFringes(VNATimeResolvedDispersiveMeasurement2D):
 
     def __init__(self, name, sample_name, **devs_aliases_map):
-
         devs_aliases_map["q_z_awg"] = None
         super().__init__(name, sample_name, devs_aliases_map)
         self._measurement_result = \
