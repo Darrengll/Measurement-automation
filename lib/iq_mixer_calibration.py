@@ -245,7 +245,6 @@ class IQCalibrator():
 
             start = datetime.now()
 
-            assert isinstance(self._lo.set_power, object)
             self._lo.set_power(lo_power)
             self._lo.set_frequency(lo_frequency)
             self._lo.set_output_state("ON")
