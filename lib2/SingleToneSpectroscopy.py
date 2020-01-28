@@ -154,7 +154,12 @@ class SingleToneSpectroscopyResult(MeasurementResult):
             return
 
         X, Y, Z = self._prepare_data_for_plot(data)
-        phases = abs(angle(Z).T) if not self._unwrap_phase else unwrap(angle(Z)).T
+        if not self._unwrap_phase:
+            phases = abs(angle(Z).T)
+        else:
+            Z_ravelled = Z.ravel()
+            phases = unwrap(angle(Z_ravelled)).reshape(Z.shape).T
+
         phases[Z.T == 0] = 0
         phases = phases if self._phase_units == "rad" else phases * 180 / pi
 
@@ -208,7 +213,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
 
     def remove_delay(self):
         copy = self.copy()
-        s_data, frequencies = copy.get_data()["data"], copy.get_data()["frequencies"]
+        s_data, frequencies = copy.get_data()["data"], copy.get_data()["Frequency [Hz]"]
         copy.get_data()["data"] = self._remove_delay(frequencies, s_data)
         return copy
 
@@ -227,8 +232,8 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         Parameters:
         -----------
         direction: str
-            "h" for horizontal slice subtraction
-            "v" for vertical slice subtraction
+            "avg_cur" for current slice subtraction
+            "avg_freq" for frequency slice subtraction
 
         """
         s_data = self.get_data()["data"]
