@@ -43,11 +43,11 @@ class FastTwoToneSpectroscopyBase(Measurement):
         self._parameter_name = param_name + " [%s]" % param_dim
         self._info_suffix = "at %.4f " + param_dim
 
-    def set_fixed_parameters(self, flux_control_parameter, detect_resonator = True, bandwidth_factor=1, **dev_params):
+    def set_fixed_parameters(self, flux_control_parameter, detect_resonator = True, **dev_params):
 
         vna_parameters = dev_params['vna'][0]
         mw_src_parameters = dev_params['mw_src'][0]
-        self._frequencies = mw_src_parameters["freq_limits"]
+        self._frequencies = mw_src_parameters["frequencies"]
 
         if "ext_trig_channel" in mw_src_parameters.keys():
             # internal adjusted trigger parameters for vna
@@ -60,8 +60,6 @@ class FastTwoToneSpectroscopyBase(Measurement):
             mw_src_parameters["InSweep_trg_src"] = "EXT"
             mw_src_parameters["sweep_trg_src"] = "BUS"
 
-        self._bandwidth_factor = bandwidth_factor
-
         if flux_control_parameter is not None:
             self._base_parameter_setter(flux_control_parameter)
 
@@ -69,6 +67,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
             self._mw_src[0].set_output_state("OFF")
             msg = "Detecting a resonator within provided frequency range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
+            # print(msg , flush=True)
             print(msg + self._info_suffix % flux_control_parameter, flush=True)
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
             print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
@@ -97,7 +96,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
             self._vna[0].set_nop(vna_parameters["res_find_nop"])
         else:
             self._vna[0].set_nop(vna_parameters["nop"])
-        self._vna[0].set_bandwidth(vna_parameters["bandwidth"] * self._bandwidth_factor)
+        self._vna[0].set_bandwidth(vna_parameters["resonator_detection_bandwidth"])
         self._vna[0].set_averages(vna_parameters["averages"])
         result = super()._detect_resonator(plot)
         self._vna[0].do_set_power(vna_parameters["power"])
