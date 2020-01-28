@@ -63,7 +63,7 @@ class Tektronix_AWG5014(Instrument):
 
         self._address = address
         self._visainstrument = visa.ResourceManager() \
-            .open_resource(self._address, read_termination="\r\n",
+            .open_resource(self._address, read_termination="\n",
                            write_termination="\n")
         self._values = {}
         self._values['files'] = {}
