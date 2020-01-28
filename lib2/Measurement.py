@@ -24,7 +24,6 @@ class Measurement:
     The class contains methods to help with the implementation of measurement classes.
 
     """
-    logger = LoggingServer.getInstance('')
     _actual_devices = {}
     _log = []
     _devs_dict = \
@@ -48,8 +47,7 @@ class Measurement:
          'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
          'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
          'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'k6220': [["k6220"], [k6220, "K6220"]],
-         'NCS513': [["NCS513"], [NCS513, "NCS513"]]
+         'k6220': [["k6220"], [k6220, "K6220"]]
          }
 
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
@@ -76,13 +74,17 @@ class Measurement:
         if key is not recognised, do not return an error
 
         """
-        Measurement.logger.debug("Measurement " + name + " init")
-        Measurement.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
+
+        self._logger = LoggingServer.getInstance('')
+
+        self._logger.debug("Measurement " + name + " init")
+        self._logger.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
         
         self._interrupted = False
         self._name = name
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
+        self._resonator_detector = ResonatorDetector()
         if GlobalParameters().resonator_types['reflection'] == True:
             self._resonator_detector = ResonatorDetector(type= 'reflection')
         else:
@@ -309,8 +311,8 @@ class Measurement:
             vna.sweep_single()
             vna.wait_for_stb()
             frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
-            vna.autoscale_all()
-            self._resonator_detector.set_data(frequencies, sdata)
+            # vna.autoscale_all()
+            self._resonator_detector.set_data(frequencies, sdata*exp(2*pi*1j*frequencies*50e-9))
             self._resonator_detector.set_plot(plot)
             result = self._resonator_detector.detect()
 
