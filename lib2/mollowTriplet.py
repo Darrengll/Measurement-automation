@@ -1,11 +1,10 @@
-import signal
-
 from lib2.Measurement import Measurement
 from lib2.MeasurementResult import MeasurementResult
 import numpy as np
 from importlib import reload
 from drivers.keysightM3202A import KeysightM3202A
 import inspect
+from scipy import signal
 from scipy import fftpack
 import matplotlib.pyplot as plt
 import multiprocessing as mp
@@ -189,12 +188,19 @@ class MollowTriplet(Measurement):
         p.nice(psutil.HIGH_PRIORITY_CLASS)
         if ult_calib:
             for (fg_trace, bg_trace) in iter(data_queue.get, None):
+                # fg_pd = np.abs(signal.welch(fg_trace, 1.25e9, nperseg=nfft)[1])
+                # bg_pd = np.abs(signal.welch(bg_trace, 1.25e9, nperseg=nfft)[1])
+                # if len(buff_fg) != len(fg_pd):
+                #     buff_fg = np.zeros(len(fg_pd))
+                #     buff_bg = np.zeros(len(bg_pd))
                 fg_spectrum = fftpack.fftshift(fftpack.fft(fg_trace, nfft)) / nfft
                 bg_spectrum = fftpack.fftshift(fftpack.fft(bg_trace, nfft)) / nfft
-                fgsp_cut = fg_spectrum[start_idx:end_idx + 1]
-                bgsp_cut = bg_spectrum[start_idx:end_idx + 1]
-                buff_fg = np.add(np.abs(fgsp_cut) ** 2, buff_fg)
-                buff_bg = np.add(np.abs(bgsp_cut) ** 2, buff_bg)
+                fg_spectrum = fg_spectrum[start_idx:end_idx + 1]
+                bg_spectrum = bg_spectrum[start_idx:end_idx + 1]
+                buff_fg = np.add(np.abs(fg_spectrum) ** 2, buff_fg)
+                buff_bg = np.add(np.abs(bg_spectrum) ** 2, buff_bg)
+                # buff_fg = np.add(fg_pd, buff_fg)
+                # buff_bg = np.add(bg_pd, buff_bg)
                 n += 1
                 if n == N:
                     fft_queue.put((buff_fg, buff_bg))

@@ -167,6 +167,16 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             [duration] * len(self._pulse_sequence_parameters["pulse_sequence"])
         self._output_pulse_sequence()
 
+    def sweep_excitation_amplitude(self, amplitudes):
+        self._name += "excitation ampl"
+        self.set_swept_parameters(**{"Excitation amplitude, ratio": (self._set_excitation_amplitude, amplitudes)})
+        self._measurement_result.set_parameter_name("Excitation amplitude, ratio")
+
+    def _set_excitation_amplitude(self, amplitude):
+        self._pulse_sequence_parameters["excitation_amplitudes"] = \
+            [amplitude] * len(self._pulse_sequence_parameters["pulse_sequence"])
+        self._output_pulse_sequence()
+
     def sweep_two_excitation_durations(self, durations1, durations2):
         self._name += "dur1_dur2"
         swept_pars = {"Pulse 1 duration, ns": (self._set_excitation1_duration1, durations1),
@@ -200,6 +210,12 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         self._pulse_sequence_parameters["repetition_period"] = period
         self._output_pulse_sequence()
 
+    def sweep_second_pulse(self, amplitudes, durations):
+        self._name += "ampl2_dur2"
+        swept_pars = {"Pulse 2 amplitude, ratio": (self._set_excitation2_amplitude, amplitudes),
+                      "Pulse 2 duration, ns": (self._set_excitation1_duration2, durations)}
+        self.set_swept_parameters(**swept_pars)
+
     def sweep_d_freq(self, dfreqs):
         self.set_swept_parameters(**{"$\delta f$, Hz": (self._set_pulse_distance, dfreqs)})
 
@@ -223,7 +239,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         measurement_data["frequency"] = self._frequencies
         return measurement_data
 
-    def _recording_iteration(self):
+    def _measure_one_trace(self):
         dig = self._dig[0]
         data = dig.measure(dig._bufsize).astype(float)
 
@@ -270,7 +286,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             if self.__cut_pulses:  # if it is configured to cut out excitation pulses
                 desired_intervals = [(last_pulse_end, last_pulse_end + readout_duration)]
                 # print(f"cut pulses intervals: {desired_intervals}")
-            else:  # excitation pulses are remain untouched
+            else:  # excitation pulses remain untouched
                 desired_intervals = [(first_pulse_start, last_pulse_end + readout_duration)]
                 # print(f"NO cut pulses intervals: {desired_intervals}")
 
@@ -294,12 +310,15 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             # the rest of the signal is equalized to the average value
             dataI = (dataI * sampling_points_times_mask + (1 - sampling_points_times_mask) * avgI)
             dataQ = (dataQ * sampling_points_times_mask + (1 - sampling_points_times_mask) * avgQ)
+        return dataI + 1j * dataQ
 
+    def _recording_iteration(self):
+        data = self._measure_one_trace()
         # for debug purposes
-        self.dataI.append(dataI)
-        self.dataQ.append(dataQ)
+        self.dataI.append(np.real(data))
+        self.dataQ.append(np.imag(data))
 
-        fft_data = fftpack.fftshift(fftpack.fft(dataI + 1j * dataQ, self._nfft)) / self._nfft #np.sqrt
+        fft_data = fftpack.fftshift(fftpack.fft(data, self._nfft)) / self._nfft
         yf = fft_data[self._start_idx:self._end_idx + 1]
         self._measurement_result._iter += 1
         return yf
@@ -378,6 +397,7 @@ class PulseMixingResult(MeasurementResult):
 
         self._d_freq = None
         self._if_freq = None
+        self._amps_n_phases_mode = False
 
     def set_sideband_order(self, order):
         """
@@ -401,6 +421,8 @@ class PulseMixingResult(MeasurementResult):
         if n_parameters == 1:
             return self._prepare_figure1D()
         elif n_parameters == 2:
+            if self._amps_n_phases_mode:
+                return self._prepare_figure2D_amps_n_phases()
             return self._prepare_figure2D_re_n_im()
         else:
             raise NotImplementedError("None or more than 2 swept parameters are set")
@@ -514,6 +536,8 @@ class PulseMixingResult(MeasurementResult):
         if n_parameters == 1:
             return self._plot1D(data)
         elif n_parameters == 2:
+            if self._amps_n_phases_mode:
+                return self._plot2D_amps_n_phases(data)
             return self._plot2D_re_n_im(data)
         else:
             raise NotImplementedError("None or more than 2 swept parameters are set")
@@ -647,8 +671,8 @@ class PulseMixingResult(MeasurementResult):
         im_max = max(np.max(im_nonempty), -np.min(re_nonempty))
         step_X = XX[1] - XX[0]
         step_Y = YY[1] - YY[0]
-        extent = [XX[0] - 1 / 2 * step_X, XX[-1] + 1 / 2 * step_X,
-                  YY[0] - 1 / 2 * step_Y, YY[-1] + 1 / 2 * step_Y]
+        extent = [YY[0] - 1 / 2 * step_Y, YY[-1] + 1 / 2 * step_Y,
+                  XX[0] - 1 / 2 * step_X, XX[-1] + 1 / 2 * step_X]
         re_map = ax_map_re.imshow(Z_re, origin='lower', cmap="RdBu_r",
                                       aspect='auto', vmax=re_max,
                                       vmin=-re_max, extent=extent)

@@ -54,7 +54,9 @@ class SPCM:
 
         self._segment_size: int = None
         self._bufsize: int = 0
-        self._trigger_mode = SPC_TM_POS
+        self._trigger_mode = SPC_TM_POS | SPC_TM_REARM
+        self._trig_term = 0
+        self._trig_acdc = 0
         self._n_samples_to_drop_by_dig_delay: int = 0
         self._n_samples_to_drop_in_end: int = 0
 
@@ -213,7 +215,13 @@ class SPCM:
     def setup_block_avg_STD(self, memsize, segmentsize, posttrigger, averages):
         """ Setup Standart Single Aquisition mode with the Block Averaging Module
             Acquire data immediately and save them in Spectrum memory"""
-        self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE)  # Enables Segment Statistic for standard acquisition
+        if( averages <= 255 ):
+            # Enables Segment Statistic for standard acquisition 16 bit
+            self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE_16BIT)
+        else:
+            # Enables Segment Statistic for standard acquisition 16 bit
+            self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE)
+
         self.__write_to_reg_32(SPC_AVERAGES, averages)
         self.__write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
         self.__write_to_reg_32(SPC_POSTTRIGGER,
@@ -364,15 +372,17 @@ class SPCM:
         self._trigger_mode = mode
 
     def setup_ext0_trigger(self):
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 1000)  # 0-level is < 1000 mV
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 1200)  # 1-level is > 2000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 500)  # 0-level is < 1000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 700)  # 1-level is > 2000 mV
         self.__write_to_reg_32(SPC_TRIG_EXT0_MODE,
                                self._trigger_mode)  # trigger on the rising edge (voltage crosses 0-level barrier)
-        self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_EXT0)  # Enable the external triggel
+        self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_EXT0)  # Enable the external trigger
+        self.__write_to_reg_32(SPC_TRIG_TERM, self._trig_term)
+        self.__write_to_reg_32(SPC_TRIG_EXT0_ACDC, self._trig_acdc)
 
     def setup_pxi_trigger(self):
         self.__write_to_reg_32(SPC_PXITRG1_MODE, SPCM_PXITRGMODE_IN)
-        self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_PXI1)  # Enable the external triggel
+        self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_PXI1)  # Enable the external trigger
 
     def setup_auto_trigger(self):
         self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_SOFTWARE)  # Trigger the card immediately after start

@@ -256,7 +256,6 @@ class Measurement:
         for idx_group, values_group in zip(product(*parameters_idxs), product(*parameters_values)):
             # print(idx_group)
             self._call_setters(values_group)
-
             # This should be implemented in child classes:
             data = self._recording_iteration()
 
@@ -272,6 +271,7 @@ class Measurement:
             # This may need to be extended in child classes:
             measurement_data = self._prepare_measurement_result_data(par_names, parameters_values)
             self._measurement_result.set_data(measurement_data)
+            self._measurement_result._iter_idx_ready = idx_group
 
             done_iterations += 1
 

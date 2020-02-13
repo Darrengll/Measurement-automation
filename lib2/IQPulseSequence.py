@@ -3,6 +3,7 @@ from copy import deepcopy
 import numpy as np
 from matplotlib import pyplot as plt
 from numpy import *
+from scipy import signal
 
 from lib.iq_mixer_calibration import IQCalibrationData
 
@@ -355,15 +356,34 @@ class IQPulseBuilder():
 
         def hahn():
             window = sin(pi * linspace(0, N_time_steps, N_time_steps, endpoint=False) / N_time_steps) ** 2
-            if N_time_steps > 0 :
+            if N_time_steps > 0:
                 derivative = gradient(window, self._waveform_resolution)
                 derivative[0] = derivative[-1] = 0
             else:
                 derivative = 0
-
             return window, derivative
 
-        windows = {"rectangular": rectangular, "gaussian": gaussian, "hahn": hahn}
+        def tukey():
+            # https://docs.scipy.org/doc/scipy-1.0.0/reference/generated/scipy.signal.tukey.html
+            window = signal.tukey(N_time_steps)
+            if N_time_steps > 1:
+                derivative = gradient(window, self._waveform_resolution)
+                derivative[0] = derivative[-1] = 0
+            else:
+                derivative = 0
+            return window, derivative
+
+        def kaiser():
+            # https://docs.scipy.org/doc/scipy-1.0.0/reference/generated/scipy.signal.kaiser.html
+            window = signal.kaiser(N_time_steps, beta=14)
+            if N_time_steps > 0:
+                derivative = gradient(window, self._waveform_resolution)
+                derivative[0] = derivative[-1] = 0
+            else:
+                derivative = 0
+            return window, derivative
+
+        windows = {"rectangular": rectangular, "gaussian": gaussian, "hahn": hahn, "tukey": tukey, "kaiser": kaiser}
         window, derivative = windows[window]()
 
         hd_correction = - derivative * hd_amplitude / 2 / (-2 * pi * 0.2)  # anharmonicity
@@ -643,11 +663,11 @@ class IQPulseBuilder():
 
         ''' Calculating positions for positive and negative pulses respectively '''
         # amount of positive pulses
-        positive_n = len([pulse_type for pulse_type in pulse_types if pulse_type == "P"])
+        positive_n = pulse_types.count("P")
         p_positions = np.zeros(positive_n)  # start positions of the "P" pulses
         p_positions[0] += start_delay
         i = 0  # index through all pulses
-        for p_idx in range(len(p_positions)):
+        for p_idx in range(positive_n):
             # flag indicates that it is time to break from inner cycle
             # and start calculating next "P" pulse position
             next_p_idx = False
@@ -671,11 +691,11 @@ class IQPulseBuilder():
                 i += 1
 
         # amount of negative pulses
-        negative_n = len([pulse_type for pulse_type in pulse_types if pulse_type == "N"])
+        negative_n = pulse_types.count("N")
         n_positions = np.zeros(negative_n)  # start positions of the "N" pulses
         n_positions[0] += start_delay
         i = 0  # index through all pulses
-        for n_idx in range(len(n_positions)):
+        for n_idx in range(negative_n):
             # flag indicates that it is time to break from inner cycle
             # and start calculating next "N" pulse position
             next_n_idx = False
@@ -725,7 +745,7 @@ class IQPulseBuilder():
 
         # restriction: envelope duration has to be multiple of the repetition period
         if abs(envelope_duration % repetition_period) > 1e-5:  # all values in ns
-            raise ValueError("pulse repetition frequency has to be multiple of the peaks frequency difference")
+            raise ValueError("pulse repetition frequency has to be a multiple of pulse frequency difference")
 
         ''' constructing pulses '''
         # appending zero values for simplicity for code in cycle
@@ -773,6 +793,87 @@ class IQPulseBuilder():
         )
         # print("pulses are set")
         return {'q_seqs': [pb_p.build().direct_add(pb_n.build())]}
+
+    @staticmethod
+    def build_stimulated_emission_sequence(pulse_sequence_parameters, **pbs):
+        """
+        Builds a pulse sequence with a repeated group of two non-overlapping pulse.
+
+        Use build_wave_mixing_pulses() to create sequences with overlapping pulses.
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict[str, Union[int,str]]
+        pbs : Dict[str, List[IQPulseBuilder]]
+
+        Returns
+        -------
+        seqs : dict[str,list[IQPulseSequence]]
+        """
+        exc_pb = pbs["q_pbs"][0]
+        start_delay = pulse_sequence_parameters["start_delay"]
+        repetition_period = pulse_sequence_parameters["repetition_period"]
+        pulse_types = pulse_sequence_parameters["pulse_sequence"]
+        pulses_n = 2
+        if len(pulse_types) != 2:
+            raise ValueError("The number of pulses must be exactly two")
+
+        # repeatedly extends 'excitation_durations' list to the length that equals the number of pulses
+        excitation_durations = list(islice(cycle(pulse_sequence_parameters["excitation_durations"]), pulses_n))
+
+        # repeatedly extends 'excitation_durations' list to the length that equals the number of pulses
+        # + [0.0] - for convenience of iteration
+        after_pulse_delay = pulse_sequence_parameters["after_pulse_delay"]
+        if after_pulse_delay < 0:
+            raise ValueError(f"after_pulse_delay is negative")
+
+        amplitudes = list(islice(cycle(pulse_sequence_parameters["excitation_amplitudes"]), pulses_n))
+        if "phase_shifts" in pulse_sequence_parameters:
+            phase_shifts = list(islice(cycle(pulse_sequence_parameters["phase_shifts"]), pulses_n))
+        else:
+            phase_shifts = [0] * pulses_n
+
+        window = pulse_sequence_parameters["modulating_window"]
+
+        d_freq = pulse_sequence_parameters["d_freq"] # Hz
+        freq = exc_pb._iqmx_calibration.get_radiation_parameters()["if_frequency"]  # Hz
+        freqs = {"P": freq + d_freq, "N": freq - d_freq}
+
+        # period when phases between two frequencies first time reach 2 pi
+        envelope_duration = pulse_sequence_parameters["repetition_period"] * 1
+        # envelope_duration = 1 / d_freq * 1e9  # ns
+
+        envelopes_in_pulse_group = pulse_sequence_parameters["envelopes_in_pulse_group"]
+        n_pulse_groups = int(envelopes_in_pulse_group * envelope_duration / repetition_period)
+
+        # restriction: envelope duration has to be multiple of the repetition period
+        # if envelope_duration % repetition_period > 0.:  # all values in ns
+        #     raise ValueError("pulse repetition frequency has to be a multiple of pulse frequency difference")
+
+        ''' constructing pulses '''
+        for i in range(n_pulse_groups):
+            exc_pb = exc_pb.add_zero_pulse(start_delay) \
+                .add_sine_pulse(excitation_durations[0],
+                                window=window,
+                                frequency=freqs[pulse_types[0]],
+                                phase=phase_shifts[0],
+                                amplitude_mult=amplitudes[0]) \
+                .add_zero_pulse(after_pulse_delay) \
+                .add_sine_pulse(excitation_durations[1],
+                                window=window,
+                                frequency=freqs[pulse_types[1]],
+                                phase=phase_shifts[1],
+                                amplitude_mult=amplitudes[1]) \
+                .add_zero_until((i+1)*repetition_period)
+        # exc_pb = exc_pb.add_zero_until(envelope_duration * envelopes_in_pulse_group)
+        # this parameters are needed by digitizer in order to properly perform
+        # software filtering (the exact pulses end positions is needed)
+        pulse_sequence_parameters.update(
+            first_pulse_start=start_delay,
+            last_pulse_end=start_delay+excitation_durations[0]+after_pulse_delay
+        )
+        # print("pulses are set")
+        return {'q_seqs': [exc_pb.build()]}
 
     @staticmethod
     def build_direct_rabi_sequences_AM(pulse_sequence_parameters, **pbs):

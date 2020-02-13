@@ -36,9 +36,11 @@ class AWGChannel():
         self._host_awg.output_arbitrary_waveform(waveform, frequency,
                                                  self._channel_number, asynchronous = asynchronous)
 
-    def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous):
+    def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous,
+                               trigger_sync_every):
         self._host_awg.output_continuous_wave(frequency, amplitude, phase,
-                                              offset, waveform_resolution, self._channel_number, asynchronous=asynchronous)
+                                              offset, waveform_resolution, self._channel_number, asynchronous=asynchronous,
+                                              trigger_sync_every=trigger_sync_every)
 
 class CalibratedAWG():
 
@@ -147,14 +149,38 @@ class IQAWG():
         self._output_continuous_wave(frequency, amplitudes[1], 0,
             offsets[1], waveform_resolution, 2, asynchronous=False)
 
-    def output_IQ_waves_from_calibration(self, optimized=True):
+    def output_IQ_waves_from_calibration(self, optimized=True, trigger_sync_every=None):
+        """
+
+        Parameters
+        ----------
+        optimized
+        trigger_sync_every
+
+        Returns
+        -------
+
+        Notes
+        -------
+        What is actually happening, when there are two channels that are in the
+        same 'synchronization group' (term from keysightM3202A.py)?
+        Both channels are modulated by amplitude with zero modulation coefficient
+        Every call to 'output_continuous_wave' with some number 'trigger_sync_every'
+        will setup trigger on starting the first channel from the channel group.
+        So the first channel will setup output and mark itself as trigger source.
+        The first channel will setup its own output yet still mark the first channel as trigger source.
+        The last is due to the fact that channel №1 is usually first in the 'synchronization group' of the
+        awg device.
+        """
         cal = self._calibration
         self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[0],
                                      cal._if_phase[0], cal._if_offsets[0],
-                                     cal._waveform_resolution, 1, asynchronous=optimized)
+                                     cal._waveform_resolution, 1, asynchronous=optimized,
+                                     trigger_sync_every=trigger_sync_every)
         self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[1],
                                      0, cal._if_offsets[1],
-                                     cal._waveform_resolution, 2, asynchronous=False)
+                                     cal._waveform_resolution, 2, asynchronous=False,
+                                     trigger_sync_every=trigger_sync_every)
 
     def output_zero(self):
         cal = self._calibration
@@ -195,8 +221,8 @@ class IQAWG():
         awg = self._channels[0]._host_awg
         chanI = self._channels[0]._channel_number
         chanQ = self._channels[1]._channel_number
-        awg.start_modulation_AM(chanI, modulation_amp)
-        awg.start_modulation_AM(chanQ, modulation_amp)
+        awg.setup_modulation_amp(chanI, modulation_amp)
+        awg.setup_modulation_amp(chanQ, modulation_amp)
 
     def setup_AM_and_carrier_from_calibration(self, calibration=None, amp_coeffs=(1, 1)):
         """
@@ -248,13 +274,13 @@ class IQAWG():
         awg.synchronize_channels(chanI, chanQ)  # verify that both channels are started simultaneously
 
         # tell AWG that amplitude modulation is chosen
-        awg.start_modulation_AM(chanI, cal._if_amplitudes[0]*amp_coeffs[0])
-        awg.start_modulation_AM(chanQ, cal._if_amplitudes[1]*amp_coeffs[1])
+        awg.setup_modulation_amp(chanI, cal._if_amplitudes[0] * amp_coeffs[0])
+        awg.setup_modulation_amp(chanQ, cal._if_amplitudes[1] * amp_coeffs[1])
         # setup carrier signal according to calibration
-        awg.setup_carrier_signal(cal._if_frequency, 0,
-                                 cal._if_phase[0], cal._if_offsets[0], chanI)
-        awg.setup_carrier_signal(cal._if_frequency, 0,
-                                 0, cal._if_offsets[1], chanQ)
+        awg.setup_fg_sine(cal._if_frequency, 0,
+                          cal._if_phase[0], cal._if_offsets[0], chanI)
+        awg.setup_fg_sine(cal._if_frequency, 0,
+                          0, cal._if_offsets[1], chanQ)
 
     def output_modulated_IQ_waves(self, array_mod, prescaler=0, ampl_coeffs=(1, 1)):
         """
@@ -284,10 +310,10 @@ class IQAWG():
 
         awg.stop_AWG(chanI)
         awg.clear()
-        awg.setup_carrier_signal(cal._if_frequency, 0,
-                                 cal._if_phase[0], cal._if_offsets[0], chanI)
-        awg.setup_carrier_signal(cal._if_frequency, 0,
-                                 0, cal._if_offsets[1], chanQ)
+        awg.setup_fg_sine(cal._if_frequency, 0,
+                          cal._if_phase[0], cal._if_offsets[0], chanI)
+        awg.setup_fg_sine(cal._if_frequency, 0,
+                          0, cal._if_offsets[1], chanQ)
         waveform_id = 3
         awg.load_modulating_waveform(array_mod, waveform_id)
 
@@ -308,7 +334,7 @@ class IQAWG():
         awg.stop_modulation(chanQ)
 
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
-            waveform_resolution, channel, asynchronous=False):
+            waveform_resolution, channel, asynchronous=False, trigger_sync_every=None):
         """
         Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
 
@@ -329,7 +355,8 @@ class IQAWG():
             channel which will output the wave
         """
         self._channels[channel-1].output_continuous_wave(frequency, amplitude, phase, offset,
-                                                            waveform_resolution, asynchronous=asynchronous)
+                                                         waveform_resolution, asynchronous=asynchronous,
+                                                         trigger_sync_every=trigger_sync_every)
 
     def output_pulse_sequence(self, pulse_sequence, asynchronous=False):
         """

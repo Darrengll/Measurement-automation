@@ -129,7 +129,8 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         freq = np.fft.fftfreq(len(data_i), d=1/self._dig[0].get_sample_rate())
         freq = np.fft.fftshift(freq)
         signal = np.fft.fftshift(np.fft.fft(data_i + 1j * data_q))
-        idx = np.searchsorted(freq, -self._q_iqawg[0]._calibration._if_frequency)
+        # next row can be optimized with np.searchsorted and 2 comparisons with nearest elements
+        idx = np.argmin(np.abs(freq - (-self._q_iqawg[0]._calibration._if_frequency)))
         IQ = signal[idx] / len(data_i)
 
         # save full data in case of more detailed investigation

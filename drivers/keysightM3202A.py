@@ -1,3 +1,8 @@
+"""
+user's guide
+https://literature.cdn.keysight.com/litweb/pdf/M3201-90001.pdf?id=2787170
+"""
+
 from drivers.instrument import Instrument
 
 import keysightSD1
@@ -7,6 +12,7 @@ from keysightSD1 import SD_ModulationTypes
 
 import numpy as np
 from scipy.interpolate import interp1d
+
 
 class KeysightM3202A(Instrument):
     MAX_OUTPUT_VOLTAGE = 1.5  # V
@@ -20,7 +26,6 @@ class KeysightM3202A(Instrument):
         self.amplitudes = [0.0] * 4
         self.deviation_gains = [0.0] * 4
         self.offsets = [0.0] * 4
-        self.clear()  # clear internal memory and AWG queues
 
         # Shamil a.k.a. 'BATYA' code here
         self.waveforms = [None] * 4
@@ -41,6 +46,8 @@ class KeysightM3202A(Instrument):
 
         self._prescaler = 0
 
+        self.clear()  # clear internal memory and AWG queues according to p.67 of the user guide
+
     def _handle_error(self, ret_val):
         if ret_val < 0 :
             print(ret_val)
@@ -52,10 +59,7 @@ class KeysightM3202A(Instrument):
 
         # stop all modulations
         for channel in [1, 2, 3, 4]:
-            self.deviation_gains[channel - 1] = 0
-            self.module.modulationAmplitudeConfig(channel - 1, SD_ModulationTypes.AOU_MOD_OFF, 0)
-            self.module.modulationAngleConfig(channel - 1, SD_ModulationTypes.AOU_MOD_OFF, 0)
-            self.module.modulationIQconfig(channel - 1, 0)  # disable IQ modulation
+            self.stop_modulation(channel)
         self._handle_error(ret)
 
     def synchronize_channels(self, *channels):
@@ -104,7 +108,7 @@ class KeysightM3202A(Instrument):
             "ON" - output trigger for 'channel' or the first channel in its synchronized group
             "OFF" - no output
         channel : int
-            channel number to set trigger for
+            Channel number to set trigger for. Starting from 1.
             if channel is in synchronized group than trigger is configured for the first channel in group
         trig_length : int
             trigger duration in ns
@@ -139,10 +143,12 @@ class KeysightM3202A(Instrument):
             else:  # disable trigger for all channels form group
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_OUT)
                 self.module.triggerIOwrite(0, SD_SyncModes.SYNC_NONE)  # make sure the output is zero
+                # here was changed to PXI trigger output
                 # deleting marker to the specified channel
+                trgPXImask = 0b0
                 trgIOmask = 0b1
                 self.module.AWGqueueMarkerConfig(chan - 1, SD_MarkerModes.DISABLED,
-                                                 0, 1, 1, syncMode=self.sync_mode,  # trigger synch with internal CLKsys
+                                                 trgPXImask, trgIOmask, 1, syncMode=self.sync_mode,  # trigger synch with internal CLKsys
                                                  length=100,  # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                                                  delay=0)
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_IN)
@@ -190,23 +196,50 @@ class KeysightM3202A(Instrument):
         self.start_AWG(channel)
 
     def output_continuous_wave_old(self, frequency, amplitude, phase, offset, waveform_resolution,
-                               channel, asynchronous=False):
+                                   channel, asynchronous=False):
         n_points = np.around(1 / frequency / waveform_resolution * 1e9) + 1 if frequency != 0 else 3
         waveform = amplitude * np.sin(2 * np.pi * np.linspace(0, 1, n_points) + phase) + offset
         self.output_arbitrary_waveform(waveform, frequency, channel, asynchronous=asynchronous)
 
     def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution,
-                               channel, asynchronous=False):
-        self.stop_AWG(channel)
-        self.stop_modulation(channel)
-        self.setup_carrier_signal(frequency, amplitude, phase, offset, channel)
+                               channel, asynchronous=False, trigger_sync_every=None):
+        """
+
+        Parameters
+        ----------
+        frequency
+        amplitude
+        phase
+        offset
+        waveform_resolution
+        channel : int
+            Channel to operate with. Numbering starts from 1.
+        asynchronous
+        trigger_sync_every : int
+            period of trigger signal in secs
+            trigger is synchronized with the continuous wave.
+
+        Returns
+        -------
+
+        """
+        self.stop_AWG(channel)  # stop output from this channel
+        self.stop_modulation(channel)  # disable all modulation types for this channel
+        # setup embedded function generator to produce sine wave with parameters
+        self.setup_fg_sine(frequency, amplitude, phase, offset, channel)
+
+        # output trigger has to be generated
+        if trigger_sync_every is not None:
+            arr = np.zeros( int(np.around(trigger_sync_every * self.get_sample_rate())) )
+            self._load_array_into_AWG(arr, channel)
+            self.setup_modulation_amp(channel, 0)
+            self.trigger_output_config("ON", channel)
 
         # resetting phase for synchronization of multiple carrier signals from internal Function Generator
         self.module.channelPhaseResetMultiple(sum([1 << (chan - 1) for chan in self.synchronized_channels]))
-
         self.start_AWG(channel)
 
-    def setup_carrier_signal(self, frequency, amplitude, phase, offset, channel):
+    def setup_fg_sine(self, frequency, amplitude, phase, offset, channel):
         if frequency > 0:
             self.waveshape_types[channel - 1] = keysightSD1.SD_Waveshapes.AOU_SINUSOIDAL
         else:
@@ -230,12 +263,12 @@ class KeysightM3202A(Instrument):
     def setup_amplitude_modulation(self, channel, waveform_id, array, deviationGain, prescaler):
         self.load_modulating_waveform(array, waveform_id)
         self.queue_waveform(channel, waveform_id, prescaler)
-        self.start_modulation_AM(channel, deviationGain)
+        self.setup_modulation_amp(channel, deviationGain)
 
     def load_modulating_waveform(self, waveform_array_normalized, wave_id):
         wave = keysightSD1.SD_Wave()
         wave.newFromArrayDouble(SD_WaveformTypes.WAVE_ANALOG, waveform_array_normalized)
-        paddingMode = 0 # add zeros at the end if waveform length is smaller than
+        paddingMode = 0  # add zeros at the end if waveform length is smaller than
         ret = self.module.waveformLoad(wave, wave_id, paddingMode)
         if (ret == SD_Error.INVALID_OBJECTID):
             # probably, such wave_id already exists
@@ -251,20 +284,44 @@ class KeysightM3202A(Instrument):
         self._handle_error(ret)
 
     def stop_modulation(self, channel):
-        deviationGain = 0
         self.deviation_gains[channel - 1] = 0
-        self.module.modulationAmplitudeConfig(channel - 1, keysightSD1.SD_ModulationTypes.AOU_MOD_OFF, deviationGain)
+        self.module.modulationAmplitudeConfig(channel - 1,
+                                              SD_ModulationTypes.AOU_MOD_OFF,
+                                              self.deviation_gains[channel - 1])
+        self.module.modulationAngleConfig(channel - 1,
+                                          SD_ModulationTypes.AOU_MOD_OFF,
+                                          self.deviation_gains[channel - 1])
+        self.module.modulationIQconfig(channel - 1, self.deviation_gains[channel - 1])  # disable IQ modulation
+
+        # setting output to sample from channel queue
+        self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_AWG
+        self.module.channelWaveShape(channel - 1, self.waveshape_types[channel - 1])
 
     def change_amplitude_of_carrier_signal(self, amplitude, channel, ampl_coef=1):
         self.output_voltages[channel - 1] = amplitude * ampl_coef
         self.module.channelAmplitude(channel - 1, self.output_voltages[channel - 1])
 
-    def start_modulation_AM(self, channel, deviationGain):
-        self.deviation_gains[channel - 1] = deviationGain
-        self.module.modulationAmplitudeConfig(channel - 1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM,
-                                              deviationGain)
+    def setup_modulation_amp(self, channel, deviation_gain):
+        """
 
-    def load_waveform_to_channel(self, waveform, frequency, channel, waveshape_type=None):
+        Parameters
+        ----------
+        channel : int
+            number of channel to be configured. Starts from 1.
+        deviation_gain : float
+            coefficient 'G' for in formula for AM:
+                f(t) = (A + G AWG(t)) Cos(w t + \phi)
+                where AWG(t) - normalized waveform from AWG RAM.
+
+        Returns
+        -------
+        None
+        """
+        self.deviation_gains[channel - 1] = deviation_gain
+        self.module.modulationAmplitudeConfig(channel - 1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM,
+                                              deviation_gain)
+
+    def load_waveform_to_channel(self, waveform, frequency, channel):
         if np.max(np.abs(waveform)) >= 1.5:
             raise Exception("signal maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
 
@@ -300,9 +357,21 @@ class KeysightM3202A(Instrument):
         waveform_array /= normalization # normalize waveform to (-1,1) interval
         self.repetition_frequencies[channel - 1] = frequency
         waveform_array = np.array(waveform_array, dtype=np.float16, copy=True)
-        self._load_array_into_AWG(waveform_array, channel, waveshape_type)
+        self._load_array_into_AWG(waveform_array, channel)
 
-    def _load_array_into_AWG(self, waveform_array_normalized, channel, waveshape_type=None):
+    def _load_array_into_AWG(self, waveform_array_normalized, channel):
+        """
+
+        Parameters
+        ----------
+        waveform_array_normalized
+        channel : int
+            Channel number starting from 1.
+
+        Returns
+        -------
+
+        """
         from copy import deepcopy
         waveform_array_normalized = deepcopy(waveform_array_normalized)
         self.waveforms[channel - 1] = waveform_array_normalized
@@ -313,12 +382,9 @@ class KeysightM3202A(Instrument):
         wave.newFromArrayDouble(SD_WaveformTypes.WAVE_ANALOG, waveform_array_normalized)
         wave_id = channel - 1
 
-        # setting generation parameters
-        # direct AWG, AM, offset modulation, FM, PHM, maybe more
+        # setting function generation waveshape type parameters
+        # OFF, direct AWG, SINUSOIDAL, TRIANGULAR and more
         # see 'SD_Waveshapes' class for complete details
-        if (waveshape_type is not None):
-            self.waveshape_types[channel-1] = waveshape_type
-
         ret = self.module.channelWaveShape(channel - 1, self.waveshape_types[channel - 1])
         self._handle_error(ret)
 
@@ -327,6 +393,7 @@ class KeysightM3202A(Instrument):
         if (ret == SD_Error.INVALID_OBJECTID):
             # probably, such wave_id already exists
             ret = self.module.waveformReLoad(wave, wave_id)
+
         self._handle_error(ret)
 
         # clear channel queue
@@ -338,7 +405,7 @@ class KeysightM3202A(Instrument):
                                            self.trigger_modes[channel - 1],  # default trigger mode is "CONT"
                                            0,  # 0 ns starting delay
                                            0,  # 0 - means infinite
-                                           0)  # prescaler is 0
+                                           0)  # prescaler is 1 (sampling freq is 1 GHz)
         self._prescaler = 0
         self._handle_error(ret)
 
@@ -347,6 +414,17 @@ class KeysightM3202A(Instrument):
         self._handle_error(ret)
 
     def start_AWG(self, channel):
+        """
+
+        Parameters
+        ----------
+        channel : int
+            Number of channel to start. Start from 1.
+
+        Returns
+        -------
+
+        """
         if(self._update_dependent_on_start):
             self._load_dependent_channels()
 

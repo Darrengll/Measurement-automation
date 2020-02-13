@@ -1,6 +1,10 @@
 import fnmatch
 import os
 import pickle
+from typing import Tuple
+
+import matplotlib.figure, matplotlib.axes
+
 import platform
 import traceback
 from datetime import datetime
@@ -61,6 +65,14 @@ class MeasurementResult:
         self._axes = None  # axes of the subplots contained inside it
         self._caxes = None  # colorbar axes for heatmaps
         self._anim = None
+
+        # here stored objects that may have methods 'set_data'
+        # like those returned by ax.scatter(..)
+        self._lines = []
+
+        # iteration index from main loop that indicates the last
+        # valiable data index stored into 'self._data["data"]'
+        self._iter_idx_ready = None
 
         self._exception_info = None
 
@@ -271,22 +283,44 @@ class MeasurementResult:
         This method must be implemented for each new measurement type.
 
         See lib2.SingleToneSpectroscopy.py for an example implementation
-        Should return:
-        figure: matplotlib figure
-            figure window
-        axes: array of matplotlib.Axes objects
-            axes of the subplots contained inside the figure
-        caxes: array of colorbar axes
-            these axes are obtained by calling matplotlib.colorbar.make_axes(ax)
-            and then may be used to updated colorbars for each subplot
+
+        Returns
+        ------------
+        Tuple[matplotlib.figure.Figure, Tuple[matplotlib.axes.Axes], Tuple[matplotlib.axes.Axes]]
+            Return tuple with (fig, axes, caxes)
+            caxes is Tuple[Axes] that are suitable for colorbars
 
         Examples
         ------------------------
-        # from VNATimeResolvedDispersiveMeasurement1D.py
-            fig, axes = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
-            fig.canvas.set_window_title(self._name)
-            axes = ravel(axes)
-            return fig, axes, (None, None)
+        # waveMixing.py, waveMixingResult.
+            def _prepare_figure2D_re_n_im(self):
+                self._last_tr = None
+                self._peaks_last_tr = None
+                fig = plt.figure(figsize=(17, 8))
+                ax_trace = plt.subplot2grid((4, 2), (0, 0), colspan=2, rowspan=1)
+                ax_map_re = plt.subplot2grid((4, 2), (1, 0), colspan=1, rowspan=3)
+                ax_map_im = plt.subplot2grid((4, 2), (1, 1), colspan=1, rowspan=3)
+
+                ax_trace.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                ax_trace.set_xlabel("Frequency, Hz")
+                ax_trace.set_ylabel("power, dB")
+
+                ax_map_re.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                ax_map_re.set_ylabel(self._parameter_names[1].upper())
+                ax_map_re.set_xlabel(self._parameter_names[0].upper())
+                ax_map_re.autoscale_view(True, True, True)
+                ax_map_im.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                ax_map_im.set_xlabel(self._parameter_names[0].upper())
+                ax_map_im.autoscale_view(True, True, True)
+                plt.tight_layout(pad=1, h_pad=2, w_pad=-7)
+                cax_re, kw = colorbar.make_axes(ax_map_re, aspect=40)
+                cax_im, kw = colorbar.make_axes(ax_map_im, aspect=40)
+                ax_map_re.set_title("Real", position=(0.5, -0.05))
+                ax_map_im.set_title("Imaginary", position=(0.5, -0.1))
+                ax_map_re.grid(False)
+                ax_map_im.grid(False)
+                fig.canvas.set_window_title(self._name)
+                return fig, (ax_trace, ax_map_re, ax_map_im), (cax_re, cax_im)
         """
         raise NotImplementedError
 
