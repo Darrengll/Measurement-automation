@@ -27,7 +27,7 @@ class ReportGenerator:
         self._T1s = {}
         self._T2s = {}
         self._logger = LoggingServer.getInstance("report_gen")
-
+        self._only_pdflatex = False
 
     def generate(self, only_pdflatex = False):
 
@@ -36,15 +36,15 @@ class ReportGenerator:
         except FileExistsError:
             pass
 
+        self._only_pdflatex = only_pdflatex
 
-        if not only_pdflatex:
-            self._load_results()
+        self._load_results()
 
-            self._save_sts_results()
-            self._save_tts_results()
-            self._save_rabi_results()
-            self._save_ramsey_results()
-            self._save_decay_results()
+        self._save_sts_results()
+        self._save_tts_results()
+        self._save_rabi_results()
+        self._save_ramsey_results()
+        self._save_decay_results()
 
         self._generate_tex()
 
@@ -63,10 +63,15 @@ class ReportGenerator:
             self._results.append(qubit_resuts)
 
     def _save_sts_results(self):
+
         for idx, qubit_results in enumerate(self._results):
             sts = qubit_results[0][-1]
 
             self._res_freqs[self._qubit_names[idx]] = mean(sts.get_data()["Frequency [Hz]"])/1e9
+
+            if self._only_pdflatex:
+                continue
+
             fig, axes, caxes = sts.visualize()
             axes[0].set_title(self._qubit_names[idx], fontsize=16, loc="left")
             axes[1].set_visible(False)
@@ -103,6 +108,8 @@ class ReportGenerator:
             self._f_q_maxs[self._qubit_names[idx_q]] = best_two_tone._fit_params[-3]/1e9
             self._ds[self._qubit_names[idx_q]] = best_two_tone._fit_params[-2]
 
+            if self._only_pdflatex:
+                continue
 
             fig, axes, caxes = best_two_tone.visualize()
             axes[0].set_title(self._qubit_names[idx_q], fontsize=16, loc="left")
@@ -128,6 +135,9 @@ class ReportGenerator:
                 if rabi_result._fit_errors[3] < smallest_fit_error:
                     smallest_fit_error = rabi_result._fit_errors[3]
                     best_rabi_result = rabi_result
+
+            if self._only_pdflatex:
+                continue
 
             fig, axes, caxes = best_rabi_result.visualize()
 
@@ -156,6 +166,9 @@ class ReportGenerator:
 
             self._T2s[self._qubit_names[idx]] = best_T2
 
+            if self._only_pdflatex:
+                continue
+
             fig, axes, caxes = best_ramsey_result.visualize()
 
             data = (best_ramsey_result.get_data()["data"])
@@ -183,10 +196,14 @@ class ReportGenerator:
 
             self._T1s[self._qubit_names[idx]] = best_T1
 
+            if self._only_pdflatex:
+                continue
+
             fig, axes, caxes = best_decay.visualize()
 
             data = (best_decay.get_data()["data"])
-            self._truncate_td_plot(fig, axes, data, best_decay._name)
+            self._truncate_td_plot(fig, axes, data, best_decay._name+
+                                   " ("+str(best_decay.get_start_datetime())+")")
             plt.savefig("data/%s/Report/%s-decay.pdf" % (self._sample_name,
                                                          self._qubit_names[idx]),
                         bbox_inches="tight")
@@ -257,6 +274,10 @@ class ReportGenerator:
         \title{%s}
         \begin{document}
         \maketitle
+        
+        \section{Resonators}
+        
+        \includegraphics[width=\linewidth]{1910-103-5_Q_factors_and_freqs}
     
         \section{Single-tone spectroscopy}
         %s

@@ -91,10 +91,10 @@ class MeasurementResult:
             shutil.rmtree(time_location, ignore_errors=True)
 
     @staticmethod
-    def load(sample_name, name, date='', return_all=False):
+    def load(sample_name, name, date='', subfolder="", return_all=False):
         """
         Finds all files with matching result name within the file structure
-        of ./data/ folder and prompts user to resolve any ambiguities.
+        of ./data/ folder and optionally prompts user to resolve any ambiguities.
 
         Returns:
             an instance of the child class containing the specific measurement
@@ -108,7 +108,7 @@ class MeasurementResult:
         On *nix systems, readline is used if available.
         """
 
-        paths = MeasurementResult._find_paths_by(sample_name, name, ".pkl", date, return_all)
+        paths = MeasurementResult._find_paths_by(sample_name, name, ".pkl", date, subfolder, return_all)
 
         if paths is None:
             return
@@ -124,15 +124,15 @@ class MeasurementResult:
         return results[0] if len(results) == 1 and not return_all else results
 
     @staticmethod
-    def _find_paths_by(sample_name, name, extension, date="", return_all=False):
-        paths = find(name + extension, os.path.join('data', sample_name, date))
+    def _find_paths_by(sample_name, name, extension, date, subfolder, return_all=False):
+        paths = find(name + extension, os.path.join('data', sample_name, subfolder, date))
 
         if len(paths) == 0:
             print("Measurement result '%s' for the sample '%s' not found" % (name, sample_name))
             return
 
         locale.setlocale(locale.LC_TIME, "C")
-        dates = [datetime.strptime(path.split(os.sep)[2], "%b %d %Y")
+        dates = [datetime.strptime(path.split(os.sep)[-3], "%b %d %Y")
                  for path in paths]
         z = zip(dates, paths)
         sorted_dates, sorted_paths = zip(*sorted(z))

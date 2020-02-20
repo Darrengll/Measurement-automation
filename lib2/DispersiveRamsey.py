@@ -35,8 +35,11 @@ class DispersiveRamseyResult(VNATimeResolvedDispersiveMeasurement1DResult):
                                 max(imag(data))-amp_i, 0)
         return p0, bounds
 
+    def get_T_2_ast(self):
+        return self._fit_params[2], self._fit_errors[2]
+
     def get_ramsey_frequency(self):
-        return self._fit_params[3]/2/pi*1e6
+        return self._fit_params[3]/2/pi*1e6, self._fit_errors[3]/2/pi*1e6
 
     def _generate_annotation_string(self, opt_params, err):
         return "$T_2^*=%.2f \pm %.2f \mu$s\n$|\Delta\omega/2\pi| = %.3f \pm %.3f$ MHz"%\

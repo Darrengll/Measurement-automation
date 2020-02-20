@@ -49,6 +49,12 @@ class DispersiveRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DRes
     def get_pi_pulse_duration(self):
         return 1/(self._fit_params[3]/2/pi)/2
 
+    def get_T_R(self):
+        return self._fit_params[2], self._fit_errors[2]
+
+    def get_Omega_R(self):
+        return self._fit_params[3], self._fit_errors[3]
+
     def get_basis(self):
         fit = self._fit_params
         A_r, A_i, offset_r, offset_i = fit[0], fit[1], fit[-2], fit[-1]

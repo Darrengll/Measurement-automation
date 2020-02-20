@@ -24,6 +24,9 @@ class DispersiveDecayResult(VNATimeResolvedDispersiveMeasurement1DResult):
     def _model(self, t, A_r, A_i, T_1, offset_r, offset_i):
         return (A_i+A_r*1j)*exp(-1/T_1*t)+offset_r+1j*offset_i
 
+    def get_T_1(self):
+        return self._fit_params[2], self._fit_errors[2]
+
     def _generate_fit_arguments(self, x, data):
         bounds =([-1, -1, 0.1, -1, -1], [1, 1, 100, 1, 1])
         p0 = [ptp(real(data))/2, ptp(imag(data))/2, 1, min(real(data)), min(imag(data))]
