@@ -21,7 +21,7 @@ class STSRunner():
             self._ro_awg = awgs["ro_awg"]
             self._q_awg = awgs["q_awg"]
             self._open_only_readout_mixer()
-            self._vna_power = GlobalParameters.spectroscopy_readout_power+20
+            self._vna_power = GlobalParameters.spectroscopy_readout_power + 20
         else:
             self._vna_power = GlobalParameters.spectroscopy_readout_power
 
@@ -152,7 +152,7 @@ class STSRunner():
 
     def _open_only_readout_mixer(self):
         self._ro_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                                relative_phase=0, offsets=(1, 1),
+                                                relative_phase=0, offsets=(.25, .25),
                                                 waveform_resolution=1)
         self._q_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
                                                relative_phase=0, offsets=(0, 0),

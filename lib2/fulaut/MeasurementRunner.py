@@ -1,5 +1,6 @@
 from lib.iq_mixer_calibration import *
 from lib.data_management import *
+from lib2.DispersiveHahnEcho import DispersiveHahnEcho
 from lib2.fulaut.ACStarkRunnner import ACStarkRunner
 
 from lib2.fulaut.AnticrossingOracle import *
@@ -46,6 +47,7 @@ class MeasurementRunner():
         self._dro_results = {}
         self._dr_results = {}
         self._dd_results = {}
+        self._dhe_results = {}
 
         self._ramsey_offset = 5e3
         # self._vna = Znb("ZNB")
@@ -117,24 +119,24 @@ class MeasurementRunner():
             sws_current = self._tts_fit_params[qubit_name][1]
             period = self._tts_fit_params[qubit_name][0]
 
+            ASTSRunner = ACStarkRunner(self._sample_name,
+                                       qubit_name,
+                                       self._res_limits[qubit_name],
+                                       self._tts_fit_params[qubit_name],
+                                       vna=self._vna,
+                                       mw_src=self._mw_src,
+                                       cur_src=self._cur_src,
+                                       awgs={"q_awg": self._q_awg,
+                                             "ro_awg": self._ro_awg},
+                                       sa=self._sa)
+            q_freq_sws, power = ASTSRunner.launch(sws_current)
+
 
             # period_fraction = float(input("Enter current offset in period fraction: "))
-            for period_fraction in linspace(0, 0.2, 1):
+            for period_fraction in linspace(0, 0.25, 10)[0:1]:
                 current = sws_current + period_fraction * period
-                q_freq = transmon_spectrum(current, *self._tts_fit_params[qubit_name][:-1])
-
-                ASTSRunner = ACStarkRunner(self._sample_name,
-                                           qubit_name,
-                                           STSR.get_scan_area(),
-                                           self._tts_fit_params[qubit_name],
-                                           vna=self._vna,
-                                           mw_src=self._mw_src,
-                                           cur_src=self._cur_src,
-                                           awgs={"q_awg": self._q_awg,
-                                                 "ro_awg": self._ro_awg},
-                                           sa=self._sa)
-                q_freq, power = ASTSRunner.launch(sws_current)
-
+                # q_freq = transmon_spectrum(current, *self._tts_fit_params[qubit_name][:-1])
+                q_freq = q_freq_sws
 
                 GlobalParameters.ro_ssb_power[qubit_name] = power
 
@@ -154,7 +156,7 @@ class MeasurementRunner():
                 self._ramsey_nop = 201
 
                 self._perform_Ramsey_oscillations(qubit_name)
-                detected_ramsey_freq = \
+                detected_ramsey_freq, error = \
                     self._dr_results[qubit_name].get_ramsey_frequency()
                 frequency_error = self._ramsey_offset - detected_ramsey_freq
                 self._exact_qubit_freqs[qubit_name] -= frequency_error
@@ -165,10 +167,15 @@ class MeasurementRunner():
                 self._perform_Rabi_oscillations(qubit_name, True)
                 self._perform_Ramsey_oscillations(qubit_name, True)
 
+                self._max_echo_delay = 100e3
+                self._echo_nop = 21
+                self._perform_hahn_echo(qubit_name, True)
+
                 self._decay_nop = 51
                 self._decay_max_delay = 200e3
                 self._decay_readout_duration = 20e3
                 self._perform_decay(qubit_name, True)
+
 
     def _perform_decay(self, qubit_name, save=False):
 
@@ -235,7 +242,7 @@ class MeasurementRunner():
 
         pulse_sequence_parameters = \
             {"awg_trigger_reaction_delay": 0,
-             "readout_duration": 6e3,
+             "readout_duration": 15e3,
              "repetition_period": self._max_ramsey_delay + 100e3,
              "half_pi_pulse_duration": pi_pulse_duration / 2}
 
@@ -258,6 +265,51 @@ class MeasurementRunner():
         if save:
             dr_result.save()
 
+    def _perform_hahn_echo(self, qubit_name, save=False):
+
+        DHE = DispersiveHahnEcho("%s-echo" % qubit_name,
+                              self._sample_name,
+                              vna=self._vna,
+                              ro_awg=[self._ro_awg],
+                              q_awg=[self._q_awg],
+                              q_lo=self._mw_src)
+
+        vna_parameters = {"bandwidth": 10,
+                          "freq_limits": self._res_limits[qubit_name],
+                          "nop": 50,
+                          "averages": 1,
+                          "res_find_nop": 401}
+
+        echo_delays = linspace(0, self._max_echo_delay, self._echo_nop)
+        exc_frequency = self._exact_qubit_freqs[qubit_name]
+        pi_pulse_duration = \
+            self._dro_results[qubit_name].get_pi_pulse_duration() * 1e3
+
+        pulse_sequence_parameters = \
+            {"awg_trigger_reaction_delay": 0,
+             "readout_duration": 15e3,
+             "repetition_period": self._max_echo_delay + 100e3,
+             "half_pi_pulse_duration": pi_pulse_duration / 2}
+
+        ro_awg_params = {"calibration": self._ro_cal}
+        q_awg_params = {"calibration": self._exc_cal}
+
+        mw_src_params = {'power': self._exc_cal.get_radiation_parameters()["lo_power"],
+                         'frequency': exc_frequency + self._exc_cal.get_radiation_parameters()["if_frequency"]}
+
+        DHE.set_fixed_parameters(pulse_sequence_parameters,
+                                vna=[vna_parameters],
+                                ro_awg=[ro_awg_params],
+                                q_awg=[q_awg_params],
+                                q_lo=[mw_src_params])
+        DHE.set_swept_parameters(echo_delays)
+        MeasurementResult.close_figure_by_window_name("Resonator fit")
+
+        dhe_result = DHE.launch()
+        self._dhe_results[qubit_name] = dhe_result
+        if save:
+            dhe_result.save()
+
     def _perform_Rabi_oscillations(self, qubit_name, save=False):
 
         DRO = DispersiveRabiOscillations("%s-rabi" % qubit_name,
@@ -275,10 +327,10 @@ class MeasurementRunner():
                           "res_find_nop": 401}
 
         exc_frequency = self._exact_qubit_freqs[qubit_name]
-        excitation_durations = linspace(0, 500, 101)
+        excitation_durations = linspace(0, 500, 201)
         rabi_sequence_parameters = {"awg_trigger_reaction_delay": 0,
                                     "excitation_amplitude": 1,
-                                    "readout_duration": 6000,
+                                    "readout_duration": 15000,
                                     "repetition_period": 100000}
 
         ro_awg_params = {"calibration": self._ro_cal}
@@ -320,19 +372,23 @@ class MeasurementRunner():
 
         db = load_IQMX_calibration_database("CHGRO", 0)
         if db is not None:
-            ro_cal = \
-                db.get(frozenset(dict(lo_power=lo_power,
+            key = frozenset(dict(lo_power=lo_power,
                                       ssb_power=ssb_power,
                                       lo_frequency=ro_resonator_frequency,
                                       if_frequency=if_frequency,
                                       waveform_resolution=waveform_resolution) \
-                                 .items()))
+                                 .items())
+            self._logger.debug("Requesting readout mixer cal: %s"%str(key))
+            ro_cal = \
+                db.get(key)
             if ro_cal is not None and not GlobalParameters.recalibrate_mixers[qubit_name]:
                 return ro_cal
 
+        self._logger.debug("Did not find calibration! Calibrating...")
+
         self._set_vna_to_ro_lo()
 
-        ig = {"dc_offsets": (0.1, +0.1), "dc_offset_open": 0.3}
+        ig = {"dc_offsets": (0.1, -0.1), "dc_offset_open": 0.3}
         cal = IQCalibrator(self._ro_awg,
                            self._sa,
                            self._vna[0],
@@ -350,6 +406,7 @@ class MeasurementRunner():
                                sa_res_bandwidth=100,
                                initial_guess=ig)
         save_IQMX_calibration(ro_cal)
+        self._logger.debug("Calibration result: %s"%str(ro_cal))
         return ro_cal
 
     def _calibrate_excitation(self, qubit_name):

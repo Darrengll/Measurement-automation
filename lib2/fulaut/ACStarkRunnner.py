@@ -58,7 +58,7 @@ class ACStarkRunner:
 
         ACS = ACStarkOracle(self._asts_result, chi=1e-3, plot=True)
         f_max, vna_power = ACS.launch()
-        absolute_power = self._find_power(vna_power)
+        absolute_power = round(self._find_power(vna_power))
 
         self._logger.debug("Transmon bare frequency: %.4f GHz, readout power (on SA): %d dBm"%(f_max/1e9, absolute_power))
         return f_max, absolute_power
@@ -108,7 +108,7 @@ class ACStarkRunner:
 
         powers = linspace(self._vna_power-15, self._vna_power+5, 21)
 
-        mw_src_parameters = {"power": GlobalParameters.spectroscopy_excitation_power}
+        mw_src_parameters = {"power": GlobalParameters.spectroscopy_excitation_power-15}
 
         ASTS.set_fixed_parameters(vna=[vna_parameters], mw_src=[mw_src_parameters], current=current)
         ASTS.set_swept_parameters(mw_src_frequencies, powers)

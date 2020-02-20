@@ -64,7 +64,7 @@ class TTSRunner():
         #     mw_limits = (expected_q_freq-1.5e9, res_freq-1e9)
         # else:
         #     mw_limits = (res_freq-0.1e9, expected_q_freq+1e9)
-        self._logger.debug("Starting two-tone for fqmin: %.3f and fqmax: %.3f"%(min_q_freq, max_q_freq))
+        self._logger.debug("Two-tone frequency limits min: %.3f and max: %.3f"%(min_q_freq, max_q_freq))
         mw_limits = (min_q_freq-2e9, max_q_freq+.25e9)
 
         self._mw_src_frequencies = linspace(*mw_limits, 401)
@@ -88,6 +88,7 @@ class TTSRunner():
             self._perform_TTS()
 
         if hasattr(self._tts_result, "_fit_params"):
+            self._logger.debug("Using previous two-tone fit: %s" % str(self._tts_result._fit_params))
             return self._tts_result._fit_params
 
         try:
@@ -100,7 +101,7 @@ class TTSRunner():
             self._logger.warn("Two-tone fit failed")
             self._tts_result._name += "_fit-fail"
             self._tts_result.save()
-            raise ValueError("Fit was unsuccessful")
+            raise ValueError("Two-tone fit was unsuccessful")
         else:
             self._logger.debug("Two-tone fit: %s" % str(params))
             if known_results is None or not hasattr(self._tts_result, "_fit_params"):
