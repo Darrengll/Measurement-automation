@@ -75,11 +75,10 @@ class Measurement:
 
         """
 
-        self._logger = LoggingServer.getInstance('')
+        self._logger = LoggingServer.getInstance('manual_meas')
 
-        self._logger.debug("Measurement " + name + " init")
-        self._logger.logger.debug("Measurement " + name + " devs:" + str(devs_aliases_map))
-        
+        self._logger.debug("Measurement " + name + " init, devs: "+ str(devs_aliases_map))
+
         self._interrupted = False
         self._name = name
         self._sample_name = sample_name
