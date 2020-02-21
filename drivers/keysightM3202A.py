@@ -5,10 +5,10 @@ https://literature.cdn.keysight.com/litweb/pdf/M3201-90001.pdf?id=2787170
 
 from drivers.instrument import Instrument
 
-import keysightSD1
-from keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, SD_TriggerBehaviors, SD_TriggerDirections
-from keysightSD1 import SD_WaveformTypes, SD_Waveshapes, SD_MarkerModes, SD_SyncModes, SD_Error
-from keysightSD1 import SD_ModulationTypes
+import drivers.keysightSD1 as keysightSD1
+from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, SD_TriggerBehaviors, SD_TriggerDirections
+from drivers.keysightSD1 import SD_WaveformTypes, SD_Waveshapes, SD_MarkerModes, SD_SyncModes, SD_Error
+from drivers.keysightSD1 import SD_ModulationTypes
 
 import numpy as np
 from scipy.interpolate import interp1d
