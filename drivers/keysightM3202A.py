@@ -72,7 +72,7 @@ class KeysightM3202A(Instrument):
         """
         trigger_string : string
            'EXT' - external trigger on the front panel is used as a trigger signal source
-           'OUT' - device trigger input is a source of the starting trigger
+                 not used below /*   'OUT' - device trigger input is a source of the starting trigger */
            'CONT' - continious output  <---- DEFAULT setting
         channel : int
             1,2,3,4 - channel number
@@ -333,7 +333,7 @@ class KeysightM3202A(Instrument):
         # interpolating input waveform to the next step
         # that rescales waveform to fit frequency
         interpolation_method = "cubic" if frequency != 0 else "linear"
-        old_x = np.linspace(0, duration_initial, len(waveform), endpoint=False)
+        old_x = np.linspace(0, duration_initial, len(waveform))
         f_wave = interp1d(old_x, waveform, kind=interpolation_method)
 
         # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
@@ -433,6 +433,7 @@ class KeysightM3202A(Instrument):
             self.module.AWGqueueSyncMode(channel - 1, syncMode=self.sync_mode)
             self._handle_error(ret)
         elif (channel in self.synchronized_channels):
+            print("synch channels")
             channels_mask = 0
             for chan in self.synchronized_channels:
                 channels_mask += 1 << (chan - 1)
