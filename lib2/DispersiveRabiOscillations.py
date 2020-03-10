@@ -31,7 +31,7 @@ class DispersiveRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DRes
         offset_r, offset_i = max(real(data))-abs(amp_r), max(imag(data))-abs(amp_i)
 
         time_step = x[1]-x[0]
-        max_frequency = 1/time_step/2/5
+        max_frequency = 1/time_step/5
         min_frequency = 0.1
         frequency = random.random(1)*(max_frequency-.1)+.1
         p0 = [amp_r, amp_i, 1, frequency*2*pi, offset_r, offset_i]
