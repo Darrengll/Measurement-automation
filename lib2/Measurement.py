@@ -14,6 +14,7 @@ from operator import mul
 from matplotlib import pyplot as plt
 import sys
 from numpy import zeros, complex_
+from lib2.GlobalParameters import *
 
 from loggingserver import LoggingServer
 

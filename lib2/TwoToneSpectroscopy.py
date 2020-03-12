@@ -18,13 +18,12 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         self._last_resonator_result = None
         self._resonator_fits = []
 
-
     def set_fixed_parameters(self, sweet_spot_current=None, sweet_spot_voltage=None, adaptive=False,
                              **dev_params):
         self._resonator_area = dev_params['vna'][0]["freq_limits"]
         self._adaptive = adaptive
         if self._resonator_area[0] != self._resonator_area[1]:
-            detect_resonator = not adaptive
+            detect_resonator = adaptive
         else:
             detect_resonator = False
         super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
@@ -76,14 +75,6 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         self._resonator_area = (res_freq - ptp(self._resonator_area)/2,
                                 res_freq + ptp(self._resonator_area)/2)
         self._vna[0].set_parameters(vna_parameters)
-
-
-    # def _recording_iteration(self):
-    #     res_freq, res_amp, res_phase = self._resonator_fits[-1]
-    #     data = super()._recording_iteration()
-    #     # print("----", data, res_amp*exp(-1j*res_phase))
-    #
-    #     return data / res_amp*exp(-1j*res_phase)
 
 class PowerTwoToneSpectroscopy(TwoToneSpectroscopyBase):
 

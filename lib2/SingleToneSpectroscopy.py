@@ -39,6 +39,7 @@ class SingleToneSpectroscopy(Measurement):
     def __init__(self, name, sample_name, plot_update_interval=5, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
         self._measurement_result = SingleToneSpectroscopyResult(name, sample_name)
+        self._measurement_result.set_unwrap_phase(True)
         self._frequencies = []
 
     def set_fixed_parameters(self, **dev_params):
@@ -46,10 +47,11 @@ class SingleToneSpectroscopy(Measurement):
         SingleToneSpectroscopy only requires vna parameters in format
         {"bandwidth":int, ...}
         """
-        super().set_fixed_parameters(**dev_params)
         self._frequencies = linspace(*dev_params['vna'][0]["freq_limits"],
                                      dev_params['vna'][0]["nop"])
         self._vna[0].sweep_hold()
+        super().set_fixed_parameters(**dev_params)
+
 
     def set_swept_parameters(self, swept_parameter):
         """
@@ -154,11 +156,11 @@ class SingleToneSpectroscopyResult(MeasurementResult):
             return
 
         X, Y, Z = self._prepare_data_for_plot(data)
-        if not self._unwrap_phase:
+        if self._unwrap_phase:
             phases = abs(angle(Z).T)
         else:
             Z_ravelled = Z.ravel()
-            phases = unwrap(angle(Z_ravelled)).reshape(Z.shape).T
+            Z = unwrap(angle(Z))
 
         phases[Z.T == 0] = 0
         phases = phases if self._phase_units == "rad" else phases * 180 / pi

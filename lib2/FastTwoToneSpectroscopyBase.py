@@ -67,6 +67,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
             self._mw_src[0].set_output_state("OFF")
             msg = "Detecting a resonator within provided frequency range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
+            # print(msg , flush=True)
             print(msg + self._info_suffix % flux_control_parameter, flush=True)
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
             print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (

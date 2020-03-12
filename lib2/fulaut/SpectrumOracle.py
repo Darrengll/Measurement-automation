@@ -46,7 +46,7 @@ class SpectrumOracle():
         self._plot = plot
         self._extract_data()
 
-        self._y_scan_area_size = 50e-3
+        self._y_scan_area_size = 35e-3
         period, sweet_spot_cur, q_freq, d = initial_guess_qubit_params
         q_freq = q_freq / 1e9
 
@@ -167,7 +167,7 @@ class SpectrumOracle():
         self._coarse_frequency = opt_params_coarse[2]
 
         if self._plot:
-            plt.figure()
+            plt.figure("Spectrum oracle fit")
             plt.plot(self._points[:, 0], self._points[:, 1], ".")
             plt.plot([self._grids[1][0]], [mean(self._points[:, 1])],
                      "|", markersize=100)
@@ -182,7 +182,7 @@ class SpectrumOracle():
         fine_sws_grid = slice(opt_params_coarse[1], opt_params_coarse[1] + 0.1,
                               1)
         fine_freq_grid = slice(self._coarse_frequency,
-                               self._coarse_frequency + 0.41, 0.4 / 10)
+                               self._coarse_frequency + 0.41, 0.4 / 20)
         fine_d_grid = slice(opt_params_coarse[3] * 1,
                             opt_params_coarse[3] + 0.1, 1)
         fine_alpha_grid = self._slices[-1]
@@ -191,7 +191,7 @@ class SpectrumOracle():
                              fine_freq_grid,
                              fine_d_grid,
                              fine_alpha_grid)
-        self._iterations = 11 * (self._grids[-1][2] + 1)
+        self._iterations = 21 * (self._grids[-1][2] + 1)
 
         self._counter = 0
         self._fine_brute_candidates = []
@@ -292,7 +292,7 @@ class SpectrumOracle():
                                       0).reshape(-1, 2)
 
         if self._plot:
-            plt.figure()
+            plt.figure("Spectrum oracle extraction")
             x = self._parameter_values
             freqs = self._frequencies
             x_plot = concatenate(

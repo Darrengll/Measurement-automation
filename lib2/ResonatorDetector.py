@@ -14,10 +14,6 @@ class ResonatorDetector():
         self._type = type
         self._discarded_result = None
         self.set_data(frequencies, s_data)
-        # self._s_data_filtered = (savgol_filter(real(self._s_data), 21, 2)\
-        #                         + 1j*savgol_filter(imag(self._s_data), 21, 2))
-        # self._filtered_port = notch_port(frequencies, self._s_data_filtered)
-
 
     def set_data(self, frequencies, s_data):
         self._freqs = frequencies
@@ -33,52 +29,56 @@ class ResonatorDetector():
     def detect(self):
 
         frequencies, sdata = self._freqs, self._s_data
-
         if not self._fast:
             result = self._fit()
+
+            if self._plot:
+                self._port.plotall()
         else:
             if GlobalParameters().resonator_types['transmission'] == True:
                 amps = abs(self._s_data)
                 phas = angle(self._s_data)
                 min_idx = argmin(amps)
                 result = frequencies[min_idx], min(amps), phas[min_idx]
+                return result
             else:
-                amps = abs(self._s_data)
-                phas = angle(self._s_data)
 
-                unwrapped_phase = unwrap(phas)
-                max_idx = argmin(diff(unwrapped_phase))
-                fr = self._freqs[max_idx]
-
-                def Func(x,theta0, Ql, fr, slope):
-                       return theta0+2.*arctan(2.*Ql*(1.-x/fr))-slope*x
-
-                p0 = (0, 900, fr, 0)
-                p_opt, cov = curve_fit(Func,self._freqs, unwrap(angle(self._s_data)), p0 = p0)
-
-
-                '''
-                filter_window = len(phas) // 10
+                unwrapped_phase = unwrap(angle(self._s_data))
+                filter_window = len(self._s_data) // 10
                 if filter_window % 2 == 0:
                     filter_window += 1
                 filter_polyorder = 3
-                filtered_uphase = savgol_filter(unwrapped_phase, filter_window, filter_polyorder)
-                delay = abs(diff(filtered_uphase))
+                filtered_uphase = savgol_filter(unwrapped_phase,
+                                                filter_window,
+                                                filter_polyorder)
 
-                max_idx = argmax(delay)
-                result = frequencies[max_idx], amps[max_idx], phas[max_idx]
-                '''
-                phase = Func(p_opt[2], p_opt[0], p_opt[1], p_opt[2], p_opt[3])
-                amp = amps[max_idx]
-                result = p_opt[2], amp, phase
+                max_idx = argmin(diff(filtered_uphase))
+                fr = self._freqs[max_idx]
 
-        if result is not None:
-            if self._plot and not self._fast:
-                self._port.plotall()
-            return result
+                def Func(x, theta0, Ql, fr, slope):
+                    return theta0 + 2. * arctan(2. * Ql * (1. - x / fr)) - slope * x
+
+                p0 = (0, 900, fr, 0)
+                try:
+                    p_opt, cov = curve_fit(Func, self._freqs, unwrap(angle(self._s_data)), p0=p0)
+
+                    phase = Func(p_opt[2], p_opt[0], p_opt[1], p_opt[2], p_opt[3])
+                    amp = abs(self._s_data[max_idx])
+                    result = p_opt[2], amp, phase
+
+                    if self._plot:
+                        plt.figure()
+                        plt.title(str(p0))
+                        plt.plot(self._freqs[:-1], diff(unwrapped_phase))
+                        plt.plot(self._freqs, Func(self._freqs, p0[0], p0[1], p0[2], p0[3]), "--")
+                        plt.plot(self._freqs, Func(self._freqs, p_opt[0], p_opt[1], p_opt[2], p_opt[3]))
+                        plt.plot(self._freqs, unwrap(angle(self._s_data)))
+
+                    return result
+                except RuntimeError:
+                    return None
 
     def _fit(self):
-
 
         scan_range = self._freqs[-1] - self._freqs[0]
 
@@ -98,34 +98,34 @@ class ResonatorDetector():
         fine_freqs = linspace(self._freqs[0], self._freqs[-1], 10000)
         if self._type == 'reflection':
             fine_model = self._port._S11_directrefl(fine_freqs,
-                                           fr=self._port.fitresults["fr"],
-                                           Ql=self._port.fitresults["Ql"],
-                                           Qc=self._port.fitresults["Qc"],
-                                           a=self._port.fitresults["a"],
-                                           alpha=self._port.fitresults["alpha"],
-                                           delay=self._port.fitresults["delay"])
+                                                    fr=self._port.fitresults["fr"],
+                                                    Ql=self._port.fitresults["Ql"],
+                                                    Qc=self._port.fitresults["Qc"],
+                                                    a=self._port.fitresults["a"],
+                                                    alpha=self._port.fitresults["alpha"],
+                                                    delay=self._port.fitresults["delay"])
 
         else:
             fine_model = self._port._S21_notch(fine_freqs,
-                                           fr=self._port.fitresults["fr"],
-                                           Ql=self._port.fitresults["Ql"],
-                                           Qc=self._port.fitresults["absQc"],
-                                           phi=self._port.fitresults["phi0"],
-                                           a=self._port.fitresults["a"],
-                                           alpha=self._port.fitresults["alpha"],
-                                           delay=self._port.fitresults["delay"])
+                                               fr=self._port.fitresults["fr"],
+                                               Ql=self._port.fitresults["Ql"],
+                                               Qc=self._port.fitresults["absQc"],
+                                               phi=self._port.fitresults["phi0"],
+                                               a=self._port.fitresults["a"],
+                                               alpha=self._port.fitresults["alpha"],
+                                               delay=self._port.fitresults["delay"])
 
-        #plt.plot(fine_freqs, abs(fine_model))
+        # plt.plot(fine_freqs, abs(fine_model))
         fit_frequency = fine_freqs[argmin(abs(fine_model))]
         fit_amplitude = min(abs(self._port.z_data_sim))
         fit_angle = angle(self._port.z_data_sim)[fit_min_idx]
         res_width = fit_frequency / self._port.fitresults["Ql"]
-
-        if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \
-                abs(fit_amplitude - expected_amplitude) < .2*ptp(abs(self._port.z_data_sim)):
+        if self._type == 'transmission':
+            if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \
+                    abs(fit_amplitude - expected_amplitude) < .2*ptp(abs(self._port.z_data_sim)):
                 return fit_frequency, fit_amplitude, fit_angle
+            else:
+                return None
         else:
-            self._discarded_result = ((fit_frequency, fit_amplitude, fit_angle),
-                                      (expected_frequency, expected_amplitude))
-            return None
+            return fit_frequency, fit_amplitude, fit_angle
 

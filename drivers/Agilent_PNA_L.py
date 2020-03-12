@@ -439,6 +439,8 @@ class Agilent_PNA_L(Instrument):
 
         if "aux_num" in parameters_dict.keys():
             self.set_aux_num(parameters_dict["aux_num"])
+        if "trigger_source" in parameters_dict.keys():
+            self.set_trigger_source(parameters_dict["trigger_source"])
         if "trig_per_point" in parameters_dict.keys():
             self.set_trig_per_point(parameters_dict["trig_per_point"])
         if "pos" in parameters_dict.keys():
@@ -551,8 +553,7 @@ class Agilent_PNA_L(Instrument):
             None
         """
         self._visainstrument.write('SENS%i:AVER:COUN %i' % (self._ci,av))
-        self._visainstrument.write('SENS:AVER:MODE POIN')
-        self.do_set_average(True)
+        self._visainstrument.write('TRIGger:AVERage 1')
         # if av > 1:
         #     self.do_set_average(True)
         #     self._visainstrument.write('SENS:SWE:GRO:COUN %i'%av)
@@ -813,7 +814,7 @@ class Agilent_PNA_L(Instrument):
         """
         return self._zerospan
 
-    def do_set_trigger_source(self,source):
+    def do_set_trigger_source(self, source):
         """
         Set Trigger Mode
 
@@ -824,10 +825,11 @@ class Agilent_PNA_L(Instrument):
             None
         """
         self.logger.debug(__name__ + ' : setting trigger source to "%s"' % source)
-        if source.upper() in [AUTO, MAN, EXT, REM]:
+        if source.upper() in ["AUTO", "MAN", "EXT", "REM"]:
             self._visainstrument.write('TRIG:SOUR %s' % source.upper())
         else:
             raise ValueError('set_trigger_source(): must be AUTO | MANual | EXTernal | REMote')
+
     def do_get_trigger_source(self):
         """
         Get Trigger Mode
@@ -841,6 +843,9 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : getting trigger source')
         return self._visainstrument.query('TRIG:SOUR?')
 
+
+    def send_software_trigger(self):
+        self._visainstrument.write("*TRG")
 
     def do_set_channel_index(self,val):
         """
@@ -905,6 +910,7 @@ class Agilent_PNA_L(Instrument):
 
     def read(self):
         return self._visainstrument.read()
+
     def write(self,msg):
         return self._visainstrument.write(msg)
 

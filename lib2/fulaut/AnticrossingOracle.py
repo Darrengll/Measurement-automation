@@ -25,7 +25,7 @@ class AnticrossingOracle():
     qubit_spectra = {"transmon":transmon_spectrum}
 
     def __init__(self, qubit_type, sts_result, plot=False,
-                 fast_res_detect = True, hints = []):
+                 fast_res_detect = True, hints = [], remove_outliers = True, silent = False):
         self._qubit_spectrum = AnticrossingOracle.qubit_spectra[qubit_type]
         self._sts_result = sts_result
         self._plot = plot
@@ -36,10 +36,12 @@ class AnticrossingOracle():
         self._fast = True
         self._fast_res_detect = fast_res_detect
         self._noisy_data = False
+        self._remove_outliers = remove_outliers
         self._hints = hints
         self._res_points = []
         self._iteration_counter = 0
         self._extract_data()
+        self._silent = silent
 
     def launch(self):
 
@@ -102,7 +104,7 @@ class AnticrossingOracle():
             if loss<0.05:
                 break
 
-        res_freq, g, period, sweet_spot_cur, q_freq, fd = best_fitresult.x
+        res_freq, g, period, sweet_spot_cur, q_freq, d = best_fitresult.x
 
         if self._plot:
             plt.figure()
@@ -134,10 +136,10 @@ class AnticrossingOracle():
         except:
             # maybe we have raw dict
             data = self._sts_result
-        try:
-            curs = data["Current [A]"]
-        except:
-            curs = data["current"]
+        param_keys = ["Current [A]", "current", "Voltage [V]"]
+        for param_key in param_keys:
+            if param_key in data:
+                param_values = data[param_key]
 
         try:
             freqs = data["frequency"]
@@ -145,7 +147,6 @@ class AnticrossingOracle():
             freqs = data["Frequency [Hz]"]
 
         self._data = data["data"]
-
 
         data = self._data
 
@@ -169,12 +170,12 @@ class AnticrossingOracle():
         self._extracted_indices = []
         self._extraction_types = []
 
-        for idx, row in enumerate(data):
-            extrema_inhdices = argrelextrema(delay[idx], greater, order=10)[0]
-            extrema_inhdices = extrema_inhdices[delay[idx][extrema_inhdices] > threshold]
+        for idx, row in enumerate(self._delay):
+            extrema_inhdices = argrelextrema(row, less, order=10)[0]
+            extrema_inhdices = extrema_inhdices[row[extrema_inhdices] > threshold]
 
             if len(extrema_inhdices) > 0:
-                if GlobalParameters().resonator_types['reflection']:
+                if GlobalParameters.resonator_types['reflection'] == True:
                     RD = ResonatorDetector(freqs, data[idx], plot=False,
                                        fast=self._fast_res_detect, type='reflection')
                 else:
@@ -182,31 +183,46 @@ class AnticrossingOracle():
                                        fast=self._fast_res_detect, type='transmission')
                 result = RD.detect()
                 if result is not None:
-                    res_points.append((curs[idx], result[0]))
+                    res_points.append((param_values[idx], result[0]))
                     self._extraction_types.append("fit")
                     self._extracted_indices.append(idx)
                 else:
                     highest_extremum_idx =\
-                        extrema_inhdices[argmax(delay[idx][extrema_inhdices])]
-                    res_points.append((curs[idx], freqs[highest_extremum_idx]))
+                        extrema_inhdices[argmax(row[extrema_inhdices])]
+                    res_points.append((param_values[idx], freqs[highest_extremum_idx]))
                     self._extraction_types.append("max_delay")
                     self._extracted_indices.append(idx)
 
-
-        # self._res_points = np.asarray(res_points)
         self._res_points = array(res_points)
         self._freqs = freqs
-        self._curs = curs
+        self._curs = param_values
+
+        if self._remove_outliers:
+            self._remove_outlier_points()
 
         if self._plot:
             plt.figure()
             plt.plot(self._res_points[:,0], self._res_points[:,1], 'C1.',
                         label="Extracted points")
-            plt.pcolormesh(curs, freqs[:-1], delay.T)
+            plt.pcolormesh(param_values, freqs[:-1], delay.T)
             plt.legend()
             plt.gcf().set_size_inches(15, 5)
-            plt.colorbar()
 
+    def _remove_outlier_points(self):
+        median_diff = median(abs(diff(self._res_points[:, 1])))
+        #     print(median_diff)
+        to_drop = []
+        for idx in range(1, len(self._res_points) - 1):
+            point_prev, point, point_next = self._res_points[idx - 1:idx + 2]
+            diff_prev = point[1] - point_prev[1]
+            diff_next = point_next[1] - point[1]
+            diff_diff = abs(abs(diff_next) - abs(diff_prev))
+            #         print("%.2f %.2f %.2f"%(diff_next/median_diff, diff_prev/median_diff, diff_diff/median_diff), end="\n")
+            if abs(diff_next) > 15 * median_diff and abs(diff_prev) > 15 * median_diff:
+                if diff_diff < 5 * median_diff:
+                    to_drop.append(idx)
+        self._res_points = np.delete(self._res_points, to_drop, axis=0)
+        self._extracted_indices = np.delete(self._extracted_indices, to_drop, axis=0)
 
     def _find_period(self):
         extracted_no_mean = self._res_points[:,1]-mean(self._res_points[:,1])
@@ -218,7 +234,7 @@ class AnticrossingOracle():
         peaks = argrelextrema(corr, greater, order=10)[0]
         try:
             period = peaks[argmax(corr[peaks])]
-            print(peaks, period)
+            # print(peaks, period)
             return self._curs[period] - self._curs[0]
         except ValueError:
             return 1.5 * ptp(self._curs)
@@ -313,7 +329,7 @@ class AnticrossingOracle():
         else:
             cost = abs(self._model(curs, params,
                         freqs_fine_number=freqs_fine_number) - res_freqs)
-        if self._iteration_counter%100 == 0:
+        if self._iteration_counter%100 == 0 and not self._silent:
             clear_output(wait=True)
             print((("{:.4e}, "*len(params))[:-2]).format(*params),
                   "loss:",
