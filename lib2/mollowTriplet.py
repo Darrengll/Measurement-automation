@@ -126,7 +126,7 @@ class MollowTriplet(Measurement):
         dig.calc_and_set_trigger_delay(time_delay, include_pretrigger=True)
         self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
 
-        dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
+        dig.calc_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
         dig.setup_standard_mode()
         self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
 

@@ -2,7 +2,7 @@ import warnings
 from copy import deepcopy
 from importlib import reload
 import numpy as np
-from scipy import fftpack
+from scipy import fftpack, signal
 from drivers.Spectrum_m4x import SPCM
 from lib2.MeasurementResult import MeasurementResult
 from matplotlib import pyplot as plt, colorbar
@@ -33,6 +33,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             references to LO source, AWG and the digitizer
         """
         devs_aliases_map = {"q_lo": q_lo, "q_iqawg": q_iqawg, "dig": dig}
+        self._dig: list[SPCM] = None
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval=1)
         self._measurement_result = PulseMixingResult(name, sample_name)
 
@@ -250,6 +251,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
         # p.81
         data_cut = data_cut / dig.n_avg / 128 * dig.ch_amplitude
+        data_cut = signal.detrend(data_cut, type='constant')
 
         # append 32 zero after every segment with several steps, they were deleted
         # in order to allow SPCM to receive every single trigger signal
@@ -320,7 +322,6 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
         fft_data = fftpack.fftshift(fftpack.fft(data, self._nfft)) / self._nfft
         yf = fft_data[self._start_idx:self._end_idx + 1]
-        self._measurement_result._iter += 1
         return yf
 
     def _output_pulse_sequence(self, zero=False):
@@ -330,8 +331,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)
         self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
 
-        # dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
-        dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay, samples_drop=32)  # HOTFIX FOR TRIGGER
+        dig.calc_segment_size(extra_samples_to_drop_in_end=32)  # HOTFIX FOR TRIGGER
         dig.setup_averaging_mode()
 
         q_pbs = [q_iqawg.get_pulse_builder() for q_iqawg in self._q_iqawg]
@@ -385,15 +385,9 @@ class PulseMixingResult(MeasurementResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
-        self._is_finished = False
-        self._idx = []
-        self._midx = []
-        self._colors = []
         self._XX = None
         self._YY = None
         self._target_freq_2D = None
-        self._delta = 0
-        self._iter = 0
 
         self._d_freq = None
         self._if_freq = None

@@ -5,10 +5,10 @@ https://literature.cdn.keysight.com/litweb/pdf/M3201-90001.pdf?id=2787170
 
 from drivers.instrument import Instrument
 
-import keysightSD1
-from keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, SD_TriggerBehaviors, SD_TriggerDirections
-from keysightSD1 import SD_WaveformTypes, SD_Waveshapes, SD_MarkerModes, SD_SyncModes, SD_Error
-from keysightSD1 import SD_ModulationTypes
+from drivers.keysightSD1 import SD_AOU, SD_Wave
+from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, SD_TriggerBehaviors, SD_TriggerDirections
+from drivers.keysightSD1 import SD_WaveformTypes, SD_Waveshapes, SD_MarkerModes, SD_SyncModes, SD_Error
+from drivers.keysightSD1 import SD_ModulationTypes, SD_Compatibility
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -20,9 +20,9 @@ class KeysightM3202A(Instrument):
     def __init__(self, name, slot, chassis=0):
         super().__init__(name, tags=['physical'])
         self.mask = 0
-        self.module = keysightSD1.SD_AOU()
+        self.module = SD_AOU()
         self.module_id = self.module.openWithSlotCompatibility("M3202A", chassis, slot,
-                                                               compatibility=keysightSD1.SD_Compatibility.LEGACY)
+                                                               compatibility=SD_Compatibility.LEGACY)
         self.amplitudes = [0.0] * 4
         self.deviation_gains = [0.0] * 4
         self.offsets = [0.0] * 4
@@ -38,13 +38,14 @@ class KeysightM3202A(Instrument):
         self.trigger_behaviours = [SD_TriggerBehaviors.TRIGGER_RISE] * 4  # rising edge by default
         self.trigger_output = True
         self.synchronized_channels = []
-        self.sync_mode = 0  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
+        self.sync_mode = SD_SyncModes.SYNC_CLK10  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
 
         self._source_channels_group = []  # channels that are the source of the waveforms for dependent group
         self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms from _source_channels_group
         self._update_dependent_on_start = False
 
         self._prescaler = 0
+        self.flag = 0
 
         self.clear()  # clear internal memory and AWG queues according to p.67 of the user guide
 
@@ -241,9 +242,9 @@ class KeysightM3202A(Instrument):
 
     def setup_fg_sine(self, frequency, amplitude, phase, offset, channel):
         if frequency > 0:
-            self.waveshape_types[channel - 1] = keysightSD1.SD_Waveshapes.AOU_SINUSOIDAL
+            self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_SINUSOIDAL
         else:
-            self.waveshape_types[channel - 1] = keysightSD1.SD_Waveshapes.AOU_DC
+            self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_DC
         self.module.channelWaveShape(channel-1, self.waveshape_types[channel - 1])
         self.output_voltages[channel - 1] = amplitude
         self.module.channelAmplitude(channel-1, self.output_voltages[channel-1])
@@ -266,7 +267,7 @@ class KeysightM3202A(Instrument):
         self.setup_modulation_amp(channel, deviationGain)
 
     def load_modulating_waveform(self, waveform_array_normalized, wave_id):
-        wave = keysightSD1.SD_Wave()
+        wave = SD_Wave()
         wave.newFromArrayDouble(SD_WaveformTypes.WAVE_ANALOG, waveform_array_normalized)
         paddingMode = 0  # add zeros at the end if waveform length is smaller than
         ret = self.module.waveformLoad(wave, wave_id, paddingMode)
@@ -318,7 +319,7 @@ class KeysightM3202A(Instrument):
         None
         """
         self.deviation_gains[channel - 1] = deviation_gain
-        self.module.modulationAmplitudeConfig(channel - 1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM,
+        self.module.modulationAmplitudeConfig(channel - 1, SD_ModulationTypes.AOU_MOD_AM,
                                               deviation_gain)
 
     def load_waveform_to_channel(self, waveform, frequency, channel):
@@ -356,7 +357,7 @@ class KeysightM3202A(Instrument):
 
         waveform_array /= normalization # normalize waveform to (-1,1) interval
         self.repetition_frequencies[channel - 1] = frequency
-        waveform_array = np.array(waveform_array, dtype=np.float16, copy=True)
+        # waveform_array = np.array(waveform_array, dtype=np.float16, copy=True)
         self._load_array_into_AWG(waveform_array, channel)
 
     def _load_array_into_AWG(self, waveform_array_normalized, channel):
@@ -378,7 +379,7 @@ class KeysightM3202A(Instrument):
         self.waveform_ids[channel - 1] = channel
 
         # creating SD_Wave() object from keysight API
-        wave = keysightSD1.SD_Wave()
+        wave = SD_Wave()
         wave.newFromArrayDouble(SD_WaveformTypes.WAVE_ANALOG, waveform_array_normalized)
         wave_id = channel - 1
 
@@ -429,8 +430,8 @@ class KeysightM3202A(Instrument):
             self._load_dependent_channels()
 
         if ((not self.synchronized_channels) or (channel not in self.synchronized_channels)):
-            ret = self.module.AWGstart(channel - 1)
             self.module.AWGqueueSyncMode(channel - 1, syncMode=self.sync_mode)
+            ret = self.module.AWGstart(channel - 1)
             self._handle_error(ret)
         elif (channel in self.synchronized_channels):
             channels_mask = 0

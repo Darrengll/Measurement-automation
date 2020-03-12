@@ -48,7 +48,7 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
 
 class DirectRabiFromPulseDuration(DirectRabiBase):
     """
-    Rabi from pulse duration measurements
+        Rabi from pulse duration measurements
     """
     def _init_measurement_result(self):
         self._measurement_result = RabiFromPulseDurationResult(self._name, self._sample_name)

@@ -15,9 +15,9 @@ import numpy as np
 from scipy import fftpack
 from scipy.fftpack import fft, fftfreq
 import matplotlib.pyplot as plt
-from enum import Enum
 
 from drivers.pyspcm import *
+from enum import Enum
 
 
 class CardError(Exception):
@@ -31,7 +31,7 @@ class CardTimeoutError(TimeoutError):
 class SPCM_MODE(Enum):
     STANDARD = "STANDARD"
     MULTIMODE = "MULTIMODE"
-    AVERAGING = "AVERAGE"
+    AVERAGING = "AVERAGING"
     UNDEFINED = "UNDEFINED"
 
 
@@ -39,40 +39,67 @@ class SPCM_TRIGGER(Enum):
     AUTOTRIG = "AUTOTIG"
     EXT0 = "EXT0"
 
-
 class SPCM:
     DC, AC = 0, 1
     AVG_ON = False
     MODEL_NAME = "M4X.2212-X4"
 
     def __init__(self, path):
-        self.hCard = spcm_hOpen(create_string_buffer(b'/dev/spcm0'))
-        self.__samplerate = 1250000000  # Hz
-        self.__oversampling = 1
-        self.__antialiasing = 0
+        self.hCard = spcm_hOpen(create_string_buffer(path))
+        self.__samplerate: int = 1250000000  # Hz
+        self.__oversampling: int = 1
+
+        # antialiasing filter for channel
+        # '0' - no filter
+        # '1' - antialiasing filter
+        self.__antialiasing: bool = 0
         self.__acdc = self.AC
 
         self._segment_size: int = None
-        self._bufsize: int = 0
-        self._trigger_mode = SPC_TM_POS | SPC_TM_REARM
+        self._bufsize: int = 0  # size of the card buffer allocated in bytes
+        self._trigger_mode = SPC_TM_POS# | SPC_TM_REARM
         self._trig_term = 0
         self._trig_acdc = 0
-        self._n_samples_to_drop_by_dig_delay: int = 0
+        self._trig_level0 = 500  # mV
+        self._trig_level1 = 1000  # mV
+        # how many samples to drop at the start due to the fact that
+        # trace length has to be multiple of 32
+        self._n_samples_to_drop_by_delay: int = 0  #
+        # how many samples to drop in end due to the fact that
+        # trace length has to be multiple of 32
         self._n_samples_to_drop_in_end: int = 0
 
         self.channels: list[int] = []
         self.ch_amplitude: int = 0
-        self.dur_seg: int = 0
+        self.dur_seg: int = 0  # segment duration requested by user
         self.n_avg: int = 0
         self.n_seg: int = 0
-        self.pretrigger: int = 0
-        self.mode: SPCM_MODE = SPCM_MODE.STANDARD
-        self.trigger_source: SPCM_TRIGGER = SPCM_TRIGGER.AUTOTRIG
+
+        # delay in ns requested by user
+        self.delay_ns_desired: int = 0
+        # Delay in samples after trigger.
+        # Does have to be multiple of 32. (see  p.91 of manual)
+        self.delay_in_samples: int = 0
+
+        self.pretrigger_in_samples: int = 0  # pretrigger in samples
+        self.mode: SPCM_MODE = SPCM_MODE.UNDEFINED
+        self.trigger_source: SPCM_TRIGGER = SPCM_TRIGGER.EXT0
+
+        self.reset_card()  # this call is recommended in manual
+
+    def close(self):
+        spcm_vClose(self.hCard)
+
+    def _get_status(self):
+        status = self.__read_reg_32(SPC_M2STATUS)
+        self.__handle_error()
+        return status
 
     def __del__(self):
         self.close()
 
     def set_parameters(self, pars_dict):
+        print("setting parameters for digitizer: ", pars_dict)
         if "oversampling_factor" in pars_dict:
             self.set_oversampling_factor(pars_dict["oversampling_factor"])
         if "channels" in pars_dict:
@@ -86,20 +113,30 @@ class SPCM:
         if "n_seg" in pars_dict:
             self.n_seg = pars_dict["n_seg"]
         if "pretrigger" in pars_dict:
-            self.pretrigger = pars_dict["pretrigger"]
+            pretrigger = pars_dict["pretrigger"]
+            if (pretrigger % 32 != 0):
+                raise CardError("Prettiger is not multiple of 32: pretrigger = {:d}".format(pretrigger))
+            if (pretrigger < 32):
+                raise CardError("Pretrigger has to be atleast 32 samples: {:d}".format(pretrigger))
+            self.pretrigger_in_samples = pars_dict["pretrigger"]
         if "mode" in pars_dict:
             self.mode = pars_dict["mode"]
         if "trig_source" in pars_dict:
             self.trigger_source = pars_dict["trig_source"]
+        if "digitizer_delay" in pars_dict:
+            # calculate and set 'self.delay_in_samples'
+            # memorize how many samples to drop in front of trace 'self._n_samples_to_drop_by_delay'
+            if "include_pretrigger" in pars_dict:
+                self.calc_and_set_trigger_delay(pars_dict["digitizer_delay"],
+                                                pars_dict["include_pretrigger"])
+            else:
+                self.calc_and_set_trigger_delay(pars_dict["digitizer_delay"])
 
-        # this two variables will be set by the subsequent function call
-        self._n_samples_to_drop_by_dig_delay = 0
-        self._n_samples_to_drop_in_end = 0
-
-        # calculates and sets
-        # segment measurement length in samples
+        # calculates segment measurement length in samples
         # based on duration of the segment requested by user
-        self.calc_and_set_segment_size(self.dur_seg)
+        # calculates 'self._n_samples_to_drop_in_end'
+        # value transfered to device in 'setup' methods below
+        self.calc_segment_size(self.dur_seg)
 
         if self.mode == SPCM_MODE.STANDARD:
             self.setup_standard_mode()
@@ -111,9 +148,6 @@ class SPCM:
             # mode was intentionally left underfined so the real mode of
             # operation will be decided later by the measurement class
             pass
-
-    def close(self):
-        spcm_vClose(self.hCard)
 
     def __read_reg_32(self, REG):
         """Read out a 32-bit register and return its value"""
@@ -213,7 +247,7 @@ class SPCM:
         self.__handle_error()
 
     def setup_block_avg_STD(self, memsize, segmentsize, posttrigger, averages):
-        """ Setup Standart Single Aquisition mode with the Block Averaging Module
+        """ Setup Standard Single Acquisition mode with the Block Averaging Module
             Acquire data immediately and save them in Spectrum memory"""
         if( averages <= 255 ):
             # Enables Segment Statistic for standard acquisition 16 bit
@@ -298,35 +332,60 @@ class SPCM:
         self.__write_to_reg_64(SPC_TRIG_DELAY, int(delay_in_samples))
         self.__handle_error()
 
-    def calc_and_set_trigger_delay(self, timedelay, include_pretrigger=True):
-        """ !!! Must be called after the oversampling factor is set
-            Calculates the trigger delay and sets it
+    def calc_and_set_trigger_delay(self, timedelay_ns, include_pretrigger=True):
+        """ !!! Must be called after the 'oversampling_factor' and 'pretrigger' are set.
+            pretrigger is dropped automatically
+            Calculates the trigger delay and sets it.
+
+            If pretrigger and timedelay values in samples of the digitizer
+            are not dividable by 32, additional values will be acquired by the card
+            at the beginning of the signal in order to make the whole acquired samples number
+            dividable by 32. The number of additional values is:
+            (self.delay_in_samples + pretrigger_in_samples + 32) % 32
 
             Returns how many samples to cut from the beginning of the measured trace for the timedelay
             to be exact
         """
-        delay = int(timedelay * 1e-9 * self.get_sample_rate())
+        self.delay_in_samples = int(timedelay_ns*1e-9 * self.get_sample_rate())
         if include_pretrigger:
-            delay += self.pretrigger
-        self._n_samples_to_drop_by_dig_delay = delay % 32  # number of samples to drop from waveform in software
-        delay -= self._n_samples_to_drop_by_dig_delay  # digitizer delay must be dividable by 32
-        self.set_trigger_delay(delay)
+            # if we need to drop pretrigger values
+            self.delay_in_samples += self.pretrigger_in_samples
 
-    def calc_and_set_segment_size(self, dur_seg=0, extra=0, samples_drop=0):
+        # calculate and memorize how many samples to drop from trace due to delay
+        self._n_samples_to_drop_by_delay = self.delay_in_samples % 32
+
+        # decreasing delay to be multiple of 32
+        self.delay_in_samples = self.delay_in_samples - self._n_samples_to_drop_by_delay
+        # remaining 'self._n_samples_to_drop_by_delay' points will be placed into acquisition trace and
+        # dropped in software from the beginning of the trace after acquisition
+
+        # hardware will delay trigger signal on delay_in_samples duration
+        self.set_trigger_delay(self.delay_in_samples)
+
+    def calc_segment_size(self, dur_seg_ns=None, extra_samples_to_drop_in_end=0):
         """
-        !!! Must be called after the oversampling factor is set but before the mode is chosen
+        !!! Must be called after the oversampling factor and trigger delay are
+            set but before the mode is chosen
             set_parameters() handles this issue
         """
-        if dur_seg == 0:
-            dur_seg = self.dur_seg
+        if dur_seg_ns is None:
+            dur_seg_ns = self.dur_seg
 
-        self._segment_size = int(dur_seg * self.get_sample_rate()) + extra - samples_drop
-        self._n_samples_to_drop_in_end = 32 - self._segment_size % 32
-        self._segment_size += self._n_samples_to_drop_in_end  # completing requested signal length to the multiple of 32
-        self._bufsize = self.n_seg * self._segment_size * 4 * len(self.channels)
+        self._segment_size = int(dur_seg_ns * 1e-9 * self.get_sample_rate()) + self._n_samples_to_drop_by_delay - extra_samples_to_drop_in_end
+
+        # calculate and memorize how many samples to drop from trace at the end
+        # (self._segment_size + 32) - underlines the logic of 'samples to drop' value calculation
+        self._n_samples_to_drop_in_end = 32 - (self._segment_size + 32) % 32
+        # extending requested signal length to the multiple of 32 and bigger the the requested segment
+        self._segment_size += self._n_samples_to_drop_in_end
+
+        # TODO: '_bufsize' calculation here can be troubles with
+        #  standard mode (this seems to be perfectly valid only for averaging mode)
+        #  due to the fact it is multiplied by 4
+        self._bufsize = self.n_seg * self._segment_size * 4 * len(self.channels)  # in bytes
 
     def get_how_many_samples_to_drop_in_front(self):
-        return self._n_samples_to_drop_by_dig_delay
+        return self._n_samples_to_drop_by_delay
 
     def get_how_many_samples_to_drop_in_end(self):
         return self._n_samples_to_drop_in_end
@@ -372,8 +431,8 @@ class SPCM:
         self._trigger_mode = mode
 
     def setup_ext0_trigger(self):
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 500)  # 0-level is < 1000 mV
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 700)  # 1-level is > 2000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, self._trig_level0)
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, self._trig_level1)
         self.__write_to_reg_32(SPC_TRIG_EXT0_MODE,
                                self._trigger_mode)  # trigger on the rising edge (voltage crosses 0-level barrier)
         self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_EXT0)  # Enable the external trigger
@@ -426,8 +485,8 @@ class SPCM:
         self.__handle_error()
         return cnt
 
-    def obtain_data(self, bufsize):
-        pcData = (int8 * bufsize)()
+    def obtain_data(self):
+        pcData = (int8 * self._bufsize)()
         res = self.__def_simp_transfer(pcData)  # define Card -> PC transfer buffer
         if res is not 0:
             print("Error: %d" % res)
@@ -449,7 +508,7 @@ class SPCM:
         if memsize is None:
             memsize = self._segment_size
         if pretrigger is None:
-            pretrigger = self.pretrigger
+            pretrigger = self.pretrigger_in_samples
 
         # if function was not invoked from 'set_parameters'
         self.mode = SPCM_MODE.STANDARD
@@ -477,7 +536,7 @@ class SPCM:
         if segment_size is None:
             segment_size = self._segment_size
         if pretrigger is None:
-            pretrigger = self.pretrigger
+            pretrigger = self.pretrigger_in_samples
 
         # if function was not invoked from 'set_parameters'
         self.mode = SPCM_MODE.MULTIMODE
@@ -512,9 +571,10 @@ class SPCM:
         if segment_size is None:
             segment_size = self._segment_size
         if pretrigger is None:
-            pretrigger = self.pretrigger
+            pretrigger = self.pretrigger_in_samples
         if num_averages is None:
             num_averages = self.n_avg
+
         # if function was not invoked from 'set_parameters'
         self.mode = SPCM_MODE.AVERAGING
 
@@ -527,7 +587,7 @@ class SPCM:
         if segment_size > max_seg_size:
             raise CardError(f"Segment size {segment_size} exceeds maximal "
                             f"segment size {max_seg_size} for {len(channels)} channels")
-        if segment_size % 32 > 0:
+        if segment_size % 32 != 0:
             raise CardError(f"Segment size must be a multiple of 32")
 
         self.setup_block_avg_STD(memsize, segment_size, posttrigger_mem, num_averages)
@@ -536,33 +596,20 @@ class SPCM:
         self.setup_trigger_source()
         self.setup_sample_rate()
 
-    def set_trigger_source(self, trig_source):
-        """
-        You may use this function as an alternative to
-        'self.set_parameters'
+    def setup_trigger_source(self, trigger_source=None):
+        def init_trigger():
+            if self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
+                self.setup_auto_trigger()
+            elif self.trigger_source == SPCM_TRIGGER.EXT0:
+                self.setup_ext0_trigger()
 
-        Parameters
-        ----------
-        trig_source : str
-        "EXT" - ext0 from front panel
-        "AUTO" - autotrigger
+        if trigger_source is None:
+            init_trigger()
+        else:
+            self.trigger_source = trigger_source
+            init_trigger()
 
-        Returns
-        -------
-        None
-        """
-        if trig_source == "EXT":
-            self.trigger_source = SPCM_TRIGGER.EXT0
-        elif trig_source == "AUTO":
-            self.trigger_source = SPCM_TRIGGER.AUTOTRIG
-
-    def setup_trigger_source(self):
-        if self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
-            self.setup_auto_trigger()
-        elif self.trigger_source == SPCM_TRIGGER.EXT0:
-            self.setup_ext0_trigger()
-
-    def measure(self, bufsize):
+    def measure(self):
         """
 
         Parameters
@@ -575,7 +622,7 @@ class SPCM:
         """
         self.start_card()
         self.wait_for_card()  # wait till the end of a measurement
-        data = self.obtain_data(bufsize)  # download data from the card
+        data = self.obtain_data()  # download data from the card
         return data
 
     def measure_standard_mode(self, channels, ampl, memsize, pretrigger):
@@ -585,7 +632,8 @@ class SPCM:
         else:
             N = len(channels)
         self.setup_standard_mode(channels, ampl, memsize, pretrigger)
-        return self.measure(memsize * N)
+        self._bufsize = memsize * N
+        return self.measure()
 
     def measure_averaging_mode(self, channels, ampl, num_segments, segment_size, pretrigger, num_averages):
         if type(channels) is int:
@@ -596,7 +644,8 @@ class SPCM:
 
         # num_pulses = num_segments * num_averages
         self.setup_averaging_mode(channels, ampl, num_segments, segment_size, pretrigger, num_averages)
-        data = self.measure(num_segments * segment_size * 4 * N)
+        self._bufsize = num_segments * segment_size * 4 * N
+        data = self.measure()
         # print("Number of triggers detected is %d out of %d" % (self.get_trigger_counter(), num_pulses))
         return data
 
@@ -608,7 +657,8 @@ class SPCM:
             N = len(channels)
 
         self.setup_multiple_recoding_mode(channels, ampl, num_segments, segment_size, pretrigger)
-        data = self.measure(num_segments * segment_size * N)
+        self._bufsize = num_segments * segment_size * 4 * N
+        data = self.measure()
         return data
 
     @staticmethod

@@ -18,7 +18,7 @@
 
 from numpy import *
 from lib2.IQPulseSequence import *
-import keysightSD1
+import drivers.keysightSD1 as keysightSD1
 from drivers.keysightM3202A import KeysightM3202A
 # there are functions that are not universal and work only with M3202A
 from drivers.keysightAWG import KeysightAWG
@@ -376,7 +376,7 @@ class IQAWG():
             duration = pulse_sequence.get_duration()
             end_idx = length
 
-        frequency = 1 / (duration+1) * 1e9
+        frequency = 1 / duration * 1e9
         self._channels[0].output_arbitrary_waveform(pulse_sequence \
                                                     .get_I_waveform()[:end_idx], frequency,
                                                     asynchronous=True)

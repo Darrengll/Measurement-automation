@@ -56,11 +56,18 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         Parameters
         ----------
         pulse_sequence_parameters
+
+        Notes
+        ----------
+        If digitizer 'mode' and 'trigger_source' are absent they
+        are set to 'averaging' and 'EXT0' respectively
         """
+
+        # LO source initialization
         q_lo_params[0]["power"] = q_iqawg_params[0]["calibration"] \
             .get_radiation_parameters()["lo_power"]
 
-        # TODO check carefully. All single device functions should be deleted?
+        # store sequence parameters for further usage
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
 
         # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
@@ -68,7 +75,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
                       "q_iqawg": q_iqawg_params,
                       "dig": dig_params}
         # for all child experiments this parameters are default for
-        # digitizer acquisition mode
+        # digitizer
         if "mode" not in dig_params[0]:
             dig_params[0]["mode"] = SPCM_MODE.AVERAGING
         if "trig_source" not in dig_params:
@@ -110,17 +117,19 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
     def _single_measurement(self):
         dig = self._dig[0]
-        dig_data = dig.measure(dig._bufsize)
+        dig_data = dig.measure()
         # convertion to mV is according to
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
         # p.81
         dig_data = dig_data.astype(float) / dig.n_avg / 128 * dig.ch_amplitude
 
+        # I channel data exctraction
         data_i = dig_data[0::2]
         data_i = data_i.reshape(dig.n_seg, round(dig_data.shape[0] / 2 / dig.n_seg))
         data_i = data_i[:, self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
         data_i = data_i.flatten()
 
+        # Q channel data exctraction
         data_q = dig_data[1::2]
         data_q = data_q.reshape(dig.n_seg, round(dig_data.shape[0] / 2 / dig.n_seg))
         data_q = data_q[:, self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
@@ -167,15 +176,20 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
     def _output_pulse_sequence(self, zero=False):
         # update a trigger delay of the digitizer
         dig = self._dig[0]
-        timedelay = self._pulse_sequence_parameters["start_delay"] + \
-                    self._pulse_sequence_parameters["excitation_duration"] + \
-                    self._pulse_sequence_parameters["digitizer_delay"]
-        dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)
+        timedelay_ns = self._pulse_sequence_parameters["excitation_duration"] + \
+                    self._pulse_sequence_parameters["digitizer_delay"]# + self._pulse_sequence_parameters["start_delay"]
+        dig.calc_and_set_trigger_delay(timedelay_ns, include_pretrigger=True)  # updates how many to drop in front
         self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
-
-        dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
-        dig.setup_averaging_mode()
+        dig.calc_segment_size()  # updates how many to drop in the end
         self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
+        dig.setup_averaging_mode()
+        ns_in_sample = 1e9 / dig.get_sample_rate()
+        ns_in_sample = 1e9 / dig.get_sample_rate()
+        print("")
+        print("segment duration: {:.3f} ns".format(dig._segment_size * ns_in_sample))
+        print("delay in fornt: {:.3f} ns".format((dig.delay_in_samples + dig._n_samples_to_drop_by_delay) * ns_in_sample))
+        print("drop in front: {:.3f} ns".format(dig._n_samples_to_drop_by_delay * ns_in_sample))
+        print("drop in end: {:.3f} ns".format(dig._n_samples_to_drop_in_end * ns_in_sample))
 
         q_pbs = [q_iqawg.get_pulse_builder() for q_iqawg in self._q_iqawg]
 
