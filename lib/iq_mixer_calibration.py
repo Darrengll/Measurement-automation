@@ -125,7 +125,7 @@ class IQCalibrator():
                                     format_number_list(data), self._iterations,
                                     end=", ", flush=True)
             clear_output(wait=True)
-            answer =  data[0]
+            answer = data[0]
             return answer
 
         def loss_function_dc_offsets_open(dc_offset_open):
