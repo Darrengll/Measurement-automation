@@ -69,6 +69,8 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
         # store sequence parameters for further usage
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
+        # calculates maximum pulse sequence duration for digitizer window to remain at constant distance from trigger
+        self._calc_max_pulse_duration()
 
         # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
         dev_params = {"q_lo": q_lo_params,
@@ -87,6 +89,26 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             "radiation_parameters": self._q_iqawg[0]._calibration.get_radiation_parameters(),
             "pulse_sequence_parameters": pulse_sequence_parameters
         })
+
+    def _calc_max_pulse_duration(self):
+        """
+        Purely virtual function that calculates maximum
+         pulse duration and stores it into 'self.pulse_sequence_parameters'
+        for further usage by PulseBuilder method.
+        Pulse builder will construct sequence in such a way that will let data acquisition window
+        by digitizer to remain at constant distance from trigger rising edge. Together with restriction
+        that 'repetition_period' is dividable by AWG and digitizer clocks this will help to evade
+        phase jumps due to the shifts of the measurement window from trigger event.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -------
+        For internal usage in 'self.set_fixed_parmaters' only.
+        """
+
 
     def set_basis(self, basis):
         d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
@@ -177,19 +199,21 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         # update a trigger delay of the digitizer
         dig = self._dig[0]
         timedelay_ns = self._pulse_sequence_parameters["excitation_duration"] + \
-                    self._pulse_sequence_parameters["digitizer_delay"]# + self._pulse_sequence_parameters["start_delay"]
+                    self._pulse_sequence_parameters["digitizer_delay"] + self._pulse_sequence_parameters["start_delay"]
+
         dig.calc_and_set_trigger_delay(timedelay_ns, include_pretrigger=True)  # updates how many to drop in front
         self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
         dig.calc_segment_size()  # updates how many to drop in the end
         self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
         dig.setup_averaging_mode()
+
+        # DIAGNOSE PHASE JUMPS WITH THIS TIMINGS OUTPUT
         ns_in_sample = 1e9 / dig.get_sample_rate()
-        ns_in_sample = 1e9 / dig.get_sample_rate()
-        print("")
-        print("segment duration: {:.3f} ns".format(dig._segment_size * ns_in_sample))
-        print("delay in fornt: {:.3f} ns".format((dig.delay_in_samples + dig._n_samples_to_drop_by_delay) * ns_in_sample))
-        print("drop in front: {:.3f} ns".format(dig._n_samples_to_drop_by_delay * ns_in_sample))
-        print("drop in end: {:.3f} ns".format(dig._n_samples_to_drop_in_end * ns_in_sample))
+        # print("")
+        # print("segment duration: {:.3f} ns".format(dig._segment_size * ns_in_sample))
+        # print("delay in fornt: {:.3f} ns".format((dig.delay_in_samples + dig._n_samples_to_drop_by_delay) * ns_in_sample))
+        # print("drop in front: {:.3f} ns".format(dig._n_samples_to_drop_by_delay * ns_in_sample))
+        # print("drop in end: {:.3f} ns".format(dig._n_samples_to_drop_in_end * ns_in_sample))
 
         q_pbs = [q_iqawg.get_pulse_builder() for q_iqawg in self._q_iqawg]
 
