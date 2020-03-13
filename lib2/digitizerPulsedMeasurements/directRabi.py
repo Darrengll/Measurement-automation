@@ -4,7 +4,7 @@ from drivers.IQAWG import IQAWG
 from drivers.Spectrum_m4x import SPCM
 from drivers.E8257D import EXG, MXG
 
-from .digitizerPulsedMeasurements import DigitizerTimeResolvedDirectMeasurement
+from .digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
 from ..VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
 from ..IQPulseSequence import IQPulseBuilder
 
