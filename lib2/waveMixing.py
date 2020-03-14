@@ -12,10 +12,10 @@ import lib2.IQPulseSequence
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
 
-import lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements
+import lib2.digitizerPulsedMeasurements.digitizerPulsedMeasurements
 
-reload(lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements)
-from lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements import DigitizerTimeResolvedDirectMeasurement
+reload(lib2.digitizerPulsedMeasurements.digitizerPulsedMeasurements)
+from lib2.digitizerPulsedMeasurements.digitizerPulsedMeasurements import DigitizerTimeResolvedDirectMeasurement
 
 
 class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
