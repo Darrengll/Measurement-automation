@@ -15,6 +15,8 @@ import sys
 import numpy as np
 from numpy import zeros, complex_
 
+from typing import Dict, Tuple, List
+
 from lib2.loggingServer import LoggingServer
 
 
@@ -108,6 +110,8 @@ class Measurement:
         self._plot_update_interval = plot_update_interval
         self._resonator_detector = ResonatorDetector()
         self._raw_data = None  # measurement results are stored here
+        self._swept_pars: Dict[str, Tuple] = None
+        self._swept_pars_names: List[str] = None
         # TODO: explicit definition of members in child classes
         # self._measurement_result = None  # should be initialized in child class
 

@@ -3,6 +3,13 @@ from typing import Union, List
 from drivers.IQAWG import IQAWG
 from drivers.Spectrum_m4x import SPCM
 from drivers.E8257D import EXG, MXG
+from lib2.digitizerPulsedMeasurements import digitizerTimeResolvedDirectMeasurement
+
+
+# DEVELOPMENT BLOCK
+from . import digitizerTimeResolvedDirectMeasurement
+from importlib import reload
+reload(digitizerTimeResolvedDirectMeasurement)
 
 from .digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
 from ..VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
@@ -44,6 +51,55 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
         None
         """
         raise NotImplementedError
+
+    def _get_longest_pulse_sequence_duration(self, pulse_sequence_parameters, swept_pars):
+        """
+        Implementation of purely virtual function for 'DirectRabi' sequences measurements.
+        Function calculates and return the longest pulse sequence duration based
+        on pulse sequence parameters provided and 'self._sequence_generator' implementation.
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict
+            Dictionary that contain pulse sequence parameters for which
+            you wish to calculate the longest duration. This parameters are fixed.
+
+        swept_pars : dict
+            Sweep parameters that are needed for calculation of the
+            longest sequence.
+
+        Returns
+        -------
+        float
+            Longest sequence duration based on pulse sequence parameters in ns.
+
+        Notes
+        ------
+            This function is introduced in the context of the solution to the phase jumps, caused
+        by clock incompatibility between AWG and digitizer. The aim is to fix distance between
+        digitizer measurement window and AWG trigger that obtains digitizer.
+            The last pulse ending should stay at fixed distance from trigger event in contrary with previous
+        implementation, where the start of the first control pulse was fixed relative to trigger event.
+            The previous solution forced digitizer acquisition window (which is placed after the pulse sequence, usually)
+        to shift further in timeline following the extension of the length of the pulse sequence.
+        And due to the fact that extension length does not always coincide with acquisition
+        window displacement (due to difference in AWG and digitizer clock period) the phase jumps
+        arise as a problem.
+            The solution is that end of the last pulse stays at the same distance from the trigger event and
+        pulse sequence length extendends "back in timeline". Together with requirement that 'repetition_period"
+        is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
+        """
+        longest_excitaion = None
+        if( "excitation duration" in self._swept_pars ):
+            longest_excitaion = np.max(self._swept_pars["excitation duration"][1])
+        elif ("excitation_duration" in self._pulse_sequence_parameters ):
+            longest_excitaion = self._pulse_sequence_parameters["excitation_duration"]
+        else:
+            raise ValueError("Cannot estimate longest pulse duration based on 'self.pulse_sequence_parameters'"
+                             " or 'self._swept_pars'\n No pulse duration data found.")
+
+        start_delay = self._pulse_sequence_parameters["start_delay"]
+        return start_delay + longest_excitaion
 
 
 class DirectRabiFromPulseDuration(DirectRabiBase):
@@ -93,7 +149,7 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
 
     def _generate_annotation_string(self, opt_params, err):
         return f"$T_R={opt_params[2]*1e-3:.2f}\pm {err[2]*1e-3:.2f}~\mu$s\n" \
-               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz\n" \
+               fr"$\nu_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz" + "\n" \
                f"$\Delta\phi={np.mod(opt_params[6] - opt_params[7], 2 * np.pi) - np.pi:.2f}$ rad"
 
     def _prepare_data_for_plot(self, data):

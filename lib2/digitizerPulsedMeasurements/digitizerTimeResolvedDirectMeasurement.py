@@ -12,6 +12,8 @@ from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiv
 from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
 from drivers.IQAWG import IQAWG
 
+from typing import Dict, Union
+
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
 
@@ -36,7 +38,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._adc_parameters = None
         self._n_samples_to_drop_by_dig_delay = 0
         self._n_samples_to_drop_in_end = 0
-        self._pulse_sequence_parameters = \
+        self._pulse_sequence_parameters: Dict[Union[str, int, float]] = \
             {"modulating_window": "rectangular", "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
 
@@ -70,12 +72,16 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         # store sequence parameters for further usage
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
 
+        # TODO: make check of the repetition period.
+        #  in order to verify if it is dividable by both AWG and digitizer clocks.
+        # repetition_period = self._pulse_sequence_parameters["repetition_period"]
+
         # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
         dev_params = {"q_lo": q_lo_params,
                       "q_iqawg": q_iqawg_params,
                       "dig": dig_params}
         # for all child experiments this parameters are default for
-        # digitizer
+        # digitizer acquisition mode
         if "mode" not in dig_params[0]:
             dig_params[0]["mode"] = SPCM_MODE.AVERAGING
         if "trig_source" not in dig_params:
@@ -87,7 +93,6 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             "radiation_parameters": self._q_iqawg[0]._calibration.get_radiation_parameters(),
             "pulse_sequence_parameters": pulse_sequence_parameters
         })
-
 
     def set_basis(self, basis):
         d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
@@ -106,6 +111,54 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             basis = (ground_state, excited_state)
 
         self._basis = basis
+
+    def set_swept_parameters(self, **swept_pars):
+        super().set_swept_parameters(**swept_pars)
+        self._pulse_sequence_parameters["longest_duration"] = \
+            self._get_longest_pulse_sequence_duration(self._pulse_sequence_parameters, self._swept_pars)
+
+    def _get_longest_pulse_sequence_duration(self, pulse_sequence_parameters, swept_pars):
+        """
+        Purely virtual function. Needs to be implemented in child classes.
+        Function must calculate and return the longest pulse sequence duration for the particular
+        measurement child class based on its 'self._sequence_generator' implementation.
+
+        Docstring for child classes:
+        Function calculates and return the longest pulse sequence duration based
+        on pulse sequence parameters provided and 'self._sequence_generator' implementation.
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict
+            Dictionary that contain pulse sequence parameters for which
+            you wish to calculate the longest duration. This parameters are fixed.
+
+        swept_pars : dict
+            Sweep parameters that are needed for calculation of the
+            longest sequence.
+
+        Returns
+        -------
+        float
+            Longest sequence duration based on pulse sequence parameters in ns.
+
+        Notes
+        ------
+            This function is introduced in the context of the solution to the phase jumps, caused
+        by clock incompatibility between AWG and digitizer. The aim is to fix distance between
+        digitizer measurement window and AWG trigger that obtains digitizer.
+            The last pulse ending should stay at fixed distance from trigger event in contrary with previous
+        implementation, where the start of the first control pulse was fixed relative to trigger event.
+            The previous solution forced digitizer acquisition window (which is placed after the pulse sequence, usually)
+        to shift further in timeline following the extension of the length of the pulse sequence.
+        And due to the fact that extension length does not always coincide with acquisition
+        window displacement (due to difference in AWG and digitizer clock period) the phase jumps
+        arise as a problem.
+            The solution is that end of the last pulse stays at the same distance from the trigger event and
+        pulse sequence length extendends "back in timeline". Together with requirement that 'repetition_period"
+        is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
+        """
+        raise NotImplementedError
 
     @staticmethod
     def _calculate_basis_complex_amplitudes(self, basis):
@@ -177,17 +230,16 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
     def _output_pulse_sequence(self, zero=False):
         # update a trigger delay of the digitizer
         dig = self._dig[0]
-        timedelay_ns = self._pulse_sequence_parameters["excitation_duration"] + \
-                    self._pulse_sequence_parameters["digitizer_delay"] + self._pulse_sequence_parameters["start_delay"]
-
-        dig.calc_and_set_trigger_delay(timedelay_ns, include_pretrigger=True)  # updates how many to drop in front
+        timedelay = self._pulse_sequence_parameters["longest_duration"] + \
+                    self._pulse_sequence_parameters["digitizer_delay"]
+        dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)
         self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
         dig.calc_segment_size()  # updates how many to drop in the end
         self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
         dig.setup_averaging_mode()
 
         # DIAGNOSE PHASE JUMPS WITH THIS TIMINGS OUTPUT
-        ns_in_sample = 1e9 / dig.get_sample_rate()
+        # ns_in_sample = 1e9 / dig.get_sample_rate()
         # print("")
         # print("segment duration: {:.3f} ns".format(dig._segment_size * ns_in_sample))
         # print("delay in fornt: {:.3f} ns".format((dig.delay_in_samples + dig._n_samples_to_drop_by_delay) * ns_in_sample))
