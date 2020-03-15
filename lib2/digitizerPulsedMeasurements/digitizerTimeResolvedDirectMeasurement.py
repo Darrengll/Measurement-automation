@@ -69,7 +69,6 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         #  in order to verify if it is dividable by both AWG and digitizer clocks.
         # repetition_period = self._pulse_sequence_parameters["repetition_period"]
 
-
         # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
         dev_params = {"q_lo": q_lo_params,
                       "q_iqawg": q_iqawg_params,
