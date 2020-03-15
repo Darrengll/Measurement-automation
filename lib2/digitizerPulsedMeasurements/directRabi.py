@@ -89,7 +89,15 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
         pulse sequence length extendends "back in timeline". Together with requirement that 'repetition_period"
         is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
         """
-        longest_excitaion = np.max(self._swept_pars["excitation duration"][1])
+        longest_excitaion = None
+        if( "excitation duration" in self._swept_pars ):
+            longest_excitaion = np.max(self._swept_pars["excitation duration"][1])
+        elif ("excitation_duration" in self._pulse_sequence_parameters ):
+            longest_excitaion = self._pulse_sequence_parameters["excitation_duration"]
+        else:
+            raise ValueError("Cannot estimate longest pulse duration based on 'self.pulse_sequence_parameters'"
+                             " or 'self._swept_pars'\n No pulse duration data found.")
+
         start_delay = self._pulse_sequence_parameters["start_delay"]
         return start_delay + longest_excitaion
 
@@ -141,7 +149,7 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
 
     def _generate_annotation_string(self, opt_params, err):
         return f"$T_R={opt_params[2]*1e-3:.2f}\pm {err[2]*1e-3:.2f}~\mu$s\n" \
-               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz\n" \
+               fr"$\nu_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz" + "\n" \
                f"$\Delta\phi={np.mod(opt_params[6] - opt_params[7], 2 * np.pi) - np.pi:.2f}$ rad"
 
     def _prepare_data_for_plot(self, data):
