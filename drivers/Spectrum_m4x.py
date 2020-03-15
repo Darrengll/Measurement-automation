@@ -365,8 +365,11 @@ class SPCM:
     def calc_segment_size(self, dur_seg_ns=None, extra_samples_to_drop_in_end=0):
         """
         !!! Must be called after the oversampling factor and trigger delay are
-            set but before the mode is chosen
+            set but before the mode is chosen.
             set_parameters() handles this issue
+
+            Call setup mode is neccessary after calculation of the segment size.
+            In order to set calculated value into the device.
         """
         if dur_seg_ns is None:
             dur_seg_ns = self.dur_seg

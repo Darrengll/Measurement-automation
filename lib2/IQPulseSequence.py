@@ -549,7 +549,20 @@ class IQPulseBuilder():
 
         Returns
         -------
+        Dict[str,List[IQPulseSequence]]
+            Dictionary that contain pulse sequences for devices groups.
+            Devices group lists id's are denoted by dictionary keys.
 
+        Notes
+        -------
+            The previous solution forced digitizer acquisition window (which is placed after the pulse sequence, usually)
+        to shift further in timeline following the extension of the length of the pulse sequence.
+        And due to the fact that extension length does not always coincide with acquisition
+        window displacement (due to difference in AWG and digitizer clock period) the phase jumps
+        arise as a problem.
+            The solution is that end of the last pulse stays at the same distance from the trigger event and
+        pulse sequence length extendends "back in timeline". Together with requirement that 'repetition_period"
+        is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
         """
         exc_pb = pbs['q_pbs'][0]
         awg_trigger_reaction_delay = \
@@ -558,6 +571,8 @@ class IQPulseBuilder():
             pulse_sequence_parameters["repetition_period"]
         excitation_duration = \
             pulse_sequence_parameters["excitation_duration"]
+        longest_pulse_duration = \
+            pulse_sequence_parameters["longest_duration"]
         amplitude = \
             pulse_sequence_parameters["excitation_amplitude"]
         window = \
@@ -569,10 +584,10 @@ class IQPulseBuilder():
         frequency = exc_pb._iqmx_calibration.get_radiation_parameters()["if_frequency"] / 1e9
 
         # calculate phase in order for both signals to end with the same phase (starting phase depends on duration)
-        starting_phase = 2 * pi * (1 - frequency * excitation_duration % 1)
+        starting_phase = 2 * pi * frequency * longest_pulse_duration
         # starting_phase = 0
 
-        exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
+        exc_pb.add_zero_pulse(longest_pulse_duration - excitation_duration) \
             .add_sine_pulse(excitation_duration,
                             window=window,
                             window_parameter=window_parameter,

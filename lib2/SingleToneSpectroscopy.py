@@ -11,7 +11,7 @@ from matplotlib import colorbar
 from lib2.Measurement import *
 from time import sleep
 
-from lib2.digitizerPulsedMeasurements.digitizerPulsedMeasurements import DigitizerTimeResolvedDirectMeasurement
+from lib2.digitizerPulsedMeasurements.digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
 
 
 class SingleToneSpectroscopy(Measurement):
