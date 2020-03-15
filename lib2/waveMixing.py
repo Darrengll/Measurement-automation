@@ -242,7 +242,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
     def _measure_one_trace(self):
         dig = self._dig[0]
-        data = dig.measure(dig._bufsize).astype(float)
+        data = dig.measure().astype(float)
 
         # deleting extra samples from segments
         data_cut = SPCM.extract_useful_data(data, 2, dig._segment_size, dig.get_how_many_samples_to_drop_in_front(),
