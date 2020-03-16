@@ -162,7 +162,7 @@ class KeysightM3202A(Instrument):
         -----------
         waveform: array
             ADC levels, in Volts. max( abs(waveform) ) < 1.5 V
-        repetition_rate: float, Hz
+        frequency: float, Hz
             frequency at which the waveform will be repeated
         channel: 1,2,3,4
             channel which will output the waveform

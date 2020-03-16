@@ -31,13 +31,13 @@ class AWGChannel():
         self._host_awg = host_awg
         self._channel_number = channel_number
 
-    def output_arbitrary_waveform(self, waveform, frequency, asynchronous):
+    def output_arbitrary_waveform(self, waveform, frequency, asynchronous=False):
 
         self._host_awg.output_arbitrary_waveform(waveform, frequency,
-                                                 self._channel_number, asynchronous = asynchronous)
+                                                 self._channel_number, asynchronous=asynchronous)
 
-    def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous,
-                               trigger_sync_every):
+    def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous=False,
+                               trigger_sync_every=None):
         self._host_awg.output_continuous_wave(frequency, amplitude, phase,
                                               offset, waveform_resolution, self._channel_number, asynchronous=asynchronous,
                                               trigger_sync_every=trigger_sync_every)
@@ -182,14 +182,21 @@ class IQAWG():
                                      cal._waveform_resolution, 2, asynchronous=False,
                                      trigger_sync_every=trigger_sync_every)
 
-    def output_zero(self):
+    def output_zero(self, trigger_every_period=False, repetition_period_ns=None):
         cal = self._calibration
         awg = self._channels[0]._host_awg
         chanI = self._channels[0]._channel_number
         chanQ = self._channels[1]._channel_number
         awg.synchronize_channels(chanI, chanQ)
-        self._output_continuous_wave(0, 0, 0, cal._dc_offsets[0], 1, 0)
-        self._output_continuous_wave(0, 0, 0, cal._dc_offsets[1], 2, 1)
+        if trigger_every_period:
+            # 100 ns trigger length after every 'start' of the playing
+            awg.trigger_output_config(trig_mode="ON", trig_length=100)
+        else:
+            # turns trigger of
+            awg.trigger_output_config(trig_mode="OFF")
+        waveform = np.zeros(int(repetition_period_ns/awg.get_sample_rate()*1e9))
+        self._channels[0].output_arbitrary_waveform(waveform, 1/repetition_period_ns*1e9)
+        self._channels[1].output_arbitrary_waveform(waveform, 1/repetition_period_ns*1e9)
 
     def output_continuous_two_freq_IQ_waves(self, dfreq, ampl_coefs=(2, 2)):
         fs = self._channels[0]._host_awg.get_sample_rate()  # Hz

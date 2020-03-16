@@ -108,8 +108,6 @@ class SPCM:
             self.ch_amplitude = pars_dict["ch_amplitude"]
         if "dur_seg" in pars_dict:
             self.dur_seg = pars_dict["dur_seg"]
-        if "n_avg" in pars_dict:
-            self.n_avg = pars_dict["n_avg"]
         if "n_seg" in pars_dict:
             self.n_seg = pars_dict["n_seg"]
         if "pretrigger" in pars_dict:
@@ -121,6 +119,11 @@ class SPCM:
             self.pretrigger_in_samples = pars_dict["pretrigger"]
         if "mode" in pars_dict:
             self.mode = pars_dict["mode"]
+        if "n_avg" in pars_dict:
+            n_avg = pars_dict["n_avg"]
+            if (self.mode == SPCM_MODE.AVERAGING) and (n_avg < 4):
+                raise CardError(f"Minimum number of averages: 4; you requested n_avg = {n_avg}")
+            self.n_avg = pars_dict["n_avg"]
         if "trig_source" in pars_dict:
             self.trigger_source = pars_dict["trig_source"]
         if "digitizer_delay" in pars_dict:
@@ -136,7 +139,7 @@ class SPCM:
         # based on duration of the segment requested by user
         # calculates 'self._n_samples_to_drop_in_end'
         # value transfered to device in 'setup' methods below
-        self.calc_segment_size(self.dur_seg)
+        self.calc_segment_size()
 
         if self.mode == SPCM_MODE.STANDARD:
             self.setup_standard_mode()
@@ -249,11 +252,11 @@ class SPCM:
     def setup_block_avg_STD(self, memsize, segmentsize, posttrigger, averages):
         """ Setup Standard Single Acquisition mode with the Block Averaging Module
             Acquire data immediately and save them in Spectrum memory"""
-        if( averages <= 255 ):
+        if averages <= 256:
             # Enables Segment Statistic for standard acquisition 16 bit
             self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE_16BIT)
         else:
-            # Enables Segment Statistic for standard acquisition 16 bit
+            # Enables Segment Statistic for standard acquisition
             self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE)
 
         self.__write_to_reg_32(SPC_AVERAGES, averages)
@@ -385,7 +388,16 @@ class SPCM:
         # TODO: '_bufsize' calculation here can be troubles with
         #  standard mode (this seems to be perfectly valid only for averaging mode)
         #  due to the fact it is multiplied by 4
-        self._bufsize = self.n_seg * self._segment_size * 4 * len(self.channels)  # in bytes
+        mul = None
+        if self.mode == SPCM_MODE.AVERAGING:
+            # 16 bit data mode due to low averaging
+            if self.n_avg <= 256:
+                mul = 2
+            else:
+                mul = 4
+        if self.mode == SPCM_MODE.STANDARD:
+            mul = 1
+        self._bufsize = self.n_seg * self._segment_size * mul * len(self.channels)  # in bytes
 
     def get_how_many_samples_to_drop_in_front(self):
         return self._n_samples_to_drop_by_delay
@@ -498,8 +510,12 @@ class SPCM:
                                M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)  # Start the transfer and wait till it's completed
         self.__write_to_reg_32(SPC_M2CMD, M2CMD_DATA_STOPDMA)  # Explicitly stop DMA transfer
         self.__invalidate_buffer()  # Invalidate the buffer
-        if self.AVG_ON:
-            return np.frombuffer(pcData, dtype=np.int32)
+        if self.mode == SPCM_MODE.AVERAGING:
+            if self.n_avg <= 256:
+                # 16 bit averagin mode
+                return np.frombuffer(pcData, dtype=np.int16)
+            else:
+                return np.frombuffer(pcData, dtype=np.int32)
         else:
             return np.frombuffer(pcData, dtype=np.int8)
 
