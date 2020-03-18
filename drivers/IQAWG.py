@@ -15,13 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# there are functions that are not universal and work only with M3202A  TODO: should have made another class then!
+
 
 from numpy import *
 from lib2.IQPulseSequence import *
-import keysightSD1
-from drivers.keysightM3202A import KeysightM3202A
-# there are functions that are not universal and work only with M3202A
-from drivers.keysightAWG import KeysightAWG
 
 
 class AWGChannel():

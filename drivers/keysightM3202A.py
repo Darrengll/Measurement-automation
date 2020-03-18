@@ -114,8 +114,10 @@ class KeysightM3202A(Instrument):
             trigger duration in ns
             trigger duration resolution is 10 ns
         """
+
         if trig_mode == "ON":
             self.trigger_output = True
+            self.trigger_length = trig_length
         elif trig_mode == "OFF":
             self.trigger_output = False
         else:
@@ -233,7 +235,7 @@ class KeysightM3202A(Instrument):
             arr = np.zeros( int(np.around(trigger_sync_every * self.get_sample_rate())) )
             self._load_array_into_AWG(arr, channel)
             self.setup_modulation_amp(channel, 0)
-            self.trigger_output_config("ON", channel)
+            self.trigger_output_config("ON", channel, trig_length=self.trigger_length)
 
         # resetting phase for synchronization of multiple carrier signals from internal Function Generator
         self.module.channelPhaseResetMultiple(sum([1 << (chan - 1) for chan in self.synchronized_channels]))
@@ -433,7 +435,6 @@ class KeysightM3202A(Instrument):
             self.module.AWGqueueSyncMode(channel - 1, syncMode=self.sync_mode)
             self._handle_error(ret)
         elif (channel in self.synchronized_channels):
-            print("synch channels")
             channels_mask = 0
             for chan in self.synchronized_channels:
                 channels_mask += 1 << (chan - 1)

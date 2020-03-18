@@ -372,8 +372,8 @@ class SPCM:
         self._trigger_mode = mode
 
     def setup_ext0_trigger(self):
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 500)  # 0-level is < 1000 mV
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 700)  # 1-level is > 2000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, 1000)  # 0-level is < 1000 mV
+        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, 1500)  # 1-level is > 2000 mV
         self.__write_to_reg_32(SPC_TRIG_EXT0_MODE,
                                self._trigger_mode)  # trigger on the rising edge (voltage crosses 0-level barrier)
         self.__write_to_reg_32(SPC_TRIG_ORMASK, SPC_TMASK_EXT0)  # Enable the external trigger
@@ -394,7 +394,6 @@ class SPCM:
 
     def wait_for_card(self):
         """Wait until the card completes the current run"""
-        self.set_timeout(0)
         try:
             self.__handle_timeout(
                 self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)  # Wait till the card completes the current run
