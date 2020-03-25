@@ -45,6 +45,8 @@ class Tektronix_AWG5014(Instrument):
     4) Add 4-channel compatibility
     """
 
+    MAX_OUTPUT_VOLTAGE = 1
+
     def __init__(self, address, reset=False, clock=1e9, nop=1000, marker_enob=10):
         """
         Initializes the AWG520.
@@ -79,6 +81,12 @@ class Tektronix_AWG5014(Instrument):
             self.get_marker_voltages(i)
         for i in range(1, 5):
             self.set_amplitude(2, i)
+
+    def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution,
+                               channel, asynchronous=False, trigger_sync_every=None):
+        n_points = np.around(1 / frequency / waveform_resolution * 1e9) + 1 if frequency != 0 else 3
+        waveform = amplitude * np.sin(2 * np.pi * np.linspace(0, 1, n_points) + phase) + offset
+        self.output_arbitrary_waveform(waveform, frequency, channel, asynchronous=asynchronous)
 
     def output_arbitrary_waveform(self, waveform, repetition_rate,
                                   channel, asynchronous=True):

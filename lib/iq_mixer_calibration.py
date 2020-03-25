@@ -102,8 +102,9 @@ class IQCalibrator():
         self._iterations = 0
         self._optimized_awg_calls = optimized_awg_calls
 
-    def calibrate(self, lo_frequency, if_frequency, lo_power, ssb_power, waveform_resolution=1, initial_guess=None,
-                sa_res_bandwidth=500, iterations=5, minimize_iterlimit=20):
+    def calibrate(self, lo_frequency, if_frequency, lo_power, ssb_power,
+                  waveform_resolution=1, initial_guess=None,
+                  sa_res_bandwidth=500, iterations=5, minimize_iterlimit=20):
         """
         Perform the calibration routine to suppress LO and upper sideband LO+IF
          while maintaining the lower sideband at ssb_power.
@@ -204,29 +205,20 @@ class IQCalibrator():
             self._sa.prepare_for_stb();self._sa.sweep_single();self._sa.wait_for_stb()
             data = self._sa.get_tracedata()
 
-            diff_rect = 0.2*self._iqawg.MAX_OUTPUT_VOLTAGE
-            amp_rect = 0.9*self._iqawg.MAX_OUTPUT_VOLTAGE
+            loss_value_amp = 0
+            for i,psd in enumerate(data):
+                if i != self._target_freq_idx:
+                    # value = abs((self._target_freq_idx-i))**(-1.8)*10**(psd/10)
+                    value = 10**((psd-ssb_power)/10)
+                    loss_value_amp += value
 
-            answer = None
-            if (abs(abs(amp1)-abs(amp2)) < diff_rect) and (abs(amp1) < amp_rect) and (abs(amp1) < amp_rect):
-                loss_value_amp = 0
-                for i,psd in enumerate(data):
-                    if i != self._target_freq_idx:
-                        value = abs((self._target_freq_idx-i))**(-1.8)*10**(psd/10)
-                        loss_value_amp += value
-
-                answer = 50e3*loss_value_amp \
-                        + 10*(abs(ssb_power - data[self._target_freq_idx]))
-            else:
-                restriction = 0
-                if abs(amp1) >= amp_rect:
-                    restriction += 10**(10*abs(amp1))
-                if abs(amp2) >= amp_rect:
-                    restriction += 10**(10*abs(amp2))
-                answer = 10**(10*abs(abs(amp1)-abs(amp2))) + restriction
+            if_amplitude_difference_loss = (abs(amp1-amp2)*50 if abs(amp1-amp2) > 0.01 else 0)
+            answer = loss_value_amp \
+                    + 10**(abs(ssb_power - data[self._target_freq_idx])/10)*10 \
+                    + if_amplitude_difference_loss
 
             print("\rAmplitudes: ", format_number_list(if_amplitudes), format_number_list(data),
-                  "loss:", answer,
+                  "loss:", answer, "IF IQ amplitude difference loss:", if_amplitude_difference_loss,
                   end="          ", flush=True)
             clear_output(wait=True)
             return answer
@@ -244,6 +236,11 @@ class IQCalibrator():
             answer = 25e3*sum(np.array(
                 [abs((self._target_freq_idx-i))**(-1.8)*10**(psd/10) for i, psd in enumerate(data) if i != self._target_freq_idx])
             ) + 10**(abs(ssb_power - data[self._target_freq_idx])/10)
+
+            if self._sideband_to_maintain == "right":
+                answer = -data[self._target_freq_idx] + data[self._target_freq_idx-2]
+            else:
+                answer = -data[self._target_freq_idx] + data[self._target_freq_idx+2]
 
             print("\rPhase: ", "%3.2f" % (phase / pi * 180), format_number_list(data),
                   "loss:", answer,

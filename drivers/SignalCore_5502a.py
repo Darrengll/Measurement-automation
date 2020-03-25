@@ -7,6 +7,19 @@ MAXDESCRIPTORSIZE = 9
 
 class SignalCore_5502a():
 
+
+    def __init__(self):
+
+        self.search()
+        self.open()
+
+        self._ext_ref_lock = 1
+        self._ext_ref_output = 1
+        self._ext_ref_100Mhz = 0
+        self._pxi_10MHz_ref_output = 0
+
+        self.set_ext_reference_lock(True)
+
     def search(self):
 
         self._lib = WinDLL('C:/Program Files/SignalCore/SC5502A/api/c/lib/x64/sc5502a.dll')
@@ -98,8 +111,25 @@ class SignalCore_5502a():
         else:
             raise ValueError("state can be either True of False")
 
+        self._ext_ref_output = state
         self._lib.sc5502a_SetClockReference(self._handle,
-                                            c_uint8(0),
-                                            val,
-                                            c_uint8(0),
-                                            c_uint8(0))
+                                            self._ext_ref_lock,
+                                            self._ext_ref_output,
+                                            self._ext_ref_100Mhz,
+                                            self._pxi_10MHz_ref_output)
+
+    def set_ext_reference_lock(self, state):
+
+        if state is True:
+            val = c_uint8(1)
+        elif state is False:
+            val = c_uint8(0)
+        else:
+            raise ValueError("state can be either True of False")
+
+        self._ext_ref_lock = state
+        self._lib.sc5502a_SetClockReference(self._handle,
+                                            self._ext_ref_lock,
+                                            self._ext_ref_output,
+                                            self._ext_ref_100Mhz,
+                                            self._pxi_10MHz_ref_output)

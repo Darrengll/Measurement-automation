@@ -468,6 +468,18 @@ class SD_Module(SD_Object) :
 
 		return result;
 
+	def getTemperature(self) :
+		if self._SD_Object__handle > 0 :
+			self._SD_Object__core_dll.SD_Module_getTemperature.restype = c_double;
+			result = self._SD_Object__core_dll.SD_Module_getTemperature(self._SD_Object__handle);
+
+			if result < 0 :
+				return int(result);
+			else :
+				return result;
+		else :
+			return SD_Error.MODULE_NOT_OPENED;
+
 	##HVI Registers
 	def readRegisterByNumber(self, regNumber) :
 		varValue = 0;
@@ -690,8 +702,6 @@ class SD_Module(SD_Object) :
 			return SD_Error.MODULE_NOT_OPENED;
 
 class SD_AOU(SD_Module):
-
-
 	def clockGetFrequency(self) :
 		if self._SD_Object__handle > 0 :
 			self._SD_Object__core_dll.SD_AOU_clockGetFrequency.restype = c_double;
@@ -855,7 +865,7 @@ class SD_AOU(SD_Module):
 	def waveformLoadInt16(self, waveformType, dataRaw, waveformNumber, paddingMode = 0) :
 		if self._SD_Object__handle > 0 :
 			if len(dataRaw) > 0 :
-				dataC = (c_double * len(dataRaw))(*dataRaw);
+				dataC = (c_short * len(dataRaw))(*dataRaw);
 				return self._SD_Object__core_dll.SD_AOU_waveformLoadArrayInt16(self._SD_Object__handle, waveformType, dataC._length_, dataC, waveformNumber, paddingMode);
 			else :
 				return SD_Error.INVALID_VALUE;
@@ -1292,10 +1302,12 @@ class SD_DIO(SD_Module) :
 			if nPoints > 0 :
 				data = (c_short * nPoints)()
 
-				nPoints = self._SD_Object__core_dll.SD_DIO_DAQread(self._SD_Object__handle, nDAQ, data, nPoints, timeOut)
+				nPointsOrError = self._SD_Object__core_dll.SD_DIO_DAQread(self._SD_Object__handle, nDAQ, data, nPoints, timeOut)
 
-				if nPoints > 0 :
-					return np.array(cast(data, POINTER(c_short*nPoints)).contents)
+				if nPointsOrError > 0 :
+					return np.array(cast(data, POINTER(c_short*nPointsOrError)).contents)
+				elif nPointsOrError < 0 :
+					return nPointsOrError
 				else :
 					return np.empty(0, dtype=np.short)
 			else :
@@ -1664,10 +1676,12 @@ class SD_AIN(SD_Module) :
 			if nPoints > 0 :
 				data = (c_short * nPoints)()
 
-				nPoints = self._SD_Object__core_dll.SD_AIN_DAQread(self._SD_Object__handle, nDAQ, data, nPoints, timeOut)
+				nPointsOrError = self._SD_Object__core_dll.SD_AIN_DAQread(self._SD_Object__handle, nDAQ, data, nPoints, timeOut)
 
-				if nPoints > 0 :
-					return np.array(cast(data, POINTER(c_short*nPoints)).contents)
+				if nPointsOrError > 0 :
+					return np.array(cast(data, POINTER(c_short*nPointsOrError)).contents)
+				elif nPointsOrError < 0 :
+					return nPointsOrError
 				else :
 					return np.empty(0, dtype=np.short)
 			else :
@@ -1778,7 +1792,7 @@ class SD_HVI(SD_Object) :
 		if self._SD_Object__handle > 0 :
 			self._SD_Object__handle = self._SD_Object__core_dll.SD_HVI_close(self._SD_Object__handle);
 
-		return self._SD_Object__core_dll;
+		return self._SD_Object__handle;
 
 	def getType(self) :
 		return SD_Object_Type.HVI;
@@ -1843,6 +1857,18 @@ class SD_HVI(SD_Object) :
 		else :
 			return SD_Error.HVI_NOT_OPENED;
 
+	def removeModuleWithIndex(self, index) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_HVI_removeModuleWithIndex(self._SD_Object__handle, index);
+		else :
+			return SD_Error.HVI_NOT_OPENED;
+
+	def removeModuleWithUserName(self, moduleUserName) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_HVI_removeModuleWithUserName(self._SD_Object__handle, moduleUserName.encode());
+		else :
+			return SD_Error.HVI_NOT_OPENED;
+
 	def start(self) :
 		if self._SD_Object__handle > 0 :
 			return self._SD_Object__core_dll.SD_HVI_start(self._SD_Object__handle);
@@ -1870,6 +1896,30 @@ class SD_HVI(SD_Object) :
 	def reset(self) :
 		if self._SD_Object__handle > 0 :
 			return self._SD_Object__core_dll.SD_HVI_reset(self._SD_Object__handle);
+		else :
+			return SD_Error.HVI_NOT_OPENED;
+
+	def releaseHW(self) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_HVI_releaseHW(self._SD_Object__handle);
+		else :
+			return SD_Error.HVI_NOT_OPENED;
+
+	def assignTriggers(self, triggerMask) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_HVI_assignTriggers(self._SD_Object__handle, triggerMask);
+		else :
+			return SD_Error.HVI_NOT_OPENED;
+
+	def getTriggersAssigned(self) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_HVI_getTriggersAssigned(self._SD_Object__handle);
+		else :
+			return SD_Error.HVI_NOT_OPENED;
+
+	def isTriggerAssigned(self, trigger) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_HVI_isTriggerAssigned(self._SD_Object__handle, trigger);
 		else :
 			return SD_Error.HVI_NOT_OPENED;
 
