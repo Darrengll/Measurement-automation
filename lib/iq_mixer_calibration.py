@@ -205,31 +205,20 @@ class IQCalibrator():
             self._sa.prepare_for_stb();self._sa.sweep_single();self._sa.wait_for_stb()
             data = self._sa.get_tracedata()
 
-            diff_rect = 0.1*self._iqawg.MAX_OUTPUT_VOLTAGE
-            amp_rect = 0.9*self._iqawg.MAX_OUTPUT_VOLTAGE
+            loss_value_amp = 0
+            for i,psd in enumerate(data):
+                if i != self._target_freq_idx:
+                    # value = abs((self._target_freq_idx-i))**(-1.8)*10**(psd/10)
+                    value = 10**((psd-ssb_power)/10)
+                    loss_value_amp += value
 
-            answer = None
-            if (abs(abs(amp1)-abs(amp2)) < diff_rect) and (abs(amp1) < amp_rect) and (abs(amp1) < amp_rect):
-                loss_value_amp = 0
-                for i,psd in enumerate(data):
-                    if i != self._target_freq_idx:
-                        # value = abs((self._target_freq_idx-i))**(-1.8)*10**(psd/10)
-                        value = 10**((psd-ssb_power)/10)
-                        loss_value_amp += value
-
-                answer = loss_value_amp \
-                        + 10**(abs(ssb_power - data[self._target_freq_idx])*10/10) \
-                        + (abs(amp1-amp2)/10 if abs(amp1-amp2) > 0.02 else 0)
-            else:
-                restriction = 0
-                if abs(amp1) >= amp_rect:
-                    restriction += 10**(10*abs(amp1))
-                if abs(amp2) >= amp_rect:
-                    restriction += 10**(10*abs(amp2))
-                answer = 10**(10*abs(abs(amp1)-abs(amp2))) + restriction
+            if_amplitude_difference_loss = (abs(amp1-amp2)*50 if abs(amp1-amp2) > 0.01 else 0)
+            answer = loss_value_amp \
+                    + 10**(abs(ssb_power - data[self._target_freq_idx])/10)*10 \
+                    + if_amplitude_difference_loss
 
             print("\rAmplitudes: ", format_number_list(if_amplitudes), format_number_list(data),
-                  "loss:", answer,
+                  "loss:", answer, "IF IQ amplitude difference loss:", if_amplitude_difference_loss,
                   end="          ", flush=True)
             clear_output(wait=True)
             return answer
