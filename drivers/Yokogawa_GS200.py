@@ -112,8 +112,7 @@ class Yokogawa_GS210(Instrument):
         else:
             # if (self._mincurrent <= current <= self._maxcurrent):
             self._visainstrument.write("SOUR:LEVEL %e"%current)
-            time.sleep(0.1)
-            sys.stdout.flush()
+            self._visainstrument.query("*OPC?")
             # else:
                 # print("Error: current limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
 
