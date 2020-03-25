@@ -45,6 +45,7 @@ class KeysightM3202A(Instrument):
         self._update_dependent_on_start = False
 
         self._prescaler = 0
+        self.trigger_length = 100  # ns
 
         self.clear()  # clear internal memory and AWG queues according to p.67 of the user guide
 
@@ -197,11 +198,17 @@ class KeysightM3202A(Instrument):
         # starting operation
         self.start_AWG(channel)
 
-    def output_continuous_wave_old(self, frequency, amplitude, phase, offset, waveform_resolution,
+    def output_continuous_wave_old(self, frequency, amplitude, phase, offset,
+                                   waveform_resolution,
                                    channel, asynchronous=False):
         n_points = np.around(1 / frequency / waveform_resolution * 1e9) + 1 if frequency != 0 else 3
         waveform = amplitude * np.sin(2 * np.pi * np.linspace(0, 1, n_points) + phase) + offset
         self.output_arbitrary_waveform(waveform, frequency, channel, asynchronous=asynchronous)
+
+
+    def reset_phase(self):
+        self.module.channelPhaseResetMultiple(sum([1 << (chan - 1) for chan in self.synchronized_channels]))
+
 
     def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution,
                                channel, asynchronous=False, trigger_sync_every=None):
@@ -335,8 +342,8 @@ class KeysightM3202A(Instrument):
         # interpolating input waveform to the next step
         # that rescales waveform to fit frequency
         interpolation_method = "cubic" if frequency != 0 else "linear"
-        old_x = np.linspace(0, duration_initial, len(waveform))
-        f_wave = interp1d(old_x, waveform, kind=interpolation_method)
+        old_x = np.linspace(0, duration_initial, len(waveform)+1)
+        f_wave = interp1d(old_x, np.concatenate((waveform, [waveform[0]])), kind=interpolation_method)
 
         # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
         # but to provide frequency accuracy, we are sampling from
