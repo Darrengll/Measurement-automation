@@ -29,8 +29,25 @@ class FastTwoToneSpectroscopyBase(Measurement):
 
         self._measurement_result = TwoToneSpectroscopyResult(name, sample_name)
         self._interrupted = False
-        self._base_parameter_setter = None
+        self._base_parameter_setter = None  # set function that is used to set sweep parameter
         self._last_resonator_result = None
+        self._frequencies = None
+        # frequencies are no longer in self._swept_pars
+        # sweep over frequencies is provided automatically through
+        # trigger settings of the mw_src -> there is no need to call
+        # mw_src.set_frequency() setter and cycle through frequency parameters
+        # in Measurement._record_data()
+        # but it is still swept parameter in some sense.
+        # TODO: I propose following solution
+        # We should implement the following mechanics:
+        # Whenever this happens: some parameters are swept automatically and they are part of the
+        # visualization process.
+        #  We should just modify Measurement._record_data() in order to
+        # be able to determine such situation and skip cycling through this parameters,
+        # maybe by some additional parameter like swept_automatically=["par_name1",...,"par_nameN"]
+        # or maybe by implementing trigger interface in all device classes that could be triggered by
+        # external hardware signal and those who can trigger other devices. This is simple class with 2
+        # attributes at most. The deal is to verify a consistency of the idea before starting actual coding
 
         if flux_control_type is FluxControlType.CURRENT:
             self._base_parameter_setter = self._current_src[0].set_current
@@ -63,12 +80,13 @@ class FastTwoToneSpectroscopyBase(Measurement):
         if flux_control_parameter is not None:
             self._base_parameter_setter(flux_control_parameter)
 
+        
         if detect_resonator:
             self._mw_src[0].set_output_state("OFF")
             msg = "Detecting a resonator within provided frequency range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
-            # print(msg , flush=True)
             print(msg + self._info_suffix % flux_control_parameter, flush=True)
+
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
             print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
                 res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
@@ -79,40 +97,15 @@ class FastTwoToneSpectroscopyBase(Measurement):
 
         super().set_fixed_parameters(vna=dev_params['vna'], mw_src=dev_params['mw_src'])
 
-    def _prepare_measurement_result_data(self, parameter_names, parameters_values):
-        measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
-        measurement_data["Frequency [Hz]"] = self._frequencies
-        return measurement_data
+    def set_swept_parameters(self, **swept_pars):
+        setter_function = self._adaptive_setter if self._adaptive else self._base_setter
 
-    def _detect_resonator(self, vna_parameters, plot=True):
+        for swept_par in swept_pars.keys():  # only 1 parameter here
+            swept_pars[swept_par][0] = setter_function
 
-        self._vna[0].set_nop(100)
-        self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
-        if "res_find_power" in vna_parameters.keys():
-            self._vna[0].set_power(vna_parameters["res_find_power"])
-        else:
-            self._vna[0].set_power(vna_parameters["power"])
-        if "res_find_nop" in vna_parameters.keys():
-            self._vna[0].set_nop(vna_parameters["res_find_nop"])
-        else:
-            self._vna[0].set_nop(vna_parameters["nop"])
-        self._vna[0].set_bandwidth(vna_parameters["resonator_detection_bandwidth"])
-        self._vna[0].set_averages(vna_parameters["averages"])
-        result = super()._detect_resonator(plot)
-        self._vna[0].do_set_power(vna_parameters["power"])
-        self._vna[0].do_set_power(vna_parameters["nop"])
-        return result
+        super().set_swept_parameters(**swept_pars)
 
-    def _recording_iteration(self):
-        vna = self._vna[0]
-        vna.avg_clear()
-        vna.prepare_for_stb()
-        vna.sweep_single()
-        vna.wait_for_stb()
-        data = vna.get_sdata()
-        return data
-
-    def _triggering_setter(self, value):
+    def _base_setter(self, value):
         self._base_parameter_setter(value)
         self._mw_src[0].send_sweep_trigger()  # telling mw_src to be ready to start
 
@@ -134,18 +127,49 @@ class FastTwoToneSpectroscopyBase(Measurement):
                 print("no successful fit is present, terminating")
                 return None
             else:
-                res_result = self._last_resonator_result
+                res_freq, res_amp, res_phase = self._last_resonator_result
         else:
             self._last_resonator_result = res_result
-
-        res_freq, res_amp, res_phase = self._last_resonator_result
+            res_freq, res_amp, res_phase = self._last_resonator_result
 
         # print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
         #            degrees"%(res_freq/1e9, res_amp*1e3, res_phase/pi*180), end="")
         self._mw_src[0].set_output_state("ON")
         vna_parameters["freq_limits"] = (res_freq, res_freq)
-        self._vna[0].set_parameters(vna_parameters)
+        self._vna[0].set_parameters(vna_parameters)  # set new freq_limits
         self._mw_src[0].send_sweep_trigger()  # telling mw_src to be ready to start
+
+    def _prepare_measurement_result_data(self, parameter_names, parameters_values):
+        measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
+        measurement_data["Frequency [Hz]"] = self._frequencies
+        return measurement_data
+
+    def _detect_resonator(self, vna_parameters, plot=True):
+
+        self._vna[0].set_nop(100)
+        self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
+        if "res_find_power" in vna_parameters.keys():
+            self._vna[0].set_power(vna_parameters["res_find_power"])
+        else:
+            self._vna[0].set_power(vna_parameters["power"])
+        if "res_find_nop" in vna_parameters.keys():
+            self._vna[0].set_nop(vna_parameters["res_find_nop"])
+        else:
+            self._vna[0].set_nop(vna_parameters["nop"])
+        self._vna[0].set_bandwidth(vna_parameters["resonator_detection_bandwidth"])
+        self._vna[0].set_averages(vna_parameters["averages"])
+        result = super()._detect_resonator(plot)
+        self._vna[0].set_parameters(vna_parameters)  # restore initial parameters values
+        return result
+
+    def _recording_iteration(self):
+        vna = self._vna[0]
+        vna.avg_clear()
+        vna.prepare_for_stb()
+        vna.sweep_single()
+        vna.wait_for_stb()
+        data = vna.get_sdata()
+        return data
 
 
 class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
@@ -217,4 +241,4 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
     def _prepare_data_for_plot(self, data):
         s_data = data["data"]
         parameter_list = data[self._parameter_names[0]]
-        return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
+        return [parameter_list, data["Frequency [Hz]"] / 1e9, s_data]

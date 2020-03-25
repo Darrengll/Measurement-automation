@@ -9,18 +9,25 @@ class ZPulseProfileScan(VNATimeResolvedDispersiveMeasurement2D):
         self._sequence_generator = \
             IQPulseBuilder.build_z_pulse_profile_scan_sequence
 
-    def set_fixed_parameters(self, pulse_sequence_parameters, **dev_params):
-        super().set_fixed_parameters(pulse_sequence_parameters, **dev_params)
 
     def set_swept_parameters(self, pi_pulse_delays, excitation_freqs):
-        q_if_frequency = self._q_awg.get_calibration() \
+
+        m = None
+        if self._fixed_pars["q_awg"][0]["calibration"]._sideband_to_maintain == "left":
+            m = 1
+        elif self._fixed_pars["q_awg"][0]["calibration"]._sideband_to_maintain == "right":
+            m = -1
+        if_frequency = self._fixed_pars["q_awg"][0]["calibration"]._if_frequency
+        def set_lo_freq(excitation_freq):
+            return self._q_lo[0].set_frequency(excitation_freq + m*if_frequency)
+
+        q_if_frequency = self._q_awg[0].get_calibration() \
             .get_radiation_parameters()["if_frequency"]
         swept_pars = {"pi_pulse_delay":
                           (self._set_pi_pulse_delay_and_output,
                            pi_pulse_delays),
                       "excitation_frequency":
-                          (lambda x: self._q_lo.set_frequency(x + q_if_frequency),
-                           excitation_freqs)}
+                          (set_lo_freq, excitation_freqs)}
         super().set_swept_parameters(**swept_pars)
 
     def _set_pi_pulse_delay_and_output(self, pi_pulse_delay):

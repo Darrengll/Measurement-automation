@@ -28,7 +28,7 @@ class Agilent_EXA_N9010A(Instrument):
 
         self._address = address
         rm = visa.ResourceManager()
-        self._visainstrument = rm.open_resource(self._address, timeout = 10000)# no term_chars for GPIB!!!!!
+        self._visainstrument = rm.open_resource(self._address, timeout=10000)# no term_chars for GPIB!!!!!
         self._freqpoints = 0
         self._zerospan=False
         self._list_sweep = False
@@ -37,7 +37,7 @@ class Agilent_EXA_N9010A(Instrument):
         self._stop = 0
         self._nop = 0
 
-        self._visainstrument.timeout = 1000
+        self._visainstrument.timeout = None
 
         # Implement parameters
 
@@ -192,11 +192,11 @@ class Agilent_EXA_N9010A(Instrument):
 
     def avg_status(self):
         # this does not work the same way than the VNA:
-        #return int(self._visainstrument.ask(':SENS%i:AVER:COUN?' %(self._ci))
+        #return int(self._visainstrument.query(':SENS%i:AVER:COUN?' %(self._ci))
         pass
 
     def get_avg_status(self):
-        return self._visainstrument.ask('STAT:OPER:AVER1:COND?')
+        return self._visainstrument.query('STAT:OPER:AVER1:COND?')
 
     def still_avg(self):
         if int(self.get_avg_status()) == 1: return True
@@ -211,7 +211,7 @@ class Agilent_EXA_N9010A(Instrument):
         """
         self._visainstrument.write(":FORMat:DATA REAL,32")
         self._visainstrument.write(":FORMat:BORDer SWAP")
-        data = self._visainstrument.ask_for_values(":CALC:DATA1?")
+        data = self._visainstrument.query_binary_values(":CALC:DATA1?")
 
         if self._list_sweep:
             return data
@@ -254,7 +254,7 @@ class Agilent_EXA_N9010A(Instrument):
             out: float
                 time in ms
         """
-        return float(self._visainstrument.ask(':SENS%i:SWE:TIME?' %(self._ci)))*1e3
+        return float(self._visainstrument.query(':SENS%i:SWE:TIME?' %(self._ci)))*1e3
     ###
     # SET and GET functions
     ###
@@ -285,7 +285,7 @@ class Agilent_EXA_N9010A(Instrument):
         if self._zerospan:
           return 1
         else:
-            self._nop = int(self._visainstrument.ask(':SENS%i:SWE:POIN?' %(self._ci)))
+            self._nop = int(self._visainstrument.query(':SENS%i:SWE:POIN?' %(self._ci)))
         return self._nop
 
     def do_set_average(self, status):
@@ -313,7 +313,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             Status of Averaging ('on' or 'off) (string)
         """
-        return bool(int(self._visainstrument.ask(":AVERage:STAT?")))
+        return bool(int(self._visainstrument.query(":AVERage:STAT?")))
 
     def do_set_averages(self, av):
         """
@@ -344,8 +344,7 @@ class Agilent_EXA_N9010A(Instrument):
         """
         return self._visainstrument.query(":OBWidth:AVERage:COUNt?")
 
-
-    def do_set_centerfreq(self,cf):
+    def do_set_centerfreq(self, cf):
         """
         Set the center frequency
 
@@ -359,6 +358,7 @@ class Agilent_EXA_N9010A(Instrument):
         self.get_startfreq();
         self.get_stopfreq();
         self.get_span();
+
     def do_get_centerfreq(self):
         """
         Get the center frequency
@@ -369,7 +369,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             cf (float) :Center Frequency in Hz
         """
-        return  float(self._visainstrument.ask('SENS%i:FREQ:CENT?'%(self._ci)))
+        return  float(self._visainstrument.query('SENS%i:FREQ:CENT?'%(self._ci)))
 
     def do_set_span(self,span):
         """
@@ -402,7 +402,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             span (float) : Span in Hz
         """
-        span = self._visainstrument.ask('SENS%i:FREQ:SPAN?' % (self._ci) ) #float( self.ask('SENS1:FREQ:SPAN?'))
+        span = self._visainstrument.query('SENS%i:FREQ:SPAN?' % (self._ci) ) #float( self.query('SENS1:FREQ:SPAN?'))
         return span
 
     def setup_list_sweep(self, frequency_list, rbw_list):
@@ -451,7 +451,6 @@ class Agilent_EXA_N9010A(Instrument):
         self.do_set_nop(nop)
         self.do_set_bandwidth(rbw)
 
-
     def sweep_single(self):
         """
         Sweep single
@@ -459,7 +458,6 @@ class Agilent_EXA_N9010A(Instrument):
         self.init()
         #self.write("SENSe{0}:SWEep:MODE SINGle".format(self.current_channel))
         #self.write("SENS%i:SWE:MODE SING"%(self._ci))
-
 
     def get_averaging_setup(self):
         return self._visainstrument.query("CHP:AVER:TCON?")[:-1]
@@ -503,7 +501,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             span (float) : Start Frequency in Hz
         """
-        self._start = float(self._visainstrument.ask('SENS%i:FREQ:STAR?' % (self._ci)))
+        self._start = float(self._visainstrument.query('SENS%i:FREQ:STAR?' % (self._ci)))
         return  self._start
 
     def do_set_stopfreq(self,val):
@@ -532,7 +530,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             val (float) : Start Frequency in Hz
         """
-        self._stop = float(self._visainstrument.ask('SENS%i:FREQ:STOP?' %(self._ci) ))
+        self._stop = float(self._visainstrument.query('SENS%i:FREQ:STOP?' %(self._ci) ))
         return  self._stop
 
     def do_set_bandwidth(self,band):
@@ -558,7 +556,7 @@ class Agilent_EXA_N9010A(Instrument):
             band (float) : Bandwidth in Hz
         """
         # getting value from instrument
-        return  float(self._visainstrument.ask('SENS%i:BWID:RES?'%self._ci))
+        return  float(self._visainstrument.query('SENS%i:BWID:RES?'%self._ci))
 
     def do_set_zerospan(self,val):
         self._zerospan=val
@@ -600,7 +598,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             source (string) : AUTO | MANual | EXTernal | REMote
         """
-        return self._visainstrument.ask('TRIG:SOUR?')
+        return self._visainstrument.query('TRIG:SOUR?')
 
 
     def do_set_channel_index(self,val):
@@ -666,8 +664,8 @@ class Agilent_EXA_N9010A(Instrument):
         return self._visainstrument.read()
     def write(self,msg):
         return self._visainstrument.write(msg)
-    def ask(self,msg):
-        return self._visainstrument.ask(msg)
+    def query(self,msg):
+        return self._visainstrument.query(msg)
 
 def create_window(self,ON=True):
     if(ON):

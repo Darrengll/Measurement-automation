@@ -3,8 +3,7 @@ from lib2.VNATimeResolvedDispersiveMeasurement2D import *
 
 class VacuumRabiOscillations2D(VNATimeResolvedDispersiveMeasurement2D):
 
-    def __init__(self, name, sample_name,
-                 plot_update_interval=1, **devs_aliases_map):
+    def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
         self._measurement_result = VacuumRabiOscillations2DResult(name,
                                                                   sample_name)
@@ -12,12 +11,9 @@ class VacuumRabiOscillations2D(VNATimeResolvedDispersiveMeasurement2D):
             IQPulseBuilder.build_vacuum_rabi_oscillations_sequences
 
     def set_fixed_parameters(self, pulse_sequence_parameters, **dev_params):
-
         super().set_fixed_parameters(pulse_sequence_parameters, **dev_params)
 
     def set_swept_parameters(self, z_pulse_offset_voltages, interaction_durations):
-        q_if_frequency = self._q_awg.get_calibration() \
-            .get_radiation_parameters()["if_frequency"]
         swept_pars = {"z_pulse_offset_voltage": \
                           (self._set_z_pulse_offset_voltage,
                            z_pulse_offset_voltages),

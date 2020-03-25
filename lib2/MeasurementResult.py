@@ -1,10 +1,11 @@
 import fnmatch
 import os
 import pickle
+import matplotlib.figure, matplotlib.axes
+import platform
 import traceback
 from datetime import datetime
 from threading import Lock
-
 from IPython.display import clear_output
 import matplotlib
 from matplotlib import animation, pyplot as plt
@@ -12,8 +13,8 @@ from matplotlib._pylab_helpers import Gcf
 from numpy import array, where
 import copy
 import shutil
-
 import locale
+locale.setlocale(locale.LC_TIME, "C")
 
 def find(pattern, path):
     result = []
@@ -50,14 +51,23 @@ class MeasurementResult:
         self._data_lock = Lock()
         self._data = {}
         self._context = ContextBase()
-
         self._parameter_names = None
+
+        self._is_finished = False
 
         # visualization fields, see _prepare_figure(...) docstring below
         self._figure = None  # the figure that will be dynamically updated
         self._axes = None  # axes of the subplots contained inside it
         self._caxes = None  # colorbar axes for heatmaps
         self._anim = None
+
+        # here stored objects that may have methods 'set_data'
+        # like those returned by ax.scatter(..)
+        self._lines = []
+
+        # iteration index from main loop that indicates the last
+        # valiable data index stored into 'self._data["data"]'
+        self._iter_idx_ready = None
 
         self._exception_info = None
 
@@ -220,8 +230,7 @@ class MeasurementResult:
 
     def visualize(self, maximized=True):
         """
-        Generates the required plots to visualize the measurement result. Should
-        be implemented for each subclass.
+        Generates the required plots to visualize the measurement result.
         """
         fig, axes, caxes = self._prepare_figure()
         self._figure = fig
@@ -276,18 +285,46 @@ class MeasurementResult:
         This method must be implemented for each new measurement type.
 
         See lib2.SingleToneSpectroscopy.py for an example implementation
-        Should return:
-        figure: matplotlib figure
-            figure window
-        axes: array of matplotlib.Axes objects
-            axes of the subplots contained inside the figure
-        caxes: array of colorbar axes
-            these axes are obtained by calling matplotlib.colorbar.make_axes(ax)
-            and then may be used to updated colorbars for each subplot
+
+        Returns
+        ------------
+        Tuple[matplotlib.figure.Figure, Tuple[matplotlib.axes.Axes], Tuple[matplotlib.axes.Axes]]
+            Return tuple with (fig, axes, caxes)
+            caxes is Tuple[Axes] that are suitable for colorbars
+
+        Examples
+        ------------------------
+        # waveMixing.py, waveMixingResult.
+            def _prepare_figure2D_re_n_im(self):
+                self._last_tr = None
+                self._peaks_last_tr = None
+                fig = plt.figure(figsize=(17, 8))
+                ax_trace = plt.subplot2grid((4, 2), (0, 0), colspan=2, rowspan=1)
+                ax_map_re = plt.subplot2grid((4, 2), (1, 0), colspan=1, rowspan=3)
+                ax_map_im = plt.subplot2grid((4, 2), (1, 1), colspan=1, rowspan=3)
+
+                ax_trace.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                ax_trace.set_xlabel("Frequency, Hz")
+                ax_trace.set_ylabel("power, dB")
+
+                ax_map_re.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                ax_map_re.set_ylabel(self._parameter_names[1].upper())
+                ax_map_re.set_xlabel(self._parameter_names[0].upper())
+                ax_map_re.autoscale_view(True, True, True)
+                ax_map_im.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+                ax_map_im.set_xlabel(self._parameter_names[0].upper())
+                ax_map_im.autoscale_view(True, True, True)
+                plt.tight_layout(pad=1, h_pad=2, w_pad=-7)
+                cax_re, kw = colorbar.make_axes(ax_map_re, aspect=40)
+                cax_im, kw = colorbar.make_axes(ax_map_im, aspect=40)
+                ax_map_re.set_title("Real", position=(0.5, -0.05))
+                ax_map_im.set_title("Imaginary", position=(0.5, -0.1))
+                ax_map_re.grid(False)
+                ax_map_im.grid(False)
+                fig.canvas.set_window_title(self._name)
+                return fig, (ax_trace, ax_map_re, ax_map_im), (cax_re, cax_im)
         """
-        fig, axes = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
-        caxes = None
-        return fig, axes, caxes
+        raise NotImplementedError
 
     def _plot(self, data):
         """
@@ -297,8 +334,46 @@ class MeasurementResult:
         should be used here to visualize the data
 
         The data to plot is passed as an argument by FuncAnimation
+
+        Examples
+        ---------------
+        # from VNATimeResolvedDispersiveMeasurement1D.py
+
+        axes = self._axes
+        axes = dict(zip(self._data_formats_used, axes))
+        if "data" not in data.keys():
+            return
+
+        X, Y_raw = self._prepare_data_for_plot(data)
+
+        for idx, name in enumerate(self._data_formats_used):
+            Y = self._data_formats[name][0](Y_raw)
+            Y = Y[Y != 0]
+            ax = axes[name]
+            if self._lines[idx] is None or not self._dynamic:
+                ax.clear()
+                ax.grid()
+                ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+                self._lines[idx], = ax.plot(X[:len(Y)], Y, "C%d" % idx, ls=":", marker="o",
+                                            markerfacecolor='none',
+                                            markersize=self._data_points_marker_size)
+                ax.set_xlim(X[0], X[-1])
+                ax.set_ylabel(self._data_formats[name][1])
+            else:
+                self._lines[idx].set_xdata(X[:len(Y)])
+                self._lines[idx].set_ydata(Y)
+                ax.relim()
+                ax.autoscale_view()
+
+        xlabel = self._parameter_names[0][0].upper() + \
+                 self._parameter_names[0][1:].replace("_", " ") + \
+                 " [%s]" % self._x_axis_units
+
+        axes["imag"].set_xlabel(xlabel)
+        plt.tight_layout(pad=2)
+        self._plot_fit(axes)
         """
-        pass
+        raise NotImplementedError
 
     def finalize(self):
         """

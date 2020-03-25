@@ -63,14 +63,13 @@ class MXG(Instrument):
         if "frequency" in keys:
             self.set_frequency(parameters_dict["frequency"])
 
-        # trigger stuff by Elena
         if "sweep_trg_src" in keys:
             self.set_freq_sweep()
 
         if "frequencies" in keys:
-            self.set_freq_limits(parameters_dict["frequencies"])
-        if "nop" in keys:
-            self.set_nop(parameters_dict["nop"])
+            freqs = parameters_dict["frequencies"]
+            self.set_freq_limits((freqs[0], freqs[-1]))
+            self.set_nop(len(freqs))
 
         if "sweep_trg_src" in keys:
             self.set_sweep_type()
@@ -87,9 +86,7 @@ class MXG(Instrument):
         if "InSweep_trg_src" in keys:
             self.set_InSweep_trg_src(parameters_dict["InSweep_trg_src"])
         if "ext_trig_channel" in keys:
-            self.set_ext_trig_channel(parameters_dict["ext_trig_channel"])
-
-
+            self.set_ext_trig_channel(parameters_dict["ext_trig_channel"])\
 
     def use_internal_clock(self, is_clock_internal):
         if is_clock_internal:
@@ -116,7 +113,7 @@ class MXG(Instrument):
         self.write(":SOURce:FREQuency:CW {0}HZ".format(freq))
 
     def get_frequency(self):
-        bla = 0  # self.read(":SOURce:FREQuency:CW?")
+        bla = self.query(":SOURce:FREQuency:CW?")
         try:
             output = float(bla)
         except:
@@ -125,10 +122,10 @@ class MXG(Instrument):
         return output
 
     def set_power(self, power_dBm):
-        if (power_dBm >= -130) & (power_dBm <= 15):
+        if (power_dBm >= -130) & (power_dBm <= 19):
             self.write(":SOURce:POWer {0}DBM".format(power_dBm))
         else:
-            print("Error: power must be between -130 and 15 dBm")
+            print("Error: power must be between -130 and 19 dBm")
 
     def get_power(self):
         bla = self.query(":SOURce:POWer?")
@@ -155,13 +152,16 @@ class MXG(Instrument):
     def set_single_point(self):
         self.write(":FREQuency:MODE CW")
 
+    def attn_hold_off(self):
+        self.write(":SOUR:POW:ATT:AUTO ON")
+
     def set_sweep_type(self):
         # STEP - interval and number of pts | LIST - list ought to be loaded
         self.write(":LIST:TYPE STEP")
 
-    def set_freq_limits(self, frequencies):
-        self.write(":FREQuency:STARt %f%s" % (frequencies[0], "Hz"))
-        self.write(":FREQuency:STOP %f%s" % (frequencies[-1], "Hz"))
+    def set_freq_limits(self, freq_limits):
+        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz")) # TODO: rename
+        self.write(":FREQuency:STOP %f%s" % (freq_limits[-1], "Hz"))
 
     def do_set_nop(self, nop):
         self.write(":SWEep:POINts %i" % (nop))

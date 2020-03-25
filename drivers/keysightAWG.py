@@ -1,4 +1,4 @@
-# KeysightAWG.py
+# keysightAWG.py
 # Gleb Fedorov <vdrhc@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 
 from drivers.instrument import Instrument
 from numpy import *
+import numpy as np
 import visa
 import types
 import time
@@ -38,7 +39,7 @@ class WaveformType(Enum):
 
 
 class KeysightAWG(Instrument):
-
+    MAX_OUTPUT_VOLTAGE = 1.0  # V
     def __init__(self, address):
         """Create a default Keysight AWG instrument"""
         Instrument.__init__(self, 'AWG', tags=['physical'])
@@ -97,8 +98,65 @@ class KeysightAWG(Instrument):
         self.prepare_waveform(WaveformType.arbitrary, repetition_rate, 2, 0, channel)
         self.set_output(channel, 1)
 
+    def set_trigger(self, trigger_string: str):
+        """
+        trigger_string : string
+           'EXT' - external trigger on the front panel is used as trigger signal source
+           'CONT' - continious output
+        """
+        if( trigger_string == "EXT"):
+            self._visainstrument.write(":ARM:SOUR1 EXT")
+        elif trigger_string == "CONT":
+            self._visainstrument.write(":ARM:SOUR1 IMM")
+
+    def set_ext_trig_level(self, thres):
+        """
+
+        Parameters
+        ----------
+        thres - level in volts
+
+        Returns
+        -------
+        """
+        self._visainstrument.write("ARM:LEV {0:.2f}V".format(thres))
+
+    def trigger_output_config(self, trig_mode):
+        """
+        Manipulates output trigger for AWG 86110A
+        Parameters
+        ----------
+        trig_mode : str
+            "ON" - output syncAB for channel 1
+            "OFF" - no output
+            :OUTput[1|2]:TRIGger:ROUTe[?] {NONE | SYNA | SYNB| SYAB}
+        """
+        if( trig_mode == "ON" ):
+            self._visainstrument.write("OUTP1:TRIG:ROUT SYAB")
+        elif( trig_mode == "OFF" ):
+            self._visainstrument.write("OUTP1:TRIG:ROUT NONE")
+            self._visainstrument.write("OUTP1:STR:ROUT NONE")
+            self._visainstrument.write("OUTP2:TRIG:ROUT NONE")
+            self._visainstrument.write("OUTP2:STR:ROUT NONE")
+
+    def repeat_trigger_as_dummy(self):
+        # only 1 device driver is supporting this since 05.05.2019
+        self.set_trigger("EXT")
+
+        def output_dummy_waveform():
+            # verify that both syncA and syncB output trigger channels
+            # are connected as intended and output tigger option setting
+            # is outputting both triggers at the same time (chan1:syncAB or something like that)
+
+            # big frequency in order to repeat very short trigger sequences
+            big_freq = 250e6
+            self.output_arbitrary_waveform(np.zeros(100), big_freq, 1)
+            self.output_arbitrary_waveform(np.zeros(100), big_freq, 2)
+
+        output_dummy_waveform()
+
     def output_continuous_wave(self, frequency=100e6, amplitude=0.1, phase=0, offset=0, waveform_resolution=1,
-                               channel=1):
+                               channel=1, asynchronous=False):
         """
         Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
 
@@ -121,8 +179,6 @@ class KeysightAWG(Instrument):
         N_points = 1 / frequency / waveform_resolution * 1e9 + 1 if frequency != 0 else 3
         waveform = amplitude * sin(2 * pi * linspace(0, 1, N_points) + phase) + offset
         self.output_arbitrary_waveform(waveform, frequency, channel)
-
-        # Basic low-level functions
 
     def set_channel_coupling(self, state):
         self._visainstrument.write(":TRAC:CHAN1:%s" % ("ON" if state == True else "OFF"))

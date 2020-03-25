@@ -12,3 +12,6 @@ Git token
 spectrum_code
 *.pdf
 *.csv
+*.eps
+*.png
+*.rar

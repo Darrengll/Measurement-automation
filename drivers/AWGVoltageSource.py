@@ -5,6 +5,7 @@ class AWGVoltageSource():
         self._awg = awg
         self._channel_number = channel_number
         self._asynchronous = False
+        self._voltage = None
 
     def set_asynchronous(self, value):
         self._asynchronous = value

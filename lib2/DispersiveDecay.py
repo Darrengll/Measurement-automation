@@ -28,9 +28,12 @@ class DispersiveDecayResult(VNATimeResolvedDispersiveMeasurement1DResult):
         return self._fit_params[2], self._fit_errors[2]
 
     def _generate_fit_arguments(self, x, data):
-        bounds =([-1, -1, 0.1, -1, -1], [1, 1, 100, 1, 1])
+        bounds =([-10, -10, 0.1, -10, -10], [10, 10, 100, 10, 10])
         p0 = [ptp(real(data))/2, ptp(imag(data))/2, 1, min(real(data)), min(imag(data))]
         return p0, bounds
 
     def _generate_annotation_string(self, opt_params, err):
         return "$T_1=%.2f \pm %.2f\mu$s"%(opt_params[2], err[2])
+
+    def get_decay(self):
+        return (self._fit_params[2], self._fit_errors[2])

@@ -51,7 +51,6 @@ class FastPowerTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
     def set_swept_parameters(self, power_values):
         self._base_parameter_setter = self._mw_src[0].set_power
         setter = self._adaptive_setter if self._adaptive else self._triggering_setter
-        # swept_pars = {"Power [dBm]": (self._triggering_setter, power_values)}
         swept_pars = {'Power [dBm]': (setter, power_values)}
         super().set_swept_parameters(**swept_pars)
 
@@ -77,7 +76,8 @@ class FastAcStarkTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
     def set_swept_parameters(self, power_values):
 
         swept_pars = \
-            {"Readout power [dBm]": (self._power_and_averages_setter, power_values)}
+            {"Readout power [dBm]": (self._power_and_averages_setter, power_values),
+             "Frequency [Hz]": (self._mw_src.set_frequency, mw_src_frequencies)}
         super().set_swept_parameters(**swept_pars)
 
     def _power_and_averages_setter(self, power):

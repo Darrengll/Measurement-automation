@@ -43,6 +43,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
                 'q_awg': 0
                 'ro_awg': 0
         """
+
         # TODO check carefully. All single device functions should be deleted?
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
         self._measurement_result.get_context() \
@@ -52,7 +53,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         dev_params['vna'][0]["trigger_type"] = "single"
         freq_limits = dev_params['vna'][0]["freq_limits"]
 
-        if detect_resonator and freq_limits[0] != freq_limits[1]:
+        if detect_resonator and freq_limits[0] != freq_limits[-1]:
             q_z_cal = dev_params['q_z_awg'][0]["calibration"] if \
                 'q_z_awg' in dev_params.keys() else None
             res_freq = self._detect_resonator(dev_params['vna'][0],
@@ -64,23 +65,27 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         super().set_fixed_parameters(**dev_params)
 
     def set_basis(self, basis):
-        d_real = abs(real(basis[0] - basis[1]))
-        d_imag = abs(imag(basis[0] - basis[1]))
-        relation = d_real / d_imag
+        d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
+        relation = d_real/d_imag
         if relation > 5:
             # Imag quadrature is not oscillating, ignore it by making imag
             # distance equal to ten real distances so that new normalized values
-            # obtained via that component will be small
-            ground_state = real(basis[0]) - 1j * 5 * d_real
-            excited_state = real(basis[1]) + 1j * 5 * d_real
+            # obtained via that component would be small
+            ground_state = real(basis[0]) + 1j * imag(basis[0])
+            excited_state = real(basis[1]) + 1j * (imag(basis[0]) + 10 * d_real)
             basis = (ground_state, excited_state)
         elif relation < 0.2:
             # Real quadrature is not oscillating, ignore it
-            ground_state = -5 * d_imag + 1j * imag(basis[0])
-            excited_state = 5 * d_imag + 1j * imag(basis[1])
+            ground_state = real(basis[0]) + 1j * imag(basis[0])
+            excited_state = real(basis[0]) + 10 * d_imag + 1j * imag(basis[1])
             basis = (ground_state, excited_state)
 
         self._basis = basis
+
+    def _calculate_basis_complex_amplitudes(self, basis):
+        d_real = abs(real(basis[0] - basis[1]))
+        d_imag = abs(imag(basis[0] - basis[1]))
+        return d_real, d_imag
 
     def set_ult_calib(self, value=False):
         self._ult_calib = value
@@ -94,27 +99,34 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         vna.wait_for_stb()
         data = vna.get_sdata()
         if self._ult_calib:
-            q_lo.set_output_state("OFF")
+            for q_lo in self._q_lo:
+                q_lo.set_output_state("OFF")
             vna.avg_clear()
             vna.prepare_for_stb()
             vna.sweep_single()
             vna.wait_for_stb()
             bg = vna.get_sdata()
-            q_lo.set_output_state("ON")
-            mean_data = mean(data) / mean(bg)
+            for q_lo in self._q_lo:
+                q_lo.set_output_state("ON")
+            mean_data = mean(data-bg)
         else:
             mean_data = mean(data)
+
         if self._basis is None:
             return mean_data
-        basis = self._basis
-        p_r = (real(mean_data) - real(basis[0])) / (real(basis[1]) - real(basis[0]))
-        p_i = (imag(mean_data) - imag(basis[0])) / (imag(basis[1]) - imag(basis[0]))
-        return p_r + 1j * p_i
+        else:
+            basis = self._basis
+            p_r = (real(mean_data) - real(basis[0])) / (real(basis[1]) - real(basis[0]))
+            p_i = (imag(mean_data) - imag(basis[0])) / (imag(basis[1]) - imag(basis[0]))
+            return p_r + 1j * p_i
 
     def _detect_resonator(self, vna_parameters, ro_calibration, q_calibration,
-                          q_z_calibration=None, plot_resonator_fit=True):
+                          q_z_calibration=None, plot_resonator_fit=True, z_offset=None):
 
-        self._q_lo[0].set_output_state("OFF")
+        # turning all microwave OFF
+        for q_lo in self._q_lo:
+            q_lo.set_output_state("OFF")
+
         print("Detecting a resonator within provided frequency range of the VNA %s\
                     " % (str(vna_parameters["freq_limits"])))
 
@@ -127,31 +139,51 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         rep_period = self._pulse_sequence_parameters["repetition_period"]
         ro_duration = self._pulse_sequence_parameters["readout_duration"]
 
+        # making sure that readout is in pulse regime
         ro_pb = IQPulseBuilder(ro_calibration)
-        q_pb = IQPulseBuilder(q_calibration)
         self._ro_awg[0].output_pulse_sequence(ro_pb
                                               .add_dc_pulse(ro_duration).add_zero_until(rep_period).build())
-        self._q_awg[0].output_pulse_sequence(q_pb.add_zero_until(rep_period).build())
 
-        if hasattr(self, "_q_z_awg"):
+        # turning all the AWG output OFF
+        q_pb = IQPulseBuilder(q_calibration)
+        for q_awg in self._q_awg:
+            q_awg.output_pulse_sequence(q_pb.add_zero_until(rep_period).build())
+
+        # TODO: 'and (q_z_calibration is not None)'  hotfix by Shamil (below)
+        # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
+        # So hasattr(self, "_q_z_awg") is True
+        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
+        if q_z_calibration is not None:
             q_z_pb = PulseBuilder(q_z_calibration)
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
 
         res_freq, res_amp, res_phase = super()._detect_resonator(plot_resonator_fit)
         print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % \
               (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
-        self._q_lo[0].set_output_state("ON")
+
+        # turning microwave back ON
+        for q_lo in self._q_lo:
+            q_lo.set_output_state("ON")
         return res_freq
 
     def _output_pulse_sequence(self):
 
         q_pbs = [q_awg.get_pulse_builder() for q_awg in self._q_awg]
         ro_pbs = [ro_awg.get_pulse_builder() for ro_awg in self._ro_awg]
-        q_z_pbs = [q_z_awg.get_pulse_builder() for q_z_awg in self._q_z_awg] \
-            if hasattr(self, '_q_z_awg') else [None]
+
+        # TODO: 'and (self._q_z_awg[0] is not None)'  hotfix by Shamil (below)
+        # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
+        # So hasattr(self, "_q_z_awg") is True
+        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
+        if hasattr(self, '_q_z_awg') and (self._q_z_awg[0] is not None):
+            q_z_pbs = [q_z_awg.get_pulse_builder() for q_z_awg in self._q_z_awg]
+        else:
+            q_z_pbs = [None]
+
         pbs = {'q_pbs': q_pbs,
                'ro_pbs': ro_pbs,
                'q_z_pbs': q_z_pbs}
+
         seqs = self._sequence_generator(self._pulse_sequence_parameters, **pbs)
 
         for (seq, dev) in zip(seqs['q_seqs'], self._q_awg):

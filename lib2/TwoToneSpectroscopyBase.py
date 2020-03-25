@@ -19,16 +19,17 @@ class TwoToneSpectroscopyBase(Measurement):
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval)
 
-        # devs_names = [vna_name, mw_src_name, current_src_name]
-        # super().__init__(name, sample_name, devs_names)
-        # self._vna = self._actual_devices[vna_name]
-        # self._mw_src = self._actual_devices[mw_src_name]
-        # self._current_src = self._actual_devices[current_src_name]
-
         self._measurement_result = TwoToneSpectroscopyResult(name, sample_name)
         self._interrupted = False
         self._base_parameter_setter = None
         self._base_parameter_name = None
+
+    def set_zero_output(self):
+        self._mw_src.set_output_state("OFF")
+        if (self._voltage_source is not None):
+            self._voltage_source.set_voltage(0)
+        if (self._current_source is not None):
+            self._current_source.set_current(0)
 
     def set_fixed_parameters(self, current=None, voltage=None, detect_resonator=True,
                              **dev_params):
@@ -87,6 +88,9 @@ class TwoToneSpectroscopyBase(Measurement):
         vna.wait_for_stb()
         data = vna.get_sdata()
         return mean(data)
+
+    def _finalize(self):
+        pass
 
 
 class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
