@@ -11,6 +11,7 @@ import lib2.IQPulseSequence
 from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
 from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
 from drivers.IQAWG import IQAWG
+from drivers.E8257D import MXG
 
 from typing import Dict, Union
 
@@ -28,7 +29,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
         # mandatory names for devices:
         self._q_iqawg: list[IQAWG] = None
-        self._q_lo = None
+        self._q_lo: list[MXG] = None
         self._dig: list[SPCM] = None
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval=plot_update_interval)
@@ -36,7 +37,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._basis = None
         self._ult_calib = False
         self._adc_parameters = None
-        self._n_samples_to_drop_by_dig_delay = 0
+        self._n_samples_to_drop_by_delay = 0
         self._n_samples_to_drop_in_end = 0
         self._pulse_sequence_parameters: Dict[Union[str, int, float]] = \
             {"modulating_window": "rectangular", "excitation_amplitude": 1,
@@ -68,6 +69,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         # LO source initialization
         q_lo_params[0]["power"] = q_iqawg_params[0]["calibration"] \
             .get_radiation_parameters()["lo_power"]
+        self._q_lo[0].set_output_state("ON")
 
         # store sequence parameters for further usage
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
@@ -179,21 +181,21 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
         # I channel data exctraction
         data_i = dig_data[0::2]
-        data_i = data_i.reshape(dig.n_seg, round(dig_data.shape[0] / 2 / dig.n_seg))
-        data_i = data_i[:, self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
+        data_i = data_i.reshape(dig.n_seg, round(data_i.shape[0] / dig.n_seg))
+        data_i = data_i[:, self._n_samples_to_drop_by_delay: -self._n_samples_to_drop_in_end]
         data_i = data_i.flatten()
 
         # Q channel data exctraction
         data_q = dig_data[1::2]
-        data_q = data_q.reshape(dig.n_seg, round(dig_data.shape[0] / 2 / dig.n_seg))
-        data_q = data_q[:, self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
+        data_q = data_q.reshape(dig.n_seg, round(data_q.shape[0] / dig.n_seg))
+        data_q = data_q[:, self._n_samples_to_drop_by_delay: -self._n_samples_to_drop_in_end]
         data_q = data_q.flatten()
 
         freq = np.fft.fftfreq(len(data_i), d=1/self._dig[0].get_sample_rate())
         freq = np.fft.fftshift(freq)
         signal = np.fft.fftshift(np.fft.fft(data_i + 1j * data_q))
         # next row can be optimized with np.searchsorted and 2 comparisons with nearest elements
-        idx = np.argmin(np.abs(freq - (-self._q_iqawg[0]._calibration._if_frequency)))
+        idx = np.argmin(np.abs(freq - (self._q_iqawg[0]._calibration._if_frequency)))
         IQ = signal[idx] / len(data_i)
 
         # save full data in case of more detailed investigation
@@ -203,11 +205,12 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
     def _recording_iteration(self):
         if self._ult_calib:
+            # pulse sequence already played buy AWG
             fg = self._single_measurement()
+            # close input mixer to measure background
             self._output_zero_sequence()
             bg = self._single_measurement()
             mean_data = fg - bg
-            # print(fg, bg, mean_data).
         else:
             mean_data = self._single_measurement()
 
@@ -220,23 +223,34 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             return p_r + 1j * p_i
 
     def _output_zero_sequence(self):
-        prescaler = 0
-        fs = KeysightM3202A.calc_sampling_rate(prescaler)
-        pulses_period = self._pulse_sequence_parameters["repetition_period"]  # ns
-        M = int(fs * pulses_period * 1e-9)
-        wf = np.zeros(M)
-        self._q_iqawg[0].output_modulated_IQ_waves(wf, prescaler)
+        """
+        Closes input mixer and force AWG to continue generate trigger
+        pulses for every period.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -------
+        NOT TESTED
+        Change is introduced on 16.03.2020 by Shamil
+        """
+        self._q_iqawg[0].output_zero(
+            trigger_every_period=True,
+            repetition_period_ns=self._pulse_sequence_parameters["repetition_period"]
+        )
 
     def _output_pulse_sequence(self, zero=False):
         # update a trigger delay of the digitizer
         dig = self._dig[0]
         timedelay = self._pulse_sequence_parameters["longest_duration"] + \
                     self._pulse_sequence_parameters["digitizer_delay"]
-        dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)
-        self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
+        dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)  # update how many samples drop in front
+        self._n_samples_to_drop_by_delay = dig.get_how_many_samples_to_drop_in_front()
         dig.calc_segment_size()  # updates how many to drop in the end
         self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
-        dig.setup_averaging_mode()
+        dig.setup_averaging_mode()  # loads new segment size into device
 
         # DIAGNOSE PHASE JUMPS WITH THIS TIMINGS OUTPUT
         # ns_in_sample = 1e9 / dig.get_sample_rate()

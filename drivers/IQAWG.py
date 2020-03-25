@@ -17,6 +17,8 @@
 
 
 from numpy import *
+from prompt_toolkit import output
+
 from lib2.IQPulseSequence import *
 import drivers.keysightSD1 as keysightSD1
 from drivers.keysightM3202A import KeysightM3202A
@@ -149,7 +151,7 @@ class IQAWG():
         self._output_continuous_wave(frequency, amplitudes[1], 0,
             offsets[1], waveform_resolution, 2, asynchronous=False)
 
-    def output_IQ_waves_from_calibration(self, optimized=True, trigger_sync_every=None):
+    def output_IQ_waves_from_calibration(self, optimized=True, trigger_sync_every=None, frequency=None, amp_coeffs=(1., 1.)):
         """
 
         Parameters
@@ -173,30 +175,36 @@ class IQAWG():
         awg device.
         """
         cal = self._calibration
-        self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[0],
+        if frequency == None:
+            output_frequency = cal._if_frequency
+        else:
+            output_frequency = frequency
+
+        self._output_continuous_wave(output_frequency, amp_coeffs[0]*cal._if_amplitudes[0],
                                      cal._if_phase[0], cal._if_offsets[0],
                                      cal._waveform_resolution, 1, asynchronous=optimized,
                                      trigger_sync_every=trigger_sync_every)
-        self._output_continuous_wave(cal._if_frequency, cal._if_amplitudes[1],
+        self._output_continuous_wave(output_frequency, amp_coeffs[1]*cal._if_amplitudes[1],
                                      0, cal._if_offsets[1],
                                      cal._waveform_resolution, 2, asynchronous=False,
                                      trigger_sync_every=trigger_sync_every)
 
-    def output_zero(self, trigger_every_period=False, repetition_period_ns=None):
+    def output_zero(self, trigger_sync_every=None):
         cal = self._calibration
         awg = self._channels[0]._host_awg
         chanI = self._channels[0]._channel_number
         chanQ = self._channels[1]._channel_number
         awg.synchronize_channels(chanI, chanQ)
-        if trigger_every_period:
+        if trigger_sync_every is None:
+            # turns trigger off
+            awg.trigger_output_config(trig_mode="OFF")
+        else:
             # 100 ns trigger length after every 'start' of the playing
             awg.trigger_output_config(trig_mode="ON", trig_length=100)
-        else:
-            # turns trigger of
-            awg.trigger_output_config(trig_mode="OFF")
-        waveform = np.zeros(int(repetition_period_ns/awg.get_sample_rate()*1e9))
-        self._channels[0].output_arbitrary_waveform(waveform, 1/repetition_period_ns*1e9)
-        self._channels[1].output_arbitrary_waveform(waveform, 1/repetition_period_ns*1e9)
+        waveform0 = np.zeros(int(trigger_sync_every/awg.get_sample_rate()*1e9)) + cal._if_offsets[0]
+        waveform1 = np.zeros(int(trigger_sync_every/awg.get_sample_rate()*1e9)) + cal._if_offsets[1]
+        self._channels[0].output_arbitrary_waveform(waveform0, 1/trigger_sync_every*1e9)
+        self._channels[1].output_arbitrary_waveform(waveform1, 1/trigger_sync_every*1e9)
 
     def output_continuous_two_freq_IQ_waves(self, dfreq, ampl_coefs=(2, 2)):
         fs = self._channels[0]._host_awg.get_sample_rate()  # Hz

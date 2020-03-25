@@ -99,7 +99,6 @@ class SPCM:
         self.close()
 
     def set_parameters(self, pars_dict):
-        print("setting parameters for digitizer: ", pars_dict)
         if "oversampling_factor" in pars_dict:
             self.set_oversampling_factor(pars_dict["oversampling_factor"])
         if "channels" in pars_dict:
@@ -113,19 +112,27 @@ class SPCM:
         if "pretrigger" in pars_dict:
             pretrigger = pars_dict["pretrigger"]
             if (pretrigger % 32 != 0):
-                raise CardError("Prettiger is not multiple of 32: pretrigger = {:d}".format(pretrigger))
+                raise CardError(f"Prettiger is not multiple of 32; you requested {pretrigger}")
             if (pretrigger < 32):
-                raise CardError("Pretrigger has to be atleast 32 samples: {:d}".format(pretrigger))
+                raise CardError(f"Pretrigger has to be atleast 32 samples; you requested {pretrigger}")
             self.pretrigger_in_samples = pars_dict["pretrigger"]
         if "mode" in pars_dict:
-            self.mode = pars_dict["mode"]
+            mode = pars_dict["mode"]
+            if mode in SPCM_MODE:
+                self.mode = mode
+            else:
+                raise ValueError(f"Underfined opeation mode; you requested {mode}")
         if "n_avg" in pars_dict:
             n_avg = pars_dict["n_avg"]
             if (self.mode == SPCM_MODE.AVERAGING) and (n_avg < 4):
-                raise CardError(f"Minimum number of averages: 4; you requested n_avg = {n_avg}")
-            self.n_avg = pars_dict["n_avg"]
+                raise ValueError(f"Minimum number of averages: 4; you requested n_avg = {n_avg}")
+            self.n_avg = n_avg
         if "trig_source" in pars_dict:
-            self.trigger_source = pars_dict["trig_source"]
+            trig_source = pars_dict["trig_source"]
+            if trig_source in SPCM_TRIGGER:
+                self.trigger_source = trig_source
+            else:
+                raise ValueError(f"Underfined trigger source; you requested {trig_source}")
         if "digitizer_delay" in pars_dict:
             # calculate and set 'self.delay_in_samples'
             # memorize how many samples to drop in front of trace 'self._n_samples_to_drop_by_delay'
@@ -365,7 +372,7 @@ class SPCM:
         # hardware will delay trigger signal on delay_in_samples duration
         self.set_trigger_delay(self.delay_in_samples)
 
-    def calc_segment_size(self, dur_seg_ns=None, extra_samples_to_drop_in_end=0):
+    def calc_segment_size(self, dur_seg_ns=None, decrease_segment_size_by=0):
         """
         !!! Must be called after the oversampling factor and trigger delay are
             set but before the mode is chosen.
@@ -374,16 +381,18 @@ class SPCM:
             Call setup mode is neccessary after calculation of the segment size.
             In order to set calculated value into the device.
         """
+        if decrease_segment_size_by % 32 != 0:
+            ValueError(f"'decrease_segment_size_by' argument has to be multiple of 32; you requested {decrease_segment_size_by}")
         if dur_seg_ns is None:
             dur_seg_ns = self.dur_seg
 
-        self._segment_size = int(dur_seg_ns * 1e-9 * self.get_sample_rate()) + self._n_samples_to_drop_by_delay - extra_samples_to_drop_in_end
+        self._segment_size = int(dur_seg_ns * 1e-9 * self.get_sample_rate()) + self._n_samples_to_drop_by_delay
 
         # calculate and memorize how many samples to drop from trace at the end
         # (self._segment_size + 32) - underlines the logic of 'samples to drop' value calculation
         self._n_samples_to_drop_in_end = 32 - (self._segment_size + 32) % 32
         # extending requested signal length to the multiple of 32 and bigger the the requested segment
-        self._segment_size += self._n_samples_to_drop_in_end
+        self._segment_size += self._n_samples_to_drop_in_end - decrease_segment_size_by
 
         # TODO: '_bufsize' calculation here can be troubles with
         #  standard mode (this seems to be perfectly valid only for averaging mode)
@@ -637,7 +646,7 @@ class SPCM:
 
         Returns
         -------
-        data : np.ndarray
+        np.ndarray
         """
         self.start_card()
         self.wait_for_card()  # wait till the end of a measurement

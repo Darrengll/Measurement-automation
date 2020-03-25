@@ -565,7 +565,7 @@ class IQPulseBuilder():
         is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
         """
         exc_pb = pbs['q_pbs'][0]
-        awg_trigger_reaction_delay = \
+        start_delay = \
             pulse_sequence_parameters["start_delay"]
         repetition_period = \
             pulse_sequence_parameters["repetition_period"]
@@ -581,13 +581,12 @@ class IQPulseBuilder():
         window_parameter = pulse_sequence_parameters["window_parameter"] \
             if "window_parameter" in pulse_sequence_parameters else 0.5
 
-        frequency = exc_pb._iqmx_calibration.get_radiation_parameters()["if_frequency"] / 1e9
+        # no need in starting_phase if end time of pulse ending is fixed
+        # phase is accumulated and accounted for automatically
+        # in pulse builders.
+        starting_phase = 0
 
-        # calculate phase in order for both signals to end with the same phase (starting phase depends on duration)
-        starting_phase = 2 * pi * frequency * longest_pulse_duration
-        # starting_phase = 0
-
-        exc_pb.add_zero_pulse(longest_pulse_duration - excitation_duration) \
+        exc_pb.add_zero_pulse(start_delay + longest_pulse_duration - excitation_duration) \
             .add_sine_pulse(excitation_duration,
                             window=window,
                             window_parameter=window_parameter,
@@ -759,7 +758,7 @@ class IQPulseBuilder():
 
         # check that pulses from the same group do not overlap
         if p_delays.any() < 0 or n_delays.any() < 0:
-            raise ValueError("pulses from the same frequency group found to be overlapping on each other")
+            raise ValueError("pulses from the same frequency group found to be overlapping")
 
         envelopes_in_pulse_group = pulse_sequence_parameters["envelopes_in_pulse_group"]
         n_pulse_groups = int(envelopes_in_pulse_group*envelope_duration/repetition_period)
@@ -769,7 +768,7 @@ class IQPulseBuilder():
             raise ValueError("pulse repetition frequency has to be a multiple of pulse frequency difference")
 
         ''' constructing pulses '''
-        # appending zero values for simplicity for code in cycle
+        # appending zero values for convenience for code in cycle
         p_delays = np.concatenate((p_delays, [0.0]))
         n_delays = np.concatenate((n_delays, [0.0]))
 
@@ -812,13 +811,14 @@ class IQPulseBuilder():
             last_pulse_end=max(p_positions[-1] + p_excitation_durations[-1],
                                n_positions[-1] + n_excitation_durations[-1])
         )
-        # print("pulses are set")
+
+        # performing direct add on non-overlapping positive and negative waveforms
         return {'q_seqs': [pb_p.build().direct_add(pb_n.build())]}
 
     @staticmethod
     def build_stimulated_emission_sequence(pulse_sequence_parameters, **pbs):
         """
-        Builds a pulse sequence with a repeated group of two non-overlapping pulse.
+        Builds a pulse sequence with a repeated group of two non-overlapping pulses.
 
         Use build_wave_mixing_pulses() to create sequences with overlapping pulses.
 
@@ -862,8 +862,8 @@ class IQPulseBuilder():
         freqs = {"P": freq + d_freq, "N": freq - d_freq, "0": freq}
 
         # period when phases between two frequencies first time reach 2 pi
-        envelope_duration = repetition_period
-        # envelope_duration = 1 / d_freq * 1e9  # ns
+        # envelope_duration = repetition_period
+        envelope_duration = 1 / d_freq * 1e9  # ns
 
         envelopes_in_pulse_group = pulse_sequence_parameters["envelopes_in_pulse_group"]
         n_pulse_groups = int(envelopes_in_pulse_group * envelope_duration / repetition_period)
@@ -878,7 +878,7 @@ class IQPulseBuilder():
         # phase1_correction = 2 * np.pi * (lo_freq + freqs[pulse_types[0]]) * repetition_period % (2 * np.pi)
         # phase2_correction = 2 * np.pi * (lo_freq + freqs[pulse_types[1]]) * repetition_period % (2 * np.pi)
 
-        ''' constructing a pulse '''
+        ''' constructing a pulse sequence'''
         for i in range(n_pulse_groups):
             for pulse_type in pulse_types:
                 exc_pb = exc_pb.add_zero_pulse(start_delay) \
@@ -887,8 +887,8 @@ class IQPulseBuilder():
                                     frequency=freqs[pulse_type],
                                     phase=(phase_shift),
                                     amplitude_mult=amplitude,
-                                    window_parameter=window_parameter) \
-                    .add_zero_until(envelope_duration * (i+1))
+                                    window_parameter=window_parameter)
+            exc_pb.add_zero_until(repetition_period * (i+1))
         # exc_pb = exc_pb.add_zero_until(envelope_duration * envelopes_in_pulse_group)
         # this parameters are needed by digitizer in order to properly perform
         # software filtering (the exact pulses end positions is needed)

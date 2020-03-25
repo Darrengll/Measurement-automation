@@ -97,9 +97,7 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
         else:
             raise ValueError("Cannot estimate longest pulse duration based on 'self.pulse_sequence_parameters'"
                              " or 'self._swept_pars'\n No pulse duration data found.")
-
-        start_delay = self._pulse_sequence_parameters["start_delay"]
-        return start_delay + longest_excitaion
+        return longest_excitaion
 
 
 class DirectRabiFromPulseDuration(DirectRabiBase):
@@ -139,7 +137,7 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
         max_frequency = 1 / time_step / 5
         min_frequency = 1e-4
         frequency = np.random.random(1) * (max_frequency - min_frequency) + min_frequency
-        p0 = [amp_r, amp_i, 1000, frequency * 2 * np.pi, offset_r, offset_i, offset_r, offset_r, 0,0]
+        p0 = [amp_r, amp_i, 1000, frequency * 2 * np.pi, offset_r, offset_i, offset_r, offset_i, 0, 0]
 
         bounds = ([-np.abs(amp_r) * 1.5, -np.abs(amp_i) * 1.5, 100,
                    min_frequency * 2 * np.pi, -10, -10, -10, -10, -np.pi, -np.pi],
@@ -149,7 +147,7 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
 
     def _generate_annotation_string(self, opt_params, err):
         return f"$T_R={opt_params[2]*1e-3:.2f}\pm {err[2]*1e-3:.2f}~\mu$s\n" \
-               fr"$\nu_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz" + "\n" \
+               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz" + "\n" \
                f"$\Delta\phi={np.mod(opt_params[6] - opt_params[7], 2 * np.pi) - np.pi:.2f}$ rad"
 
     def _prepare_data_for_plot(self, data):
@@ -159,10 +157,26 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
         return np.pi / self._fit_params[3] # ns
 
     def get_rabi_decay(self):
-        return (self._fit_params[2] * 1e-3, self._fit_errors[2] * 1e-3)
+        """
+        Returns T_R and it's standard deviation from fit results in 'ns'.
+
+        Returns
+        -------
+        tuple[float,float]
+            tuple( T_R, standard deviation(T_R) )
+        """
+        return (self._fit_params[2], self._fit_errors[2])
 
     def get_rabi_frequency(self):
-        return (self._fit_params[3] * 1e-3, self._fit_errors[3] * 1e-3)
+        """
+        Returns Omega_R and it's standard deviation from fit results in 'MHz'
+
+        Returns
+        -------
+        tuple[float,float]
+            tuple( Omega_R, standard deviation(Omega_R) )
+        """
+        return (self._fit_params[3] * 1e3, self._fit_errors[3] * 1e3)
 
     def get_basis(self):
         fit = self._fit_params
@@ -197,9 +211,11 @@ class DirectRabiFromAmplitudeResult(VNATimeResolvedDispersiveMeasurement1DResult
         super().__init__(name, sample_name)
         self._x_axis_units = "ratio"
 
-    def _model(self, amplitude, A_r, A_i, pi_amplitude, offset_r, offset_i, phase_r, phase_i):
-        return -(A_r * np.cos(np.pi * amplitude / pi_amplitude + phase_r)
-                 + 1j * A_i * np.cos(np.pi * amplitude / pi_amplitude + phase_i)) + (offset_r + 1j * offset_i)
+    def _model(self, amplitude, A_r, A_i, pi_amplitude, offset_r, offset_i, phase_r, phase_i,
+               offset_r1, offset_i1, amp_offset_decay_rate):
+        return -(A_r * np.cos(np.pi * amplitude / pi_amplitude + phase_r) +\
+                 + 1j * A_i * np.cos(np.pi * amplitude / pi_amplitude + phase_i)) + (offset_r + 1j * offset_i) + \
+               (offset_r1 + 1j*offset_i1)*(1 - np.exp(amp_offset_decay_rate * amplitude))
 
     def _generate_fit_arguments(self, x, data):
         amp_r, amp_i = np.ptp(np.real(data)) / 2, np.ptp(np.imag(data)) / 2
@@ -212,9 +228,9 @@ class DirectRabiFromAmplitudeResult(VNATimeResolvedDispersiveMeasurement1DResult
         min_pi_pulse_amp = amp_step * 2 * 5
         max_pi_pulse_amp = (x[-1] - x[0]) * 2 * 10
         pi_pulse_amp = np.random.random(1) * (max_pi_pulse_amp - min_pi_pulse_amp) + min_pi_pulse_amp
-        bounds = ([-np.abs(amp_r)*1.5,  -np.abs(amp_i)*1.5, min_pi_pulse_amp,   -10, -10, -np.pi, -np.pi],
-                  [np.abs(amp_r)*1.5,   np.abs(amp_i)*1.5,  max_pi_pulse_amp,   10, 10, np.pi, np.pi])
-        p0 = [amp_r, amp_i, pi_pulse_amp, offset_r, offset_i, 0, 0]
+        bounds = ([-np.abs(amp_r)*1.5,  -np.abs(amp_i)*1.5, min_pi_pulse_amp,   -10, -10, -np.pi, -np.pi, -10, -10, 0],
+                  [np.abs(amp_r)*1.5,   np.abs(amp_i)*1.5,  max_pi_pulse_amp,   10, 10, np.pi, np.pi, 10, 10, 1])
+        p0 = [amp_r, amp_i, pi_pulse_amp, offset_r, offset_i, 0, 0, offset_r, offset_i, 0.001]
         return p0, bounds
     #
     # def _prepare_data_for_plot(self, data):

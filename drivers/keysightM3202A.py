@@ -217,7 +217,7 @@ class KeysightM3202A(Instrument):
             Channel to operate with. Numbering starts from 1.
         asynchronous
         trigger_sync_every : int
-            period of trigger signal in secs
+            period of trigger signal in ns
             trigger is synchronized with the continuous wave.
 
         Returns
@@ -231,7 +231,7 @@ class KeysightM3202A(Instrument):
 
         # output trigger has to be generated
         if trigger_sync_every is not None:
-            arr = np.zeros( int(np.around(trigger_sync_every * self.get_sample_rate())) )
+            arr = np.zeros( int(np.around(trigger_sync_every * self.get_sample_rate()/1e9 )) )
             self._load_array_into_AWG(arr, channel)
             self.setup_modulation_amp(channel, 0)
             self.trigger_output_config("ON", channel)
