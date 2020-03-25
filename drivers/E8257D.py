@@ -87,9 +87,7 @@ class MXG(Instrument):
         if "InSweep_trg_src" in keys:
             self.set_InSweep_trg_src(parameters_dict["InSweep_trg_src"])
         if "ext_trig_channel" in keys:
-            self.set_ext_trig_channel(parameters_dict["ext_trig_channel"])
-
-
+            self.set_ext_trig_channel(parameters_dict["ext_trig_channel"])\
 
     def use_internal_clock(self, is_clock_internal):
         if is_clock_internal:

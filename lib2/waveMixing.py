@@ -2,7 +2,7 @@ import warnings
 from copy import deepcopy
 from importlib import reload
 import numpy as np
-from scipy import fftpack
+from scipy import fftpack, signal
 from drivers.Spectrum_m4x import SPCM
 from lib2.MeasurementResult import MeasurementResult
 from matplotlib import pyplot as plt, colorbar
@@ -12,10 +12,10 @@ import lib2.IQPulseSequence
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
 
-import lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements
+import lib2.digitizerPulsedMeasurements.digitizerTimeResolvedDirectMeasurement
 
-reload(lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements)
-from lib2.digitizerPulsedMeasurments.digitizerPulsedMeasurements import DigitizerTimeResolvedDirectMeasurement
+reload(lib2.digitizerPulsedMeasurements.digitizerTimeResolvedDirectMeasurement)
+from lib2.digitizerPulsedMeasurements.digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
 
 
 class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
@@ -33,6 +33,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             references to LO source, AWG and the digitizer
         """
         devs_aliases_map = {"q_lo": q_lo, "q_iqawg": q_iqawg, "dig": dig}
+        self._dig: list[SPCM] = None
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval=1)
         self._measurement_result = PulseMixingResult(name, sample_name)
 
@@ -49,6 +50,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         # whether or not to nullify parts of data that apriory contain only noise
         self.__cut = True
         self.__cut_pulses = False
+        self._pause_in_samples_before_next_trigger = 32
 
         # Fourier and measurement parameters
         # see purpose in 'self.set_fixed_parameters()'
@@ -114,10 +116,51 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             raise ValueError("freq_limits has wrong notation")
 
         self._frequencies = xf[self._start_idx:self._end_idx + 1]
+        meas_data = self._measurement_result.get_data()
+        meas_data["frequency"] = self._frequencies
+        self._measurement_result.set_data(meas_data)
 
         # to provide 'set_sideband_order()' functionality
         self._measurement_result._d_freq = pulse_sequence_parameters["d_freq"]
         self._measurement_result._if_freq = q_iqawg_params[0]["calibration"]._if_frequency
+
+    def _get_longest_pulse_sequence_duration(self, pulse_sequence_parameters, swept_pars):
+        """
+        Function calculates and return the longest pulse sequence duration based
+        on pulse sequence parameters provided and 'self._sequence_generator' implementation.
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict
+            Dictionary that contain pulse sequence parameters for which
+            you wish to calculate the longest duration. This parameters are fixed.
+
+        swept_pars : dict
+            Sweep parameters that are needed for calculation of the
+            longest sequence.
+
+        Returns
+        -------
+        float
+            Longest sequence duration based on pulse sequence parameters in ns.
+
+        Notes
+        ------
+            This function is introduced in the context of the solution to the phase jumps, caused
+        by clock incompatibility between AWG and digitizer. The aim is to fix distance between
+        digitizer measurement window and AWG trigger that obtains digitizer.
+            The last pulse ending should stay at fixed distance from trigger event in contrary with previous
+        implementation, where the start of the first control pulse was fixed relative to trigger event.
+            The previous solution forced digitizer acquisition window (which is placed after the pulse sequence, usually)
+        to shift further in timeline following the extension of the length of the pulse sequence.
+        And due to the fact that extension length does not always coincide with acquisition
+        window displacement (due to difference in AWG and digitizer clock period) the phase jumps
+        arise as a problem.
+            The solution is that end of the last pulse stays at the same distance from the trigger event and
+        pulse sequence length extends "back in timeline". Together with requirement that 'repetition_period"
+        is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
+        """
+        return 0  # TODO: this is hotfix to satisfy requirements imposed by last merge (today is 17.03.2020)
 
     def sweep_power(self, powers):
         self.set_swept_parameters(**{"Powers, dB": (self._set_power, powers)})
@@ -234,60 +277,78 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         self._pulse_sequence_parameters["pulse_shifts"][pulse_i] = shift
         self._output_pulse_sequence()
 
-    def _prepare_measurement_result_data(self, parameter_names, parameters_values):
-        measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
-        measurement_data["frequency"] = self._frequencies
-        return measurement_data
-
     def _measure_one_trace(self):
         dig = self._dig[0]
-        data = dig.measure(dig._bufsize).astype(float)
+        dig_data = dig.measure().astype(float)
 
-        # deleting extra samples from segments
-        data_cut = SPCM.extract_useful_data(data, 2, dig._segment_size, dig.get_how_many_samples_to_drop_in_front(),
-                                            dig.get_how_many_samples_to_drop_in_end())
         # convertion to mV is according to
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
         # p.81
-        data_cut = data_cut / dig.n_avg / 128 * dig.ch_amplitude
+        dig_data = dig_data / dig.n_avg / 128 * dig.ch_amplitude
 
-        # append 32 zero after every segment with several steps, they were deleted
-        # in order to allow SPCM to receive every single trigger signal
-        # this lines are reviving those missed samples and fills them with zeros.
-        # First, reshaping data arrays into segments, then append 32 zeros to every segment
-        # and finally flatten the result
-        dataI = np.append(
-            data_cut[0::2].reshape(dig.n_seg, round(data_cut.shape[0] / 2 / dig.n_seg)),
-            np.zeros((dig.n_seg, 32)),
-            axis=1
-        ).flatten()
+        '''
+        In order to allow digitizer to not miss very next trigger while the acquisition
+        window is almost equal to the trigger period, acquisition window is shriked
+        by 'self.__pause_in_samples_before_trigger' samples.
+        In order to obtain data of the desired length the code below adds
+        'self.__pause_in_samples_before_trigger' trailing zeros to the end of each segment. 
+        Finally result is flattened in order to perform DFFT.
+        '''
 
-        dataQ = np.append(
-            data_cut[1::2].reshape(dig.n_seg, round(data_cut.shape[0] / 2 / dig.n_seg)),
-            np.zeros((dig.n_seg, 32)),
-            axis=1
-        ).flatten()
+
+        # I channel data exctraction
+        data_i = dig_data[0::2]
+        # 2D array that will be set to the trace avg value
+        # and appended to the end of each segment of the trace
+        # scalar average is multiplied by 'np.ones()' of the appropriate 2D shape
+        avgs_to_concat = np.average(data_i)*np.ones((dig.n_seg, self._pause_in_samples_before_next_trigger))
+        data_i = data_i.reshape(dig.n_seg, round(data_i.shape[0] / dig.n_seg))
+        # if 'pm.pm._n_samples_to_drop_in_end' equals zero, the empty list is produced
+        if self._n_samples_to_drop_in_end == 0:
+            slice_stop = data_i.shape[1]
+        else:
+            slice_stop = -self._n_samples_to_drop_in_end
+        data_i = data_i[:, self._n_samples_to_drop_by_delay: slice_stop]
+        data_i = np.concatenate((data_i, avgs_to_concat), axis=1)
+        data_i = data_i.flatten()
+
+        # Q channel data exctraction
+        data_q = dig_data[1::2]
+        # 2D array that will be set to the trace avg value
+        # and appended to the end of each segment of the trace
+        # scalar average is multiplied by 'np.ones()' of the appropriate 2D shape
+        avgs_to_concat = np.average(data_i) * np.ones((dig.n_seg, self._pause_in_samples_before_next_trigger))
+        data_q = data_q.reshape(dig.n_seg, round(data_q.shape[0] / dig.n_seg))
+        # if 'pm.pm._n_samples_to_drop_in_end' equals zero, the empty list is produced
+        if self._n_samples_to_drop_in_end == 0:
+            slice_stop = data_q.shape[1]
+        else:
+            slice_stop = -self._n_samples_to_drop_in_end
+        data_q = data_q[:, self._n_samples_to_drop_by_delay: slice_stop]
+        data_q = np.concatenate((data_q, avgs_to_concat), axis=1)
+        data_q = data_q.flatten()
 
         if self.__cut is True:
             # cutting out parts of signals that do not carry any
             # useful information
             sampling_freq = self._dig[0].get_sample_rate()
-            samples_n = len(dataI)
+            samples_n = len(data_i)  # total amount of samples
             repetition_period = self._pulse_sequence_parameters["repetition_period"]
             sampling_points_times = 1e9 * np.arange(0, samples_n / sampling_freq, 1 / sampling_freq)  # ns
             readout_duration = self._pulse_sequence_parameters["readout_duration"]  # ns
 
             # the whole pulse sequence + readout duration after is exctracted untouched
-            # supplied during the last call to 'self._sequence_generator' function
+
+            # parameters below are calculated and stored into 'pulse_sequence_parameters'
+            # during the last call to 'self._sequence_generator' function
             first_pulse_start = self._pulse_sequence_parameters["first_pulse_start"]
-            # supplied during the last call to 'self._sequence_generator' function
             last_pulse_end = self._pulse_sequence_parameters["last_pulse_end"]
 
             if self.__cut_pulses:  # if it is configured to cut out excitation pulses
-                desired_intervals = [(last_pulse_end, last_pulse_end + readout_duration)]
+                target_intervals = [(last_pulse_end, last_pulse_end + readout_duration)]
                 # print(f"cut pulses intervals: {desired_intervals}")
             else:  # excitation pulses remain untouched
-                desired_intervals = [(first_pulse_start, last_pulse_end + readout_duration)]
+                target_intervals = [(first_pulse_start, last_pulse_end + readout_duration)]
                 # print(f"NO cut pulses intervals: {desired_intervals}")
 
             def belongs(t, intervals):
@@ -299,18 +360,19 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
                 return ret
 
             sampling_points_times_mask = np.zeros(len(sampling_points_times))
-            avgI = np.mean(dataI)
-            avgQ = np.mean(dataQ)
+            avgI = np.mean(data_i)
+            avgQ = np.mean(data_q)
 
+            # constructing mask for data to be cutted out
             for i, t in enumerate(sampling_points_times):
                 t_inside_pulse = t % repetition_period
-                if belongs(t_inside_pulse, desired_intervals):
+                if belongs(t_inside_pulse, target_intervals):
                     sampling_points_times_mask[i] = 1
 
             # the rest of the signal is equalized to the average value
-            dataI = (dataI * sampling_points_times_mask + (1 - sampling_points_times_mask) * avgI)
-            dataQ = (dataQ * sampling_points_times_mask + (1 - sampling_points_times_mask) * avgQ)
-        return dataI + 1j * dataQ
+            data_i = (data_i * sampling_points_times_mask + (1 - sampling_points_times_mask) * avgI)
+            data_q = (data_q * sampling_points_times_mask + (1 - sampling_points_times_mask) * avgQ)
+        return data_i + 1j * data_q
 
     def _recording_iteration(self):
         data = self._measure_one_trace()
@@ -320,7 +382,6 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
         fft_data = fftpack.fftshift(fftpack.fft(data, self._nfft)) / self._nfft
         yf = fft_data[self._start_idx:self._end_idx + 1]
-        self._measurement_result._iter += 1
         return yf
 
     def _output_pulse_sequence(self, zero=False):
@@ -328,10 +389,14 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         timedelay = self._pulse_sequence_parameters["start_delay"] + \
                     self._pulse_sequence_parameters["digitizer_delay"]
         dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)
-        self._n_samples_to_drop_by_dig_delay = dig.get_how_many_samples_to_drop_in_front()
+        self._n_samples_to_drop_by_delay = dig.get_how_many_samples_to_drop_in_front()
 
-        # dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay)
-        dig.calc_and_set_segment_size(extra=self._n_samples_to_drop_by_dig_delay, samples_drop=32)  # HOTFIX FOR TRIGGER
+        # because readout duration coincides with trigger period the very next trigger is missed
+        # by digitizer.
+        # decreasing segment size by fixed amount (e.g. 64) gives enough time to digitizer to
+        # catch the very next trigger event.
+        dig.calc_segment_size(decrease_segment_size_by=self._pause_in_samples_before_next_trigger)
+        self._n_samples_to_drop_in_end = dig.get_how_many_samples_to_drop_in_end()
         dig.setup_averaging_mode()
 
         q_pbs = [q_iqawg.get_pulse_builder() for q_iqawg in self._q_iqawg]
@@ -367,7 +432,9 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
     def set_sideband_order(self, order):
         """
-        Set order to visualize during measurement process
+        Set order to visualize during measurement process.
+        Takes into account positive or negative frequency range
+        in case you interchanged I and Q inputs.
 
         Parameters
         ----------
@@ -378,40 +445,43 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         -------
 
         """
-        self._measurement_result.set_sideband_order(order)
+        # control the sign in case you interchanged I and Q outputs of mixer
+        if self._freq_limits[0] > 0:
+            freqs_sign = 1
+        else:
+            freq_sign = -1
+        self._measurement_result.set_sideband_order(order, freq_sign=1)
 
 
 class PulseMixingResult(MeasurementResult):
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
-        self._is_finished = False
-        self._idx = []
-        self._midx = []
-        self._colors = []
         self._XX = None
         self._YY = None
         self._target_freq_2D = None
-        self._delta = 0
-        self._iter = 0
 
         self._d_freq = None
         self._if_freq = None
         self._amps_n_phases_mode = False
 
-    def set_sideband_order(self, order):
+    def set_sideband_order(self, order, freq_sign):
         """
+        Sets target fourier frequency that will be visualized.
 
         Parameters
         ----------
         order : int
             odd integer
+        freq_sign : int
+            '1' - positive frequency range assumed
+            '-1' - negative frequency range assumed
 
         Returns
         -------
-
+        None
         """
-        self._target_freq_2D = -(self._if_freq + order*self._d_freq)
+        self._target_freq_2D = freq_sign*(self._if_freq + order*self._d_freq)
 
     def set_parameter_name(self, parameter_name):
         self._parameter_name = parameter_name

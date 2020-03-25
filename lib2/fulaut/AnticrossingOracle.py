@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from IPython.display import clear_output
 from lib2.fulaut.qubit_spectra import *
 from lib2.ResonatorDetector import *
-from lib2.LoggingServer import *
+from lib2.loggingServer import *
 
 import scipy
 from scipy import *

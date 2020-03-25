@@ -467,7 +467,7 @@ class SD_Module(SD_Object) :
 			result = SD_Error.MODULE_NOT_OPENED;
 
 		return result;
-		
+
 	def getTemperature(self) :
 		if self._SD_Object__handle > 0 :
 			self._SD_Object__core_dll.SD_Module_getTemperature.restype = c_double;
@@ -923,6 +923,12 @@ class SD_AOU(SD_Module):
 	def AWGstart(self, nAWG) :
 		if self._SD_Object__handle > 0 :
 			return self._SD_Object__core_dll.SD_AOU_AWGstart(self._SD_Object__handle, nAWG);
+		else :
+			return SD_Error.MODULE_NOT_OPENED;
+
+	def AWGreset(self, nAWG) :
+		if self._SD_Object__handle > 0 :
+			return self._SD_Object__core_dll.SD_AOU_AWGreset(self._SD_Object__handle, nAWG);
 		else :
 			return SD_Error.MODULE_NOT_OPENED;
 
@@ -1990,7 +1996,7 @@ class SD_HVI(SD_Object) :
 	def writeIntegerConstantWithIndex(self, moduleIndex, constantName, value) :
 		if self._SD_Object__handle > 0 :
 			return self._SD_Object__core_dll.SD_HVI_writeIntegerConstantWithIndex(self._SD_Object__handle, moduleIndex, constantName.encode(), value);
-		else: 
+		else:
 			return SD_Error.HVI_NOT_OPENED;
 
 	def writeIntegerConstantWithUserName(self, moduleUserName, constantName, value) :

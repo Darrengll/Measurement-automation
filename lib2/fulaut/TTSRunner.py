@@ -5,7 +5,7 @@ from lib2.fulaut.qubit_spectra import *
 
 from datetime import datetime
 
-from lib2.LoggingServer import *
+from lib2.loggingServer import *
 
 class TTSRunner():
 

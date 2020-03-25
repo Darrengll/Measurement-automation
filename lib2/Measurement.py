@@ -15,7 +15,9 @@ import sys
 import numpy as np
 from numpy import zeros, complex_
 
-from loggingserver import LoggingServer
+from typing import Dict, Tuple, List
+
+from lib2.loggingServer import LoggingServer
 
 
 class Measurement:
@@ -23,7 +25,7 @@ class Measurement:
     The class contains methods to help with the implementation of measurement classes.
     Every new distinct measurement type is implemented as a child class of Measurement.
     """
-    logger = LoggingServer.getInstance("default_logger")  # HOTFIX by Shamil 07.04.2019 (name arg is now ought to be supplied)
+    logger = LoggingServer.getInstance()  # HOTFIX by Shamil 07.04.2019 (name arg is now ought to be supplied)
     _actual_devices = {}
     _log = []
 
@@ -108,6 +110,8 @@ class Measurement:
         self._plot_update_interval = plot_update_interval
         self._resonator_detector = ResonatorDetector()
         self._raw_data = None  # measurement results are stored here
+        self._swept_pars: Dict[str, Tuple] = None
+        self._swept_pars_names: List[str] = None
         # TODO: explicit definition of members in child classes
         # self._measurement_result = None  # should be initialized in child class
 
