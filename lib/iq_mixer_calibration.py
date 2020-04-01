@@ -50,7 +50,8 @@ class IQCalibrationData():
     def get_radiation_parameters(self):
         return dict(lo_frequency=self._lo_frequency, lo_power=self._lo_power,
                     if_frequency=self._if_frequency, ssb_power=self._ssb_power,
-                    sideband_to_maintain=self._sideband_to_maintain, waveform_resolution=self._waveform_resolution)
+                    sideband_to_maintain=self._sideband_to_maintain,
+                    waveform_resolution=self._waveform_resolution)
 
     def get_mixer_parameters(self):
         return dict(mixer_id=self._mixer_id, iq_attenuation=self._iq_attenuation)
@@ -71,8 +72,8 @@ class IQCalibrator():
                  sideband_to_maintain="left", sidebands_to_suppress=6,
                  optimized_awg_calls = True):
         """
-        IQCalibrator is a class that allows you to calibrate automatically an IQ mixer to obtain a Single Sideband (SSB)
-        with desired parameters.
+        IQCalibrator is a class that allows you to calibrate automatically an IQ mixer
+        to obtain a Single Sideband (SSB) signal with desired parameters.
         iqawg:
             reference to the IQAWG object
         sa:
@@ -111,6 +112,7 @@ class IQCalibrator():
         In case of if_frequency equal to zero the DC calibration is performed.
         The ssb_power parameter will be then treated as
         the power of the LO when the mixer is in the open state
+
         Parameters:
         ----------
         lo_frequency: float
@@ -206,13 +208,13 @@ class IQCalibrator():
             data = self._sa.get_tracedata()
 
             loss_value_amp = 0
-            for i,psd in enumerate(data):
+            for i, psd in enumerate(data):
                 if i != self._target_freq_idx:
                     # value = abs((self._target_freq_idx-i))**(-1.8)*10**(psd/10)
                     value = 10**((psd-ssb_power)/10)
                     loss_value_amp += value
 
-            if_amplitude_difference_loss = (abs(amp1-amp2)*50 if abs(amp1-amp2) > 0.01 else 0)
+            if_amplitude_difference_loss = (abs(amp1-amp2)*250 if abs(amp1-amp2) > 0.005 else 0)
             answer = loss_value_amp \
                     + 10**(abs(ssb_power - data[self._target_freq_idx])/10)*10 \
                     + if_amplitude_difference_loss
@@ -337,14 +339,18 @@ class IQCalibrator():
 
         finally:
             shift = if_frequency if self._sideband_to_maintain == "right" else -if_frequency
-            self._sa.setup_swept_sa(lo_frequency + shift, 10*if_frequency if if_frequency>0 else 1e9, nop=1001, rbw=1e5)
+            self._sa.setup_swept_sa(lo_frequency + shift,
+                                    10*if_frequency if if_frequency>0 else 1e9,
+                                    nop=1001, rbw=1e4)
             self._sa.set_continuous()
+
 
 def format_number_list(number_list):
     formatted_string = "[ "
     for number in number_list:
         formatted_string += "%3.3f "%number
     return formatted_string + "]"
+
 
 def format_time_delta(delta):
     hours, remainder = divmod(delta, 3600)

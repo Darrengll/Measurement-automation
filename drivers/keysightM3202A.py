@@ -38,6 +38,8 @@ class KeysightM3202A(Instrument):
         self.trigger_behaviours = [SD_TriggerBehaviors.TRIGGER_RISE] * 4  # rising edge by default
         self.trigger_output = True
         self.synchronized_channels = []
+        self.synchronize_channels(1,2,3,4)
+
         self.sync_mode = SD_SyncModes.SYNC_CLK10  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
 
         self._source_channels_group = []  # channels that are the source of the waveforms for dependent group
@@ -46,6 +48,7 @@ class KeysightM3202A(Instrument):
 
         self._prescaler = 0
         self.trigger_length = 100  # ns
+        self.trigger_output_config(trig_mode="ON", trig_length=self.trigger_length)
 
         self.clear()  # clear internal memory and AWG queues according to p.67 of the user guide
 
@@ -192,6 +195,8 @@ class KeysightM3202A(Instrument):
         # stopping AWG so the changes will take place according to the documentation
         # (not neccessary but a good practice)
         self.stop_AWG(channel)
+        self.stop_modulation(channel)
+
         # loading a waveform to internal RAM and putting waveform into the channel's AWG queue
         self.load_waveform_to_channel(waveform, frequency, channel)
         # starting operation

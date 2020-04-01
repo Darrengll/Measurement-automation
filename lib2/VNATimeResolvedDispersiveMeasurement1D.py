@@ -1,6 +1,5 @@
 from lib2.Measurement import *
 from lib2.VNATimeResolvedDispersiveMeasurement import *
-from lib2.IQPulseSequence import *
 
 from numpy.linalg import pinv # you will have to deal with this, FUCKING PSEUDOINVERSE, BABY
 import numpy as np
@@ -22,9 +21,6 @@ class VNATimeResolvedDispersiveMeasurement1D(VNATimeResolvedDispersiveMeasuremen
                 'q_awg': 0
                 'ro_awg'
         """
-        dev_params['vna'][0]["power"] = dev_params['ro_awg'][0]["calibration"] \
-            .get_radiation_parameters()["lo_power"]
-
         super().set_fixed_parameters(pulse_sequence_parameters,
                                      detect_resonator=detect_resonator,
                                      plot_resonator_fit=plot_resonator_fit,

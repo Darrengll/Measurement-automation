@@ -350,7 +350,7 @@ class SPCM:
             If pretrigger and timedelay values in samples of the digitizer
             are not dividable by 32, additional values will be acquired by the card
             at the beginning of the signal in order to make the whole acquired samples number
-            dividable by 32. The number of additional values is:
+            divisible by 32. The number of additional values is:
             (self.delay_in_samples + pretrigger_in_samples + 32) % 32
 
             Returns how many samples to cut from the beginning of the measured trace for the timedelay

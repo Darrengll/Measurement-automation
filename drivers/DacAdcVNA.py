@@ -41,6 +41,9 @@ class DacAdcVNA():
         self._averages = 200
         self._amplitude_window = 500
         self._recalibrate_mixer = False
+        self._adc_trigger_delay = 0
+        self._dac_overridden = False
+        self._lo.set_power(14)
 
     # Setter methods
     def set_lo(self, lo):
@@ -86,7 +89,6 @@ class DacAdcVNA():
         requested_sample_length = 1 / if_bw * self._iqadc.get_sample_rate()
         real_sample_length = 2 ** int(log2(requested_sample_length))
         real_bw = (1.25e9 / real_sample_length)
-        # print("Setting closest efficient bandwidth:", real_bw)
         self._bandwidth = real_bw
         self._sample_length = real_sample_length
         self._iqadc_parameters_invalidated = True
@@ -100,6 +102,10 @@ class DacAdcVNA():
     def autoscale_all(self):
         pass
 
+    def set_adc_trigger_delay(self, delay):
+        self._adc_trigger_delay = delay
+        self._iqadc_parameters_invalidated = True
+
     def generate_iqadc_parameters(self):
         self._iqadc_parameters_invalidated = False
         return {"channels": [0, 1],  # a list of channels to measure
@@ -112,7 +118,7 @@ class DacAdcVNA():
                 "pretrigger": 32,  # samples
                 "mode": SPCM_MODE.AVERAGING,
                 "trig_source": SPCM_TRIGGER.EXT0,
-                "digitizer_delay": 0}
+                "digitizer_delay": self._adc_trigger_delay}
 
 
     def set_parameters(self, parameters_dict):
@@ -120,19 +126,26 @@ class DacAdcVNA():
         Method allowing to set all or some of the VNA parameters at once
         (bandwidth, nop, power, averages, freq_limits and sweep type)
         """
-        if "bandwidth" in parameters_dict.keys():
+        if "bandwidth" in parameters_dict:
             self.set_bandwidth(parameters_dict["bandwidth"])
-        if "averages" in parameters_dict.keys():
+        if "averages" in parameters_dict:
             self.set_averages(parameters_dict["averages"])
-        if "power" in parameters_dict.keys():
+        if "power" in parameters_dict:
             self.set_power(parameters_dict["power"])
-        if "nop" in parameters_dict.keys():
+        if "nop" in parameters_dict:
             self.set_nop(parameters_dict["nop"])
-        if "freq_limits" in parameters_dict.keys():
+        if "freq_limits" in parameters_dict:
             self.set_freq_limits(*parameters_dict["freq_limits"])
+        if "adc_trigger_delay" in parameters_dict:
+            self.set_adc_trigger_delay(parameters_dict["adc_trigger_delay"])
+        if "dac_overridden" in parameters_dict:
+            self._dac_overridden = parameters_dict["dac_overridden"]
+        else:
+            self._dac_overridden = False
 
         self._calibrate_ssb(mean(self._freq_limits))
-        self._output_IF()
+        if not self._dac_overridden:
+            self._output_IF()
 
 
     # Getter methods
@@ -159,7 +172,6 @@ class DacAdcVNA():
         return mean(conj(demodulated_IQ), axis=1)
 
     def _output_IF(self):
-        self._lo.set_power(self._cal._lo_power)
         self._iqawg.set_parameters({"calibration": self._cal})
         pb = self._iqawg.get_pulse_builder()
         seq = pb.add_sine_pulse(1000).build()

@@ -120,7 +120,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
             p_i = (imag(mean_data) - imag(basis[0])) / (imag(basis[1]) - imag(basis[0]))
             return p_r + 1j * p_i
 
-    def _detect_resonator(self, vna_parameters, ro_calibration, q_calibration,
+    def _detect_resonator(self, vna_parameters, ro_calibration : IQCalibrationData, q_calibration,
                           q_z_calibration=None, plot_resonator_fit=True, z_offset=None):
 
         # turning all microwave OFF
@@ -130,11 +130,8 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         print("Detecting a resonator within provided frequency range of the VNA %s\
                     " % (str(vna_parameters["freq_limits"])))
 
+        self._vna[0].set_parameters(vna_parameters)
         self._vna[0].set_nop(vna_parameters["res_find_nop"])
-        self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
-        self._vna[0].set_power(vna_parameters["power"])
-        self._vna[0].set_bandwidth(vna_parameters["bandwidth"] * 10)
-        self._vna[0].set_averages(vna_parameters["averages"])
 
         rep_period = self._pulse_sequence_parameters["repetition_period"]
         ro_duration = self._pulse_sequence_parameters["readout_duration"]
@@ -142,7 +139,10 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         # making sure that readout is in pulse regime
         ro_pb = IQPulseBuilder(ro_calibration)
         self._ro_awg[0].output_pulse_sequence(ro_pb
-                                              .add_dc_pulse(ro_duration).add_zero_until(rep_period).build())
+                                              .add_zero_pulse(rep_period-ro_duration)
+                                              .add_pulse(ro_duration)
+                                              .build())
+
 
         # turning all the AWG output OFF
         q_pb = IQPulseBuilder(q_calibration)

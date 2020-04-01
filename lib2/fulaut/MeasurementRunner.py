@@ -59,17 +59,9 @@ class MeasurementRunner():
         self._cur_src = m._cur_src
         self._cur_src[0].set_status(1)
 
-        try:
-            self._ro_raw_awg = KeysightAWG("AWG1")
-            self._q_raw_awg = KeysightAWG("AWG2")
-            self._ro_awg = IQAWG(AWGChannel(self._ro_raw_awg, 1), AWGChannel(self._ro_raw_awg, 2))
-            self._q_awg = IQAWG(AWGChannel(self._q_raw_awg, 1), AWGChannel(self._q_raw_awg, 2))
-        except:
-            self._raw_awg = Tektronix_AWG5014("TEK1")
-            self._ro_awg = IQAWG(AWGChannel(self._raw_awg, 1), AWGChannel(self._raw_awg, 2))
-            self._q_awg = IQAWG(AWGChannel(self._raw_awg, 3), AWGChannel(self._raw_awg, 4))
-        # self._ro_awg = None
-        # self._q_awg = None
+        self._ro_awg = m._ro_awg
+        self._q_awg = m._q_awg
+        
         self._launch_date = datetime.today()
 
     def run(self, qubits_to_measure=[0, 1, 2, 3, 4, 5], period_fraction=0):

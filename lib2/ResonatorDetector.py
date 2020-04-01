@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
 from lib2.GlobalParameters import *
 from scipy.optimize import curve_fit
+from loggingserver import LoggingServer
 
 class ResonatorDetector():
 
@@ -12,6 +13,7 @@ class ResonatorDetector():
         self._plot = plot
         self._fast = fast
         self._type = type
+        self._logger = LoggingServer.getInstance("")
         self._discarded_result = None
         self.set_data(frequencies, s_data)
 
@@ -34,6 +36,8 @@ class ResonatorDetector():
 
             if self._plot:
                 self._port.plotall()
+
+            return result
         else:
             if GlobalParameters().resonator_types['transmission'] == True:
                 amps = abs(self._s_data)
@@ -86,7 +90,6 @@ class ResonatorDetector():
 
         if not self._freqs[0] < self._port.fitresults["fr"] < self._freqs[-1] \
                 or self._port.fitresults["Ql"] > 20000:
-            # fit failed
             return None
 
         min_idx = argmin(abs(self._s_data))
@@ -122,9 +125,10 @@ class ResonatorDetector():
         res_width = fit_frequency / self._port.fitresults["Ql"]
         if self._type == 'transmission':
             if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \
-                    abs(fit_amplitude - expected_amplitude) < .2*ptp(abs(self._port.z_data_sim)):
+                    abs(fit_amplitude - expected_amplitude) < .2 * ptp(abs(self._port.z_data_sim)):
                 return fit_frequency, fit_amplitude, fit_angle
             else:
+                self._discarded_result = fit_frequency, fit_amplitude, fit_angle
                 return None
         else:
             return fit_frequency, fit_amplitude, fit_angle

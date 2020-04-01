@@ -171,7 +171,7 @@ class AnticrossingOracle():
         self._extraction_types = []
 
         for idx, row in enumerate(self._delay):
-            extrema_inhdices = argrelextrema(row, less, order=10)[0]
+            extrema_inhdices = argrelextrema(row, greater, order=10)[0]
             extrema_inhdices = extrema_inhdices[row[extrema_inhdices] > threshold]
 
             if len(extrema_inhdices) > 0:

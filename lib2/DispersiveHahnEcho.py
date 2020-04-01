@@ -1,7 +1,5 @@
-
-from lib2.IQPulseSequence import *
+from lib2.IQPulseSequence import IQPulseBuilder
 from lib2.VNATimeResolvedDispersiveMeasurement1D import *
-from lib2.DispersiveRamsey import *
 
 
 class DispersiveHahnEcho(VNATimeResolvedDispersiveMeasurement1D):
