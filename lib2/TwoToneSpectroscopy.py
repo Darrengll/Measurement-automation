@@ -23,7 +23,7 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         self._resonator_area = dev_params['vna'][0]["freq_limits"]
         self._adaptive = adaptive
         if self._resonator_area[0] != self._resonator_area[1]:
-            detect_resonator = adaptive
+            detect_resonator = not adaptive
         else:
             detect_resonator = False
         super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
@@ -78,15 +78,15 @@ class PowerTwoToneSpectroscopy(TwoToneSpectroscopyBase):
     def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
 
-    def set_fixed_parameters(self, sweet_spot_current=None, sweet_spot_voltage=None, adaptive=False,
-                                 **dev_params):
+    def set_fixed_parameters(self, sweet_spot_current=None, sweet_spot_voltage=None,
+                             **dev_params):
             self._resonator_area = dev_params['vna'][0]["freq_limits"]
-            self._adaptive = adaptive
             if self._resonator_area[0] != self._resonator_area[1]:
-                detect_resonator = adaptive
+                detect_resonator = True
             else:
                 detect_resonator = False
-            super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
+            super().set_fixed_parameters(current=sweet_spot_current,
+                                         voltage=sweet_spot_voltage,
                                          detect_resonator=detect_resonator,
                                          **dev_params)
 
@@ -149,25 +149,25 @@ class AcStarkTwoToneSpectroscopy(TwoToneSpectroscopyBase):
 
     def _power_and_averages_setter(self, power):
         powers = self._swept_pars["Readout power [dBm]"][1]
-        vna_parameters = self._fixed_pars["vna"][0]
-        start_averages = vna_parameters["averages"]
+        initial_vna_params = self._fixed_pars["vna"][0].copy()
+        start_averages = initial_vna_params["averages"]
         avg_factor = exp((power - powers[0]) / powers[0] * log(start_averages))
-        vna_parameters["averages"] = round(start_averages * avg_factor)
-        vna_parameters["power"] = power
-        vna_parameters["freq_limits"] = self._resonator_area
+        initial_vna_params["averages"] = round(start_averages * avg_factor)
+        initial_vna_params["power"] = power
+        initial_vna_params["freq_limits"] = self._resonator_area
 
         self._mw_src[0].set_output_state("OFF")
-        if vna_parameters["freq_limits"][0] != vna_parameters["freq_limits"][1]:
+        if initial_vna_params["freq_limits"][0] != initial_vna_params["freq_limits"][1]:
             print("\rDetecting a resonator within provided frequency range of the VNA %s\
-                    " % (str(vna_parameters["freq_limits"])), flush=True, end="")
+                    " % (str(initial_vna_params["freq_limits"])), flush=True, end="")
 
-            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=False)
+            res_freq, res_amp, res_phase = self._detect_resonator(initial_vna_params, plot=False)
             print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
                     degrees" % (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180), end="")
         else:
-            res_freq = vna_parameters["freq_limits"][0]
+            res_freq = initial_vna_params["freq_limits"][0]
 
         self._mw_src[0].set_output_state("ON")
-        vna_parameters["freq_limits"] = (res_freq, res_freq)
+        initial_vna_params["freq_limits"] = (res_freq, res_freq)
 
-        self._vna[0].set_parameters(vna_parameters)
+        self._vna[0].set_parameters(initial_vna_params)

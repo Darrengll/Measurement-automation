@@ -7,7 +7,6 @@ from threading import Thread
 
 from lib2.MeasurementResult import MeasurementResult
 from lib2.ResonatorDetector import *
-from lib2.GlobalParameters import *
 from itertools import product
 from functools import reduce
 from operator import mul
@@ -19,7 +18,7 @@ from lib2.GlobalParameters import *
 
 from typing import Dict, Tuple, List
 
-from loggingServer import LoggingServer
+from loggingserver import LoggingServer
 
 
 class Measurement:
@@ -125,12 +124,12 @@ class Measurement:
         self._name = name
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
-        self._resonator_detector = ResonatorDetector()
         self._raw_data = None  # measurement results are stored here
         self._swept_pars: Dict[str, Tuple] = None
         self._swept_pars_names: List[str] = None
         # TODO: explicit definition of members in child classes
-        # self._measurement_result = None  # should be initialized in child class
+        self._measurement_result = None  # should be initialized in child class
+
         if GlobalParameters().resonator_types['reflection'] == True:
             self._resonator_detector = ResonatorDetector(type= 'reflection')
         else:

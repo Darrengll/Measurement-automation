@@ -75,7 +75,7 @@ class MeasurementResult:
         self._parameter_names = parameter_names
 
     @staticmethod
-    def delete(sample_name, name, date='', delete_all=False):
+    def delete(sample_name, name, date='', subfolder = "", delete_all=False):
         """
         Finds all files with matching result name within the file structure of ./data/
         folder, prompts user to resolve any ambiguities. Then deletes selected
@@ -89,7 +89,7 @@ class MeasurementResult:
         raise EOFError. On *nix systems, readline is used if available.
         """
         paths = MeasurementResult._find_paths_by(sample_name, name,
-                                                 ".pkl", date, delete_all)
+                                                 ".pkl", date, subfolder, delete_all)
 
         time_locations = set()
         for path in paths:
@@ -324,7 +324,9 @@ class MeasurementResult:
                 fig.canvas.set_window_title(self._name)
                 return fig, (ax_trace, ax_map_re, ax_map_im), (cax_re, cax_im)
         """
-        raise NotImplementedError
+        fig, axes = plt.subplots(1, 2, figsize=(15, 7))
+        return fig, None, None
+
 
     def _plot(self, data):
         """
@@ -373,7 +375,8 @@ class MeasurementResult:
         plt.tight_layout(pad=2)
         self._plot_fit(axes)
         """
-        raise NotImplementedError
+        pass
+
 
     def finalize(self):
         """
