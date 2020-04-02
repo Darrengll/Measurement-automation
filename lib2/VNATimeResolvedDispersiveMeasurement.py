@@ -30,7 +30,8 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         self._basis = None
         self._ult_calib = False
         self._pulse_sequence_parameters = \
-            {"modulating_window": "rectangular", "excitation_amplitude": 1,
+            {"modulating_window": "rectangular",
+             "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
 
     def set_fixed_parameters(self, pulse_sequence_parameters,

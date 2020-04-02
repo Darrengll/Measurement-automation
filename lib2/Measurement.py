@@ -130,10 +130,7 @@ class Measurement:
         # TODO: explicit definition of members in child classes
         self._measurement_result = None  # should be initialized in child class
 
-        if GlobalParameters().resonator_types['reflection'] == True:
-            self._resonator_detector = ResonatorDetector(type= 'reflection')
-        else:
-            self._resonator_detector = ResonatorDetector(type = 'transmission')
+        self._resonator_detector = ResonatorDetector(type = GlobalParameters().resonator_type)
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""

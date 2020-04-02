@@ -17,19 +17,13 @@ class STSRunner():
         self._vna = vna
         self._cur_src = cur_src
 
-        if awgs is not None:
-            self._ro_awg = awgs["ro_awg"]
-            self._q_awg = awgs["q_awg"]
-            self._open_only_readout_mixer()
-            self._vna_power = GlobalParameters.spectroscopy_readout_power + 20
-        else:
-            self._vna_power = GlobalParameters.spectroscopy_readout_power
+        self._vna_power = FulautParameters().sts_runner["power"]
 
-        self._vna_parameters = {"bandwidth": 500,
-                                "nop": 101,
+        self._vna_parameters = {"bandwidth": FulautParameters().sts_runner["bandwidth"],
+                                "nop": FulautParameters().sts_runner["nop"],
                                 "power": self._vna_power,
-                                "averages": 1,
-                                "sweep_type": "LIN"}
+                                "averages": FulautParameters().sts_runner["averages"]}
+
         self._currents = linspace(-.1e-3, .1e-3, 101)
         self._sts_result = None
         self._launch_datetime = datetime.today()
@@ -57,7 +51,7 @@ class STSRunner():
         ao = AnticrossingOracle("transmon", self._sts_result,
                                 plot=True,
                                 fast_res_detect=False,
-                                hints = GlobalParameters.anticrossing_oracle_hits)
+                                hints = FulautParameters().sts_runner["anticrossing_oracle_hints"])
         res_points = ao.get_res_points()
         params, loss = ao.launch()
 
@@ -83,7 +77,10 @@ class STSRunner():
         while (counter < 3):
 
             self._perform_STS()
-            ao = AnticrossingOracle("transmon", self._sts_result, plot=True, fast_res_detect=False)
+            ao = AnticrossingOracle("transmon", self._sts_result,
+                                    plot=True,
+                                    fast_res_detect=False,
+                                    hints = FulautParameters().sts_runner["anticrossing_oracle_hints"])
             res_points = ao.get_res_points()
 
             self._logger.debug("Scan: " + str(self._scan_area / 1e6))
@@ -107,7 +104,11 @@ class STSRunner():
 
         self._vna_parameters["nop"] = 101
         self._perform_STS()
-        ao = AnticrossingOracle("transmon", self._sts_result, plot=True, fast_res_detect=False)
+        ao = AnticrossingOracle("transmon",
+                                self._sts_result,
+                                plot=True,
+                                fast_res_detect=False,
+                                hints = FulautParameters().sts_runner["anticrossing_oracle_hints"])
         period = ao._find_period()
 
         N_periods = ptp(self._currents) / period
@@ -118,8 +119,8 @@ class STSRunner():
                 (self._currents - mean(self._currents)) / N_periods*1.5 + mean(self._currents)
             self._currents = linspace(self._currents[0], self._currents[-1], 201)
 
-            self._vna_parameters["nop"] = 201
-            self._vna_parameters["bandwidth"] = 200
+            self._vna_parameters["nop"] = self._vna_parameters["nop"]*2
+            self._vna_parameters["bandwidth"] = self._vna_parameters["bandwidth"]*2
             self._perform_STS()
         elif N_periods < 1:
             if max(abs(self._currents)) > 1e-3:
@@ -149,11 +150,3 @@ class STSRunner():
     def get_scan_area(self):
         return (self._res_freq - self._scan_area / 2,
                 self._res_freq + self._scan_area / 2)
-
-    def _open_only_readout_mixer(self):
-        self._ro_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                                relative_phase=0, offsets=(.25, .25),
-                                                waveform_resolution=1)
-        self._q_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                               relative_phase=0, offsets=(0, 0),
-                                               waveform_resolution=1)

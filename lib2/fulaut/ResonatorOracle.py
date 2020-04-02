@@ -1,6 +1,7 @@
 from scipy import *
 from scipy.signal import argrelextrema
 from matplotlib import pyplot as plt
+from lib2.GlobalParameters import FulautParameters
 
 class ResonatorOracle():
 
@@ -12,20 +13,18 @@ class ResonatorOracle():
     def launch(self, n_peaks = 8):
         vna = self._vna
         vna.sweep_hold()
-        vna.set_nop(25000)
-        vna.set_xlim(6.4e9, 7.5e9)  # setting the scan area
-        vna.set_bandwidth(10000)
-        vna.set_averages(1)
-        vna.set_power(-20)
+        vna.set_parameters(FulautParameters().resonator_oracle)
+
         vna.prepare_for_stb()
         vna.sweep_single() # triggering the sweep
         vna.wait_for_stb()
         vna.autoscale_all()
+
         freqs, s_data = self._vna.get_frequencies(), self._vna.get_sdata()
         depth = 0.1
         scan_areas = self.guess_scan_areas(freqs, s_data,
                                             self._area_size, depth)
-        while len(scan_areas)>8:
+        while len(scan_areas) > n_peaks:
             scan_areas = self.guess_scan_areas(freqs, s_data,
                                                 self._area_size, depth)
             depth+=1

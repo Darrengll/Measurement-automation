@@ -45,7 +45,7 @@ class SignalCore_5502a():
         open = self._lib.sc5502a_OpenDevice(self._device_ids[0], byref(self._handle))
         if open:
             msg = 'Failed to connect to the instrument with pxi address {} and handle {}'.format(
-                str(self._buffer_pointer_array_p[self._handle.value - 1]), self._handle)
+                str(self._device_ids[self._handle.value - 1]), self._handle)
             raise RuntimeError(msg)
 
     def close(self):
@@ -55,7 +55,8 @@ class SignalCore_5502a():
             raise RuntimeError(msg)
 
     def set_frequency(self, freq):
-        setFreq = self._lib.sc5502a_SetFrequency(self._handle, c_ulonglong(int(freq)))
+        self._lib.sc5502a_SetFrequency(self._handle, c_ulonglong(int(freq)))
+        setFreq = self._lib.sc5502a_SetFrequency(self._handle, c_ulonglong(int(freq))) # ensure complete operation
         if setFreq:
             msg = 'Failed to set frequency on the instrument with handle {}'.format(self._handle)
             raise RuntimeError(msg)
@@ -69,19 +70,10 @@ class SignalCore_5502a():
     def set_parameters(self, parameters_dict):
 
         if "frequency" in parameters_dict.keys():
-            setFreq = self._lib.sc5502a_SetFrequency(self._handle, c_ulonglong(int(parameters_dict["frequency"])))
-            if setFreq:
-                msg = 'Failed to set frequency on the instrument with handle {}'.format(self._handle)
-                raise RuntimeError(msg)
+            self.set_frequency(parameters_dict["frequency"])
 
         if "power" in parameters_dict.keys():
-            setPower = self._lib.sc5502a_SetPowerLevel(self._handle, c_float(parameters_dict['power']))
-            if setPower:
-                msg = 'Failed to set power level on the instrument with handle {}'.format(self._handle)
-                raise RuntimeError(msg)
-
-        if "frequencies" in parameters_dict.keys():
-            pass  # we just ignore this option, be careful, there's no support for a list sweep in this source
+            self.set_power(parameters_dict["power"])
 
     def send_sweep_trigger(self):
         pass  # stub method

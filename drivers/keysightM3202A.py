@@ -196,6 +196,8 @@ class KeysightM3202A(Instrument):
         # (not neccessary but a good practice)
         self.stop_AWG(channel)
         self.stop_modulation(channel)
+        self.module.channelPhase(channel - 1, 0)
+        self.module.channelOffset(channel - 1, 0)
 
         # loading a waveform to internal RAM and putting waveform into the channel's AWG queue
         self.load_waveform_to_channel(waveform, frequency, channel)

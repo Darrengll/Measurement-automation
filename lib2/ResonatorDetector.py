@@ -20,10 +20,12 @@ class ResonatorDetector():
     def set_data(self, frequencies, s_data):
         self._freqs = frequencies
         self._s_data = s_data
-        if self._type == 'reflection':
+        if self._type == ResonatorType.REFLECTION:
             self._port = reflection_port(frequencies, s_data)
-        else:
+        elif self._type == ResonatorType.NOTCH:
             self._port = notch_port(frequencies, s_data)
+        else:
+            raise ValueError("Resonator type %s not supported"%str(self._type))
 
     def set_plot(self, plot):
         self._plot = plot

@@ -1,0 +1,22 @@
+{
+  "resonator_oracle": {
+    "nop": 2500,
+    "freq_limits": [
+      6.4e9,
+      7.5e9
+    ],
+    "bandwidth": 1e6,
+    "averages": 1000,
+    "power": -40
+  },
+
+  "sts_runner": {
+    "nop": 101,
+    "bandwidth":1e6,
+    "averages": 1000,
+    "power": -60,
+    "anticrossing_oracle_hints": [
+      "fqmax_below"
+    ]
+  }
+}

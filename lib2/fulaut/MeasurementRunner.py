@@ -3,29 +3,18 @@ from lib.data_management import *
 from lib2.DispersiveHahnEcho import DispersiveHahnEcho
 from lib2.fulaut.ACStarkRunnner import ACStarkRunner
 
-from lib2.fulaut.AnticrossingOracle import *
-from lib2.fulaut.SpectrumOracle import *
 from lib2.fulaut.ResonatorOracle import *
 from lib2.fulaut.STSRunner import *
 from lib2.fulaut.TTSRunner import *
 from lib2.DispersiveRabiOscillations import DispersiveRabiOscillations
 from lib2.DispersiveRamsey import DispersiveRamsey
 from lib2.DispersiveDecay import DispersiveDecay
-from lib2.MeasurementResult import *
-from lib2.SingleToneSpectroscopy import *
 from lib2.TwoToneSpectroscopy import *
-from lib2.fulaut.qubit_spectra import transmon_spectrum
 from loggingserver import LoggingServer
 
-from drivers.keysightAWG import *
-from drivers.Tektronix_AWG5014 import *
-from drivers.IQAWG import *
 from drivers.Agilent_EXA import *
 
 from scipy.constants import pi
-import pickle
-
-from time import sleep
 
 
 class MeasurementRunner():
@@ -50,25 +39,17 @@ class MeasurementRunner():
         self._dhe_results = {}
 
         self._ramsey_offset = 5e3
-        # self._vna = Znb("ZNB")
-        self._sa = Agilent_EXA_N9010A("EXA")
         m = Measurement("", "", devs_aliases_map)
         self._vna = m._vna
-        # self._sa = m._sa
-        self._mw_src = m._mw_src
+        self._exc_iqvg = m._exc_iqvg
         self._cur_src = m._cur_src
         self._cur_src[0].set_status(1)
 
-        self._ro_awg = m._ro_awg
-        self._q_awg = m._q_awg
-        
         self._launch_date = datetime.today()
 
     def run(self, qubits_to_measure=[0, 1, 2, 3, 4, 5], period_fraction=0):
 
         self._logger.debug("Started measurement for qubits ##:" + str(qubits_to_measure))
-
-        self._open_only_readout_mixer()
 
         ro = ResonatorOracle(self._vna, self._s_parameter, 3e6)
         scan_areas = ro.launch()[:]
@@ -85,9 +66,7 @@ class MeasurementRunner():
                                  qubit_name,
                                  mean(res_limits),
                                  vna=self._vna,
-                                 cur_src=self._cur_src,
-                                 awgs={"q_awg": self._q_awg,
-                                       "ro_awg": self._ro_awg})  # {"q_awg": self._q_awg,"ro_awg": self._ro_awg}
+                                 cur_src=self._cur_src)  # {"q_awg": self._q_awg,"ro_awg": self._ro_awg}
 
                 self._sts_runners[qubit_name] = STSR
                 self._sts_fit_params[qubit_name], loss = STSR.run()
@@ -100,7 +79,7 @@ class MeasurementRunner():
                                  STSR.get_scan_area(),
                                  self._sts_fit_params[qubit_name],
                                  vna=self._vna,
-                                 mw_src=self._mw_src,
+                                 mw_src=self._exc_iqvg,
                                  cur_src=self._cur_src,
                                  awgs={"q_awg": self._q_awg,
                                        "ro_awg": self._ro_awg})
@@ -116,7 +95,7 @@ class MeasurementRunner():
                                        self._res_limits[qubit_name],
                                        self._tts_fit_params[qubit_name],
                                        vna=self._vna,
-                                       mw_src=self._mw_src,
+                                       mw_src=self._exc_iqvg,
                                        cur_src=self._cur_src,
                                        awgs={"q_awg": self._q_awg,
                                              "ro_awg": self._ro_awg},
@@ -176,7 +155,7 @@ class MeasurementRunner():
                              vna=self._vna,
                              ro_awg=[self._ro_awg],
                              q_awg=[self._q_awg],
-                             q_lo=self._mw_src)
+                             q_lo=self._exc_iqvg)
 
         vna_parameters = {"bandwidth": 10,
                           "freq_limits": self._res_limits[qubit_name],
@@ -219,7 +198,7 @@ class MeasurementRunner():
                               vna=self._vna,
                               ro_awg=[self._ro_awg],
                               q_awg=[self._q_awg],
-                              q_lo=self._mw_src)
+                              q_lo=self._exc_iqvg)
 
         vna_parameters = {"bandwidth": 10,
                           "freq_limits": self._res_limits[qubit_name],
@@ -260,11 +239,11 @@ class MeasurementRunner():
     def _perform_hahn_echo(self, qubit_name, save=False):
 
         DHE = DispersiveHahnEcho("%s-echo" % qubit_name,
-                              self._sample_name,
-                              vna=self._vna,
-                              ro_awg=[self._ro_awg],
-                              q_awg=[self._q_awg],
-                              q_lo=self._mw_src)
+                                 self._sample_name,
+                                 vna=self._vna,
+                                 ro_awg=[self._ro_awg],
+                                 q_awg=[self._q_awg],
+                                 q_lo=self._exc_iqvg)
 
         vna_parameters = {"bandwidth": 10,
                           "freq_limits": self._res_limits[qubit_name],
@@ -307,7 +286,7 @@ class MeasurementRunner():
         DRO = DispersiveRabiOscillations("%s-rabi" % qubit_name,
                                          self._sample_name,
                                          vna=self._vna,
-                                         q_lo=self._mw_src,
+                                         q_lo=self._exc_iqvg,
                                          q_awg=[self._q_awg],
                                          ro_awg=[self._ro_awg],
                                          plot_update_interval=0.5)
@@ -344,116 +323,3 @@ class MeasurementRunner():
         self._dro_results[qubit_name] = dro_result
         if save:
             dro_result.save()
-
-    def _set_vna_to_ro_lo(self):
-        ro_lo = self._vna[0]
-        ro_lo.set_frequency = lambda x: ro_lo.set_freq_limits(x, x)
-        ro_lo.set_output_state = lambda x: x
-        ro_lo.set_nop(1)
-        ro_lo.sweep_hold()
-        ro_lo.sweep_single()
-
-    def _calibrate_readout(self, qubit_name):
-
-        ro_resonator_frequency = self._sts_fit_params[qubit_name][0]
-        ro_resonator_frequency = round(ro_resonator_frequency / 1e9, 2) * 1e9
-        if_frequency = 0e6
-        lo_power = -10
-        ssb_power = GlobalParameters.ro_ssb_power[qubit_name]
-        waveform_resolution = 1
-
-        db = load_IQMX_calibration_database("CHGRO", 0)
-        if db is not None:
-            key = frozenset(dict(lo_power=lo_power,
-                                      ssb_power=ssb_power,
-                                      lo_frequency=ro_resonator_frequency,
-                                      if_frequency=if_frequency,
-                                      waveform_resolution=waveform_resolution) \
-                                 .items())
-            self._logger.debug("Requesting readout mixer cal: %s"%str(key))
-            ro_cal = \
-                db.get(key)
-            if ro_cal is not None and not GlobalParameters.recalibrate_mixers[qubit_name]:
-                return ro_cal
-
-        self._logger.debug("Did not find calibration! Calibrating...")
-
-        self._set_vna_to_ro_lo()
-
-        ig = {"dc_offsets": (0.1, -0.1), "dc_offset_open": 0.3}
-        cal = IQCalibrator(self._ro_awg,
-                           self._sa,
-                           self._vna[0],
-                           "CHGRO",
-                           0,
-                           sidebands_to_suppress=1)
-
-        ro_cal = cal.calibrate(lo_frequency=ro_resonator_frequency,
-                               if_frequency=if_frequency,
-                               lo_power=lo_power,
-                               ssb_power=ssb_power,
-                               waveform_resolution=1,
-                               iterations=3,
-                               minimize_iterlimit=20,
-                               sa_res_bandwidth=100,
-                               initial_guess=ig)
-        save_IQMX_calibration(ro_cal)
-        self._logger.debug("Calibration result: %s"%str(ro_cal))
-        return ro_cal
-
-    def _calibrate_excitation(self, qubit_name):
-        qubit_frequency = self._tts_fit_params[qubit_name][2]
-        qubit_frequency = round(qubit_frequency / 1e9 / 5, 2) * 5e9  # to 50 MHz
-        if_frequency = 100e6
-        lo_power = 14
-        ssb_power = GlobalParameters.exc_ssb_power[qubit_name]
-        waveform_resolution = 1
-
-        db = load_IQMX_calibration_database("CHGQ", 0)
-        exc_cal = \
-            db.get(frozenset(dict(lo_power=lo_power,
-                                  ssb_power=ssb_power,
-                                  lo_frequency=qubit_frequency + if_frequency,
-                                  if_frequency=if_frequency,
-                                  waveform_resolution=waveform_resolution) \
-                             .items()))
-        if exc_cal is not None and not GlobalParameters.recalibrate_mixers[qubit_name]:
-            return exc_cal
-
-        ig = {"dc_offsets": (-0.017, -0.04),
-              "if_amplitudes": (.1, .1),
-              "if_phase": -pi * 0.54}
-        cal = IQCalibrator(self._q_awg,
-                           self._sa,
-                           self._mw_src[0],
-                           "CHGQ",
-                           0,
-                           sidebands_to_suppress=6)
-
-        exc_cal = cal.calibrate(lo_frequency=qubit_frequency + if_frequency,
-                                if_frequency=if_frequency,
-                                lo_power=lo_power,
-                                ssb_power=ssb_power,
-                                waveform_resolution=waveform_resolution,
-                                iterations=2,
-                                minimize_iterlimit=20,
-                                sa_res_bandwidth=500,
-                                initial_guess=ig)
-        save_IQMX_calibration(exc_cal)
-        return exc_cal
-
-    def _open_only_readout_mixer(self):
-        self._ro_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                                relative_phase=0, offsets=(1, 1),
-                                                waveform_resolution=1)
-        self._q_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                               relative_phase=0, offsets=(0, 0),
-                                               waveform_resolution=1)
-
-    def _open_mixers(self):
-        self._ro_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                                relative_phase=0, offsets=(1, 1),
-                                                waveform_resolution=1)
-        self._q_awg.output_continuous_IQ_waves(frequency=0, amplitudes=(0, 0),
-                                               relative_phase=0, offsets=(1, 1),
-                                               waveform_resolution=1)

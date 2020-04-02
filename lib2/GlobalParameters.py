@@ -1,29 +1,61 @@
+from enum import Enum, auto
+from json import load
 
+class ResonatorType(Enum):
+    REFLECTION = auto()
+    NOTCH = auto()
+    TRANSMISSION = auto()
+
+resonator_type_map = {"reflection": ResonatorType.REFLECTION,
+                      "notch": ResonatorType.NOTCH,
+                      "transmission": ResonatorType.TRANSMISSION}
+
+class FulautParameters:
+    parameters = None
+    path = "lib2/fulaut/fulaut_parameters.json"
+
+    def __init__(self):
+        with open(self.path) as f:
+            self.parameters = load(f)
+
+    @property
+    def resonator_oracle(self):
+        return self.parameters["resonator_oracle"]
+
+    @property
+    def sts_runner(self):
+        return self.parameters["sts_runner"]
 
 class GlobalParameters:
 
-    resonator_types = {"reflection": False, "transmission": True}
+    parameters = None
+    path = "lib2/global_parameters.json"
 
-    which_sweet_spot = {"I": "top", "II":"top", "III":"top",
-                        "IV":"top", "VI":"top", "V":"top",
-                        "VII":"top", "VIII":"top"}
+    def __init__(self):
+        with open(self.path) as f:
+            self.parameters = load(f)
+    
+    @property
+    def resonator_type(self):
+        return resonator_type_map[self.parameters["resonator_type"]]
+
+    def which_sweet_spot(self):
+        return self.parameters["which_sweet_spot"]
+
+    def ro_ssb_power(self):
+        return self.parameters["ro_ssb_power"]
+
+    def exc_ssb_power(self):
+        return self.parameters["exc_ssb_power"]
+
+    def spectroscopy_readout_power(self):
+        return self.parameters["spectroscopy_readout_power"]
+
+    def spectroscopy_excitation_power(self):
+        return self.parameters["spectroscopy_excitation_power"]
+
+    def anticrossing_oracle_hits(self):
+        return self.parameters["anticrossing_oracle_hits"]
 
 
-    recalibrate_mixers = {"I": False, "II":False, "III":False,
-                        "IV":False, "V":False, "VI":False,
-                        "VII":False, "VIII":False}
 
-
-    ro_ssb_power = {"I": -55, "II":-55, "III":-60,
-                        "IV":-60, "VI":-55, "V":-60,
-                        "VII":-60, "VIII":-60}
-
-    exc_ssb_power = {"I": -20, "II":-20, "III":-20,
-                        "IV":-20, "VI":-20, "V":-20,
-                        "VII":-20, "VIII":-20}
-
-    spectroscopy_readout_power = -60
-
-    spectroscopy_excitation_power = 0
-
-    anticrossing_oracle_hits = ["fqmax_below"]
