@@ -3,15 +3,11 @@ Paramatric single-tone spectroscopy is perfomed with a Vector Network Analyzer
 (VNA) for each parameter value which is set by a specific function that must be
 passed to the SingleToneSpectroscopy class when it is created.
 """
-from numpy import *
-from scipy import fftpack
-
 from lib2.MeasurementResult import *
 from matplotlib import colorbar
 from lib2.Measurement import *
 from time import sleep
 
-from lib2.digitizerPulsedMeasurements.digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
 
 
 class SingleToneSpectroscopy(Measurement):
