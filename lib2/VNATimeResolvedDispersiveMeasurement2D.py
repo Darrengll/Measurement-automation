@@ -71,3 +71,8 @@ class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeas
 
         plt.draw()
 
+    def __getstate__(self):
+        d = super().__getstate__()
+        d['_maps'] = [None]*4
+        d['_cbs'] = [None]*4
+        return d
