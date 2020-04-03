@@ -125,7 +125,7 @@ class ResonatorDetector():
         fit_amplitude = min(abs(self._port.z_data_sim))
         fit_angle = angle(self._port.z_data_sim)[fit_min_idx]
         res_width = fit_frequency / self._port.fitresults["Ql"]
-        if self._type == 'transmission':
+        if self._type == ResonatorType.NOTCH:
             if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \
                     abs(fit_amplitude - expected_amplitude) < .2 * ptp(abs(self._port.z_data_sim)):
                 return fit_frequency, fit_amplitude, fit_angle

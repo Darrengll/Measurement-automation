@@ -85,13 +85,15 @@ class STSRunner():
 
             self._logger.debug("Scan: " + str(self._scan_area / 1e6))
             self._logger.debug("Ptp: " + str(ptp(res_points[:, 1]) / 1e6))
-            if 0.1 * self._scan_area < ptp(res_points[:, 1]) < 0.5 * self._scan_area:
-                self._logger.debug("Flux dependence found. Zooming...")
-                self._scan_area = max(ptp(res_points[:, 1]) / 0.25, 3e6)
+            if 0.1e6 < ptp(res_points[:, 1]) <= 5e6:
+                self._scan_area = ptp(res_points[:, 1]) / 0.1
                 self._res_freq = mean(res_points[:, 1])
+                self._logger.debug("Flux dependence found. Zooming to scan area of: %s",
+                                   str(self._scan_area))
                 break
-            elif ptp(res_points[:, 1]) > 0.5 * self._scan_area:
-                self._logger.debug("Strong flux dependence found. Leaving as is..")
+            elif ptp(res_points[:, 1]) > 5e6:
+                self._logger.debug("Very strong flux dependence found. "
+                                   "Probably avoided crossings. Leaving as is..")
                 self._res_freq = mean(res_points[:, 1])
                 break
             else:

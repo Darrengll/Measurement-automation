@@ -151,7 +151,7 @@ class AnticrossingOracle():
         data = self._data
 
         #convert data to delay -- works for reflection AND trasmission
-        data = self._sts_result._remove_delay(freqs, data)
+        # data = self._sts_result._remove_delay(freqs, data)
         unwrapped_phase = unwrap(angle(data), axis=1)
         filter_window = data.shape[1] // 10
         if filter_window % 2 == 0:
@@ -191,6 +191,7 @@ class AnticrossingOracle():
                     self._extracted_indices.append(idx)
 
         self._res_points = array(res_points)
+        self._extraction_types = array(self._extraction_types)
         self._freqs = freqs
         self._curs = param_values
 
@@ -199,8 +200,12 @@ class AnticrossingOracle():
 
         if self._plot:
             plt.figure()
-            plt.plot(self._res_points[:,0], self._res_points[:,1], 'C1.',
-                        label="Extracted points")
+            plt.plot(self._res_points[self._extraction_types == "fit",0],
+                     self._res_points[self._extraction_types == "fit",1], 'C1.',
+                        label="Extracted points (fit)")
+            plt.plot(self._res_points[self._extraction_types == "max_delay",0],
+                     self._res_points[self._extraction_types == "max_delay",1], 'C3.',
+                        label="Extracted points (max. delay)")
             plt.pcolormesh(param_values, freqs[:-1], delay.T)
             plt.legend()
             plt.gcf().set_size_inches(15, 5)
@@ -218,6 +223,7 @@ class AnticrossingOracle():
             if abs(diff_next) > 15 * median_diff and abs(diff_prev) > 15 * median_diff:
                 if diff_diff < 5 * median_diff:
                     to_drop.append(idx)
+        self._extraction_types = np.delete(self._extraction_types, to_drop, axis=0)
         self._res_points = np.delete(self._res_points, to_drop, axis=0)
         self._extracted_indices = np.delete(self._extracted_indices, to_drop, axis=0)
 

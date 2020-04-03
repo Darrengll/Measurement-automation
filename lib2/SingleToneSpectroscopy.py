@@ -151,8 +151,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         if not self._unwrap_phase:
             phases = abs(angle(Z).T)
         else:
-            Z_ravelled = Z.ravel()
-            phases = reshape(unwrap(angle(Z_ravelled)), Z.shape).T
+            phases = unwrap(angle(Z)).T
 
         phases[Z.T == 0] = 0
         phases = phases if self._phase_units == "rad" else phases * 180 / pi
@@ -211,7 +210,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         return copy
 
     def _remove_delay(self, frequencies, s_data):
-        phases = unwrap(angle(s_data))
+        phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))
         k, b = polyfit(frequencies, phases[0], 1)
         phases = phases - k * frequencies - b
         corr_s_data = abs(s_data) * exp(1j * phases)
