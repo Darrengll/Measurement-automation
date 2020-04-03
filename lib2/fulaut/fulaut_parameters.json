@@ -30,5 +30,42 @@
       "resonator_detection_nop": 201,
       "resonator_detection_bandwidth": 1e5
     }
+  },
+  "acstts_runner": {
+    "vna_parameters": {
+      "bandwidth": 2e5,
+      "averages": 10000,
+      "resonator_detection_nop": 201,
+      "resonator_detection_bandwidth": 1e5
+    }
+  },
+  "rabi": {
+    "nop": 101,
+    "max_excitation_duration": 501,
+    "readout_duration": 4000,
+    "repetition_period": 50000,
+    "averages": 5000
+  },
+  "ramsey": {
+    "nop": 101,
+    "readout_duration": 4000,
+    "repetition_period": 100000,
+    "averages": 5000,
+    "max_ramsey_delay": 50000,
+    "detuning": 0.1e6
+  },
+  "decay": {
+    "nop": 51,
+    "averages": 5000,
+    "readout_duration": 4000,
+    "repetition_period": 200000,
+    "max_readout_delay": 100000
+  },
+  "hahn_echo": {
+    "nop": 51,
+    "averages": 5000,
+    "readout_duration": 4000,
+    "repetition_period": 100000,
+    "max_echo_delay": 50000
   }
 }

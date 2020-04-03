@@ -123,9 +123,9 @@ class SPCM:
             else:
                 raise ValueError(f"Underfined opeation mode; you requested {mode}")
         if "n_avg" in pars_dict:
-            n_avg = pars_dict["n_avg"]
+            n_avg = int(pars_dict["n_avg"])
             if (self.mode == SPCM_MODE.AVERAGING) and (n_avg < 4):
-                raise ValueError(f"Minimum number of averages: 4; you requested n_avg = {n_avg}")
+                n_avg = 4
             self.n_avg = n_avg
         if "trig_source" in pars_dict:
             trig_source = pars_dict["trig_source"]

@@ -7,9 +7,10 @@ from scipy.fftpack import fft, fftfreq
 from time import sleep
 from lib.data_management import *
 
+
 class DacAdcVNA():
 
-    def __init__(self, iqadc, iqvg : IQVectorGenerator, sa):
+    def __init__(self, iqadc, iqvg: IQVectorGenerator, sa):
         '''
         Driver for a virtual VNA based on the heterodyne scheme with up-conversion
         and down-conversion in IQ mixers in the SSBSC (single-sideband suppressed carrier)
@@ -39,7 +40,6 @@ class DacAdcVNA():
         self._amplitude_window = 500
         self._recalibrate_mixer = False
         self._adc_trigger_delay = 0
-
 
     def set_if_frequency(self, if_frequency):
         self._iqvg.set_frequency(if_frequency)
@@ -98,7 +98,6 @@ class DacAdcVNA():
                 "trig_source": SPCM_TRIGGER.EXT0,
                 "digitizer_delay": self._adc_trigger_delay}
 
-
     def set_parameters(self, parameters_dict):
         """
         Method allowing to set all or some of the VNA parameters at once
@@ -119,13 +118,16 @@ class DacAdcVNA():
 
     def select_S_param(self, s_parameter):
         if s_parameter is not "S21":
-            raise ValueError("This VNA only measures S21, %s is not supported"%s_parameter)
+            raise ValueError("This VNA only measures S21, %s is not supported" % s_parameter)
         pass
 
     # Getter methods
 
     def get_averages(self):
         return self._averages
+
+    def get_iqawg(self):
+        return self._iqvg.get_iqawg()
 
     def get_frequencies(self):
         return linspace(*self._freq_limits, self._nop)
@@ -135,6 +137,9 @@ class DacAdcVNA():
         complex_IQ = (array(self._samples_I) + 1j * array(self._samples_Q))
         demodulated_IQ = complex_IQ * exp(-1j * self._iqvg.get_if_frequency() * Ts * 2 * pi)
         return mean(conj(demodulated_IQ), axis=1)
+
+    def get_calibration(self, frequency, power):
+        return self._iqvg.get_calibration(frequency, power)
 
     def sweep_single(self):
 
@@ -154,6 +159,9 @@ class DacAdcVNA():
 
             self._samples_I += [data[0::2]]
             self._samples_Q += [data[1::2]]
+
+    def sweep_continuous(self):
+        pass
 
     def wait_for_stb(self):
         pass

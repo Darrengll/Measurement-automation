@@ -151,8 +151,8 @@ class AcStarkTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         powers = self._swept_pars["Readout power [dBm]"][1]
         initial_vna_params = self._fixed_pars["vna"][0].copy()
         start_averages = initial_vna_params["averages"]
-        avg_factor = exp((power - powers[0]) / powers[0] * log(start_averages))
-        initial_vna_params["averages"] = round(start_averages * avg_factor)
+        avg_reduce_factor = 10**(-(power - powers[0])/10)
+        initial_vna_params["averages"] = round(start_averages * avg_reduce_factor)
         initial_vna_params["power"] = power
         initial_vna_params["freq_limits"] = self._resonator_area
 

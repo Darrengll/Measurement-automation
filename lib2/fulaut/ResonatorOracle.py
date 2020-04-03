@@ -30,6 +30,7 @@ class ResonatorOracle():
                                                self._area_size, depth)
             depth += 1
 
+        plt.figure("Resonator oracle scan")
         plt.plot(freqs / 1e9, 20 * log10(abs(s_data)))
 
         for scan_area in scan_areas:
