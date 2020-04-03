@@ -26,7 +26,7 @@ def find(pattern, path):
     return result
 
 
-class SpectrumOracle():
+class SpectrumOracle:
     """
     This class automatically processes spectral data for different types of qubits
     """
@@ -168,6 +168,7 @@ class SpectrumOracle():
 
         if self._plot:
             plt.figure("Spectrum oracle fit")
+
             plt.plot(self._points[:, 0], self._points[:, 1], ".")
             plt.plot([self._grids[1][0]], [mean(self._points[:, 1])],
                      "|", markersize=100)

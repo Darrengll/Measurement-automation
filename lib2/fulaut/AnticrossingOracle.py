@@ -6,7 +6,7 @@ import lib2.ResonatorDetector
 reload(lib2.ResonatorDetector)
 from lib2.ResonatorDetector import *
 from loggingserver import LoggingServer
-from lib2.GlobalParameters import *
+from lib2.ExperimentParameters import *
 
 import scipy
 from scipy import *

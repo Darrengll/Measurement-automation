@@ -4,7 +4,7 @@ from time import sleep
 from loggingserver import LoggingServer
 from numpy import linspace, log10, around
 
-from lib2.GlobalParameters import GlobalParameters
+from lib2.ExperimentParameters import GlobalParameters
 from lib2.MeasurementResult import MeasurementResult
 from lib2.TwoToneSpectroscopy import AcStarkTwoToneSpectroscopy
 from lib2.fulaut import qubit_spectra

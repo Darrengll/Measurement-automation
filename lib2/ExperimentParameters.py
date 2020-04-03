@@ -10,21 +10,54 @@ resonator_type_map = {"reflection": ResonatorType.REFLECTION,
                       "notch": ResonatorType.NOTCH,
                       "transmission": ResonatorType.TRANSMISSION}
 
-class FulautParameters:
+class TTSRunnerParameters:
     parameters = None
     path = "lib2/fulaut/fulaut_parameters.json"
 
     def __init__(self):
         with open(self.path) as f:
-            self.parameters = load(f)
+            self.parameters = load(f)["tts_runner"]
 
     @property
-    def resonator_oracle(self):
-        return self.parameters["resonator_oracle"]
+    def vna_parameters(self):
+        return self.parameters["vna_parameters"]
+
+class STSRunnerParameters:
+    parameters = None
+    path = "lib2/fulaut/fulaut_parameters.json"
+
+    def __init__(self):
+        with open(self.path) as f:
+            self.parameters = load(f)["sts_runner"]
 
     @property
-    def sts_runner(self):
-        return self.parameters["sts_runner"]
+    def flux_nop(self):
+        return self.parameters["flux_nop"]
+
+    @property
+    def vna_parameters(self):
+        return self.parameters["vna_parameters"]
+
+    @property
+    def anticrossing_oracle_hints(self):
+        return self.parameters["anticrossing_oracle_hints"]
+
+class ResonatorOracleParameters:
+    parameters = None
+    path = "lib2/fulaut/fulaut_parameters.json"
+
+    def __init__(self):
+        with open(self.path) as f:
+            self.parameters = load(f)["resonator_oracle"]
+
+    @property
+    def peak_number(self):
+        return self.parameters["peak_number"]
+
+    @property
+    def vna_parameters(self):
+        return self.parameters["vna_parameters"]
+
 
 class GlobalParameters:
 
@@ -39,23 +72,24 @@ class GlobalParameters:
     def resonator_type(self):
         return resonator_type_map[self.parameters["resonator_type"]]
 
+    @property
     def which_sweet_spot(self):
         return self.parameters["which_sweet_spot"]
 
+    @property
     def ro_ssb_power(self):
         return self.parameters["ro_ssb_power"]
 
+    @property
     def exc_ssb_power(self):
         return self.parameters["exc_ssb_power"]
 
+    @property
     def spectroscopy_readout_power(self):
         return self.parameters["spectroscopy_readout_power"]
 
+    @property
     def spectroscopy_excitation_power(self):
         return self.parameters["spectroscopy_excitation_power"]
-
-    def anticrossing_oracle_hits(self):
-        return self.parameters["anticrossing_oracle_hits"]
-
 
 

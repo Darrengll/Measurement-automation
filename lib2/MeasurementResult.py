@@ -2,7 +2,6 @@ import fnmatch
 import os
 import pickle
 import matplotlib.figure, matplotlib.axes
-import platform
 import traceback
 from datetime import datetime
 from threading import Lock

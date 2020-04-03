@@ -39,5 +39,7 @@
     "V": -20,
     "VII": -20,
     "VIII": -20
-  }
+  },
+  "spectroscopy_readout_power": -60,
+  "spectroscopy_excitation_power": -30
 }

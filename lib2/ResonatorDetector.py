@@ -3,7 +3,7 @@ from resonator_tools.circuit import notch_port, reflection_port
 from numpy import abs, pi, exp, angle, unwrap, arctan
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
-from lib2.GlobalParameters import *
+from lib2.ExperimentParameters import *
 from scipy.optimize import curve_fit
 from loggingserver import LoggingServer
 
@@ -41,14 +41,13 @@ class ResonatorDetector():
 
             return result
         else:
-            if GlobalParameters().resonator_types['transmission'] == True:
+            if self._type is ResonatorType.NOTCH:
                 amps = abs(self._s_data)
                 phas = angle(self._s_data)
                 min_idx = argmin(amps)
                 result = frequencies[min_idx], min(amps), phas[min_idx]
                 return result
             else:
-
                 unwrapped_phase = unwrap(angle(self._s_data))
                 filter_window = len(self._s_data) // 10
                 if filter_window % 2 == 0:

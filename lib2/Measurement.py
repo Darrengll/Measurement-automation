@@ -1,22 +1,22 @@
 import pyvisa
 from matplotlib._pylab_helpers import Gcf
+from matplotlib import pyplot as plt
+
+from itertools import product
+from functools import reduce
+from operator import mul
+import sys
+import numpy as np
+from numpy import zeros, complex_
 
 from drivers import *
 from datetime import datetime as dt
 from threading import Thread
+from typing import Dict, Tuple, List
 
 from lib2.MeasurementResult import MeasurementResult
-from lib2.ResonatorDetector import *
-from itertools import product
-from functools import reduce
-from operator import mul
-from matplotlib import pyplot as plt
-import sys
-import numpy as np
-from numpy import zeros, complex_
-from lib2.GlobalParameters import *
-
-from typing import Dict, Tuple, List
+from lib2.ResonatorDetector import ResonatorDetector
+from lib2.ExperimentParameters import GlobalParameters, ResonatorType
 
 from loggingserver import LoggingServer
 
@@ -45,29 +45,29 @@ class Measurement:
             device_module.device_class(...) constructor
     """
     _devs_dict = \
-        {    'vna1': [["PNA-L", "PNA-L1"], [agilent_PNA_L, "Agilent_PNA_L"]],
-    'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
-    'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
-    'vna4': [["ZNB"], [znb, "Znb"]],
-    'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
-    'exg': [["EXG"], [E8257D, "EXG"]],
-    'psg2': [['PSG'], [E8257D, "EXG"]],
-    'mxg': [["MXG"], [E8257D, "MXG"]],
-    'psg1': [["psg1"], [E8257D, "EXG"]],
-    'awg1': [["AWG", "AWG1"], [keysightAWG, "KeysightAWG"]],
-    'awg2': [["AWG_Vadik", "AWG2"], [keysightAWG, "KeysightAWG"]],
-    'awg3': [["AWG3"], [keysightAWG, "KeysightAWG"]],
-    'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
-    # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
-    'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
-    'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-    'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-    'yok3': [["GS210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-    'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-    'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-    'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-    'k6220': [["k6220"], [k6220, "K6220"]]
-    }
+        {'vna1': [["PNA-L", "PNA-L1"], [agilent_PNA_L, "Agilent_PNA_L"]],
+         'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
+         'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
+         'vna4': [["ZNB"], [znb, "Znb"]],
+         'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
+         'exg': [["EXG"], [E8257D, "EXG"]],
+         'psg2': [['PSG'], [E8257D, "EXG"]],
+         'mxg': [["MXG"], [E8257D, "MXG"]],
+         'psg1': [["psg1"], [E8257D, "EXG"]],
+         'awg1': [["AWG", "AWG1"], [keysightAWG, "KeysightAWG"]],
+         'awg2': [["AWG_Vadik", "AWG2"], [keysightAWG, "KeysightAWG"]],
+         'awg3': [["AWG3"], [keysightAWG, "KeysightAWG"]],
+         'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
+         # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
+         'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
+         'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok3': [["GS210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'k6220': [["k6220"], [k6220, "K6220"]]
+         }
 
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
         """
@@ -118,7 +118,7 @@ class Measurement:
 
         self._logger = LoggingServer.getInstance('manual_meas')
 
-        self._logger.debug("Measurement " + name + " init, devs: "+ str(devs_aliases_map))
+        self._logger.debug("Measurement " + name + " init, devs: " + str(devs_aliases_map))
 
         self._interrupted = False
         self._name = name
@@ -130,7 +130,7 @@ class Measurement:
         # TODO: explicit definition of members in child classes
         self._measurement_result = None  # should be initialized in child class
 
-        self._resonator_detector = ResonatorDetector(type = GlobalParameters().resonator_type)
+        self._resonator_detector = ResonatorDetector(type=GlobalParameters().resonator_type)
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""
@@ -246,7 +246,6 @@ class Measurement:
             self._measurement_result.finalize()
             plt.close(figure_number)
 
-
     def stop(self):
         self._interrupted = True
 
@@ -357,8 +356,8 @@ class Measurement:
         """
         vna = self._vna[0]
         init_averages = vna.get_averages()
-        for i in range(1, tries_number+1):
-            vna.set_averages(init_averages*i)
+        for i in range(1, tries_number + 1):
+            vna.set_averages(init_averages * i)
             vna.avg_clear()
             vna.prepare_for_stb()
             vna.sweep_single()

@@ -12,7 +12,7 @@ class IQCalibrationData():
     def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,
                  if_frequency, sideband_to_maintain, ssb_power, waveform_resolution, dc_offsets,
                  dc_offsets_open, if_offsets, if_amplitudes, if_phase, spectral_values,
-                 optimization_time, end_date, grade_warning = True):
+                 optimization_time, end_date, grade_warning=True):
 
         self._mixer_id = mixer_id
         self._iq_attenuation = iq_attenuation
@@ -90,7 +90,7 @@ class IQCalibrationData():
                                  self._waveform_resolution, self._dc_offsets,
                                  self._dc_offsets_open, self._if_offsets, self._if_amplitudes, self._if_phase,
                                  self._spectral_values,
-                                 self._optimization_time, self._end_date, grade_warning = False)
+                                 self._optimization_time, self._end_date, grade_warning=False)
 
     def __str__(self):
         return "Calibration data for mixer " + self._mixer_id + \
@@ -286,7 +286,8 @@ class IQCalibrator():
             answer = loss_value_amp
 
             print("\rAmplitudes: ", format_number_list(if_amplitudes), format_number_list(data),
-                  "loss:", answer, "IF IQ amplitude difference loss:", abs(amp1 - amp2) / abs(amp1) / 10,
+                  "loss: %.2e," % answer,
+                  "incl. IF IQ amplitude difference loss: %.2e" % (abs(amp1 - amp2) / abs(amp1) / 10),
                   end="          ", flush=True)
             clear_output(wait=True)
             return answer
@@ -384,9 +385,9 @@ class IQCalibrator():
                                          elapsed_time, datetime.now())
 
             else:
-                freqs = np.arange(lo_frequency - self._target_freq_idx * if_frequency,
-                                  lo_frequency + (self._target_freq_idx + 1) * if_frequency,
-                                  if_frequency)
+                freqs = np.linspace(lo_frequency - self._N_sup // 2 * if_frequency,
+                                    lo_frequency + self._N_sup // 2 * if_frequency,
+                                    self._N_sup + 1)
 
                 if self._sideband_to_maintain == "right":
                     freqs += if_frequency

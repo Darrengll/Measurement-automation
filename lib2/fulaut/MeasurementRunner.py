@@ -14,7 +14,6 @@ from loggingserver import LoggingServer
 
 from drivers.Agilent_EXA import *
 
-from scipy.constants import pi
 
 
 class MeasurementRunner():
@@ -76,13 +75,11 @@ class MeasurementRunner():
             if qubit_name not in self._tts_fit_params.keys():
                 TTSR = TTSRunner(self._sample_name,
                                  qubit_name,
-                                 STSR.get_scan_area(),
+                                 self._res_limits[qubit_name],
                                  self._sts_fit_params[qubit_name],
                                  vna=self._vna,
-                                 mw_src=self._exc_iqvg,
-                                 cur_src=self._cur_src,
-                                 awgs={"q_awg": self._q_awg,
-                                       "ro_awg": self._ro_awg})
+                                 exc_iqvg=self._exc_iqvg,
+                                 cur_src=self._cur_src)
                 self._tts_runners[qubit_name] = TTSR
                 self._tts_fit_params[qubit_name] = TTSR.run()
 

@@ -1,6 +1,6 @@
 from lib2.SingleToneSpectroscopy import *
 from lib2.fulaut.AnticrossingOracle import *
-from lib2.GlobalParameters import GlobalParameters
+from lib2.ExperimentParameters import STSRunnerParameters
 from loggingserver import LoggingServer
 from datetime import datetime
 
@@ -17,12 +17,9 @@ class STSRunner():
         self._vna = vna
         self._cur_src = cur_src
 
-        self._vna_power = FulautParameters().sts_runner["power"]
+        self._vna_parameters = STSRunnerParameters().vna_parameters
+        self._vna_parameters["power"] = GlobalParameters().spectroscopy_readout_power
 
-        self._vna_parameters = {"bandwidth": FulautParameters().sts_runner["bandwidth"],
-                                "nop": FulautParameters().sts_runner["nop"],
-                                "power": self._vna_power,
-                                "averages": FulautParameters().sts_runner["averages"]}
 
         self._currents = linspace(-.1e-3, .1e-3, 101)
         self._sts_result = None
@@ -51,7 +48,7 @@ class STSRunner():
         ao = AnticrossingOracle("transmon", self._sts_result,
                                 plot=True,
                                 fast_res_detect=False,
-                                hints = FulautParameters().sts_runner["anticrossing_oracle_hints"])
+                                hints = STSRunnerParameters().anticrossing_oracle_hints)
         res_points = ao.get_res_points()
         params, loss = ao.launch()
 
@@ -80,7 +77,7 @@ class STSRunner():
             ao = AnticrossingOracle("transmon", self._sts_result,
                                     plot=True,
                                     fast_res_detect=False,
-                                    hints = FulautParameters().sts_runner["anticrossing_oracle_hints"])
+                                    hints = STSRunnerParameters().anticrossing_oracle_hints)
             res_points = ao.get_res_points()
 
             self._logger.debug("Scan: " + str(self._scan_area / 1e6))
@@ -110,7 +107,7 @@ class STSRunner():
                                 self._sts_result,
                                 plot=True,
                                 fast_res_detect=False,
-                                hints = FulautParameters().sts_runner["anticrossing_oracle_hints"])
+                                hints = STSRunnerParameters().anticrossing_oracle_hints)
         period = ao._find_period()
 
         N_periods = ptp(self._currents) / period

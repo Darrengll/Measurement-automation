@@ -3,12 +3,13 @@ Paramatric single-tone spectroscopy is perfomed with a Vector Network Analyzer
 (VNA) for each parameter value which is set by a specific function that must be
 passed to the SingleToneSpectroscopy class when it is created.
 """
-from lib2.MeasurementResult import *
-from matplotlib import colorbar
-from lib2.Measurement import *
+from matplotlib import colorbar, pyplot as plt
 from time import sleep
+from numpy import *
 
 
+from lib2.Measurement import Measurement
+from lib2.MeasurementResult import MeasurementResult, ContextBase
 
 class SingleToneSpectroscopy(Measurement):
     """
@@ -211,7 +212,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
 
     def _remove_delay(self, frequencies, s_data):
         phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))
-        k, b = polyfit(frequencies, phases[0], 1)
+        k, b, V = polyfit(frequencies, phases[0], 1)
         phases = phases - k * frequencies - b
         corr_s_data = abs(s_data) * exp(1j * phases)
         corr_s_data[abs(corr_s_data) < 1e-14] = 0
