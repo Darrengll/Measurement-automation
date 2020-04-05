@@ -33,13 +33,18 @@ class DacAdcVNA():
         self._cal = None
         self._nop = None
         self._power = None
+        self._freq_limits = None
+        self._bandwidth = None
+
+        self._recalibrate_mixer = False
 
         self._samples_I = []
         self._samples_Q = []
         self._averages = 200
         self._amplitude_window = 500
-        self._recalibrate_mixer = False
         self._adc_trigger_delay = 0
+        self._sample_length = None
+        self._iqadc_parameters_invalidated = False
 
     def set_if_frequency(self, if_frequency):
         self._iqvg.set_frequency(if_frequency)

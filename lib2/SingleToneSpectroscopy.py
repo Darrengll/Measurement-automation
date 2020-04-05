@@ -212,7 +212,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
 
     def _remove_delay(self, frequencies, s_data):
         phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))
-        k, b, V = polyfit(frequencies, phases[0], 1)
+        k, b = polyfit(frequencies, phases[0], 1)
         phases = phases - k * frequencies - b
         corr_s_data = abs(s_data) * exp(1j * phases)
         corr_s_data[abs(corr_s_data) < 1e-14] = 0

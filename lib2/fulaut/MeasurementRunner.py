@@ -176,7 +176,12 @@ class MeasurementRunner():
         vna_parameters = {"bandwidth": 1 / pulse_sequence_parameters["readout_duration"] * 1e9,
                           "freq_limits": [self._ro_freqs[qubit_name]] * 2,
                           "nop": 1,
-                          "averages": DecayParameters().averages}
+                          "averages": DecayParameters().averages,
+                          "power": GlobalParameters().ro_ssb_power[qubit_name],
+                          "adc_trigger_delay": pulse_sequence_parameters["repetition_period"]
+                                               - pulse_sequence_parameters["readout_duration"]
+
+                          }
 
         ro_awg_params = {"calibration":
                              self._vna[0].get_calibration(self._ro_freqs[qubit_name],

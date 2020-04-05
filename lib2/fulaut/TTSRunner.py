@@ -30,8 +30,7 @@ class TTSRunner:
                                 "sweep_type": "LIN"}
         self._vna_parameters.update(TTSRunnerParameters().vna_parameters)
 
-        self._mw_src_parameters = {"power":
-                                       GlobalParameters().spectroscopy_excitation_power}
+        self._mw_src_parameters = {"power": GlobalParameters().spectroscopy_excitation_power}
 
         res_freq, g, period, sweet_spot, max_q_freq, d = self._fit_p0
 
@@ -40,26 +39,22 @@ class TTSRunner:
         else:
             center = sweet_spot
 
-        self._currents = linspace(center - period / 2,
-                                  center + period / 2,
+        span = 1/2 * period
+        self._currents = linspace(center - span / 2,
+                                  center + span / 2,
                                   201)
 
         min_q_freq = \
-            transmon_spectrum(sweet_spot + period / 2, period, sweet_spot, max_q_freq, d)
+            transmon_spectrum(sweet_spot + period / 2,
+                              period, sweet_spot, max_q_freq, d)
+        min_at_the_scan_edge = \
+            transmon_spectrum(sweet_spot + span / 2,
+                              period, sweet_spot, max_q_freq, d)
 
-        expected_q_freq = min_q_freq \
-            if self._which_sweet_spot is "bottom" \
-            else max_q_freq
-
-        # if res_freq>expected_q_freq:
-        #     mw_limits = (expected_q_freq-1.5e9, res_freq-1e9)
-        # else:
-        #     mw_limits = (res_freq-0.1e9, expected_q_freq+1e9)
         self._logger.debug(
             "Expected qubit frequency range (from AnticrossingOracle): %.3f to %.3f" % (min_q_freq, max_q_freq))
-        mw_limits = (min_q_freq - 2e9, max_q_freq + .25e9)
+        mw_limits = (max(4e9, min_at_the_scan_edge), max_q_freq + .25e9)
         self._logger.debug("Two-tone frequency range: %.3f to %.3f" % mw_limits)
-
 
         self._mw_src_frequencies = linspace(*mw_limits, 401)
 

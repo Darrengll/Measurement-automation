@@ -15,17 +15,19 @@
   "sts_runner": {
     "vna_parameters": {
       "nop": 101,
-      "bandwidth": 1e6,
+      "bandwidth": 1e5,
       "averages": 1000
     },
     "flux_nop": 101,
-    "anticrossing_oracle_hints": [
-      "fqmax_below"
-    ]
+    "anticrossing_oracle_hints": {
+      "fqmax_below": true,
+      "g": 35e6,
+      "d": 0.3
+    }
   },
   "tts_runner": {
     "vna_parameters": {
-      "bandwidth": 2e5,
+      "bandwidth": 1e5,
       "averages": 2000,
       "resonator_detection_nop": 201,
       "resonator_detection_bandwidth": 1e5
@@ -59,7 +61,7 @@
     "averages": 5000,
     "readout_duration": 4000,
     "repetition_period": 200000,
-    "max_readout_delay": 100000
+    "max_readout_delay": 150000
   },
   "hahn_echo": {
     "nop": 51,

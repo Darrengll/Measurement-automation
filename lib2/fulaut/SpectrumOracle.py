@@ -224,6 +224,7 @@ class SpectrumOracle:
                                                          *args)
 
         if self._plot:
+            plt.figure("Spectrum oracle fit")
             plt.plot(self._parameter_values,
                      self._qubit_spectrum(self._parameter_values,
                                           *self._fine_opt_params[:-1]))
@@ -528,6 +529,7 @@ class SpectrumOracle:
     def visualize(self):
         self._fine_opt_params[2] = self._fine_opt_params[2] / 1e9
 
+        plt.figure("Spectrum oracle fit")
         plt.subplot(2, 1, 1)
 
         x = self._parameter_values
@@ -593,7 +595,7 @@ class SpectrumOracle:
 
         plt.savefig(os.path.join(self.get_save_path(), name + ".png"), bbox_inches='tight')
         plt.savefig(os.path.join(self.get_save_path(), name + ".pdf"), bbox_inches='tight')
-        plt.close()
+        plt.close("Spectrum oracle fit")
 
     def get_save_path(self):
 
