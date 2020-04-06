@@ -23,6 +23,8 @@ class IQVectorGenerator:
         self._current_cal = None
         self._requested_cal = None
         self._cal_db = None
+        self._marker_period = 1000
+
 
         self._load_cal_db()
 
@@ -67,6 +69,23 @@ class IQVectorGenerator:
         self._requested_cal = self.get_calibration(self._frequency, self._power)
         self._output_SSB()
 
+    def set_marker_repetition_period(self, marker_period):
+        '''
+        For some applications there is need to control the length of the interval between triggers
+        output by the AWG of the IQVectorGenerator.
+
+        Parameters
+        ----------
+        marker_period: ns, float
+            real trigger period will be recalculated to be not shorter than <marker_period> ns,
+            but still divisible by the IF period
+        '''
+        self._marker_period = marker_period
+        if self._requested_cal is not None:
+            self._current_cal = None
+            self._output_SSB()
+
+
     def _output_SSB(self):
         if self._requested_cal != self._current_cal:
 
@@ -74,10 +93,14 @@ class IQVectorGenerator:
             pb = self._iqawg.get_pulse_builder()
             if_freq = self._requested_cal.get_radiation_parameters()["if_frequency"]
             resolution = self._requested_cal.get_radiation_parameters()["waveform_resolution"]
-            if (1 / if_freq * 1e9) % resolution != 0:
+            if_period = 1 / if_freq * 1e9
+
+            if (if_period * 1e9) % resolution != 0:
                 print("IQVectorGenerator warning: IF period is not divisible by "
                       "calibration waveform resolution. Phase coherence will be bad.")
-            seq = pb.add_sine_pulse(100 / if_freq * 1e9).build()
+
+            duration = (self._marker_period // if_period + 1) * if_period
+            seq = pb.add_sine_pulse(duration).build()
             self._iqawg.output_pulse_sequence(seq)
 
             self._current_cal = self._requested_cal
