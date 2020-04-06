@@ -26,11 +26,11 @@ class TTSRunner:
 
         self._vna_parameters = {"freq_limits": self._res_limits,
                                 "nop": 1,
-                                "power": GlobalParameters().spectroscopy_readout_power,
+                                "power": GlobalParameters().readout_power,
                                 "sweep_type": "LIN"}
         self._vna_parameters.update(TTSRunnerParameters().vna_parameters)
 
-        self._mw_src_parameters = {"power": GlobalParameters().spectroscopy_excitation_power}
+        self._mw_src_parameters = {"power": GlobalParameters().excitation_power}
 
         res_freq, g, period, sweet_spot, max_q_freq, d = self._fit_p0
 
@@ -68,10 +68,9 @@ class TTSRunner:
         known_results = \
             MeasurementResult.load(self._sample_name,
                                    self._tts_name,
-                                   date=self._launch_datetime.strftime("%b %d %Y"),
                                    return_all=True)
 
-        if known_results is not None:
+        if known_results is not None and not TTSRunnerParameters().rerun:
             self._tts_result = known_results[-1]
         else:
             self._perform_TTS()

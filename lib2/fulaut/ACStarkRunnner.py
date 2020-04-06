@@ -26,7 +26,7 @@ class ACStarkRunner:
         self._asts_name = "%s-ac-stark" % qubit_name
         self._spectrum_oracle_fit = spectrum_oracle_fit
         self._launch_datetime = datetime.today()
-        self._vna_power = GlobalParameters().spectroscopy_readout_power
+        self._vna_power = GlobalParameters().readout_power
 
         self._logger = LoggingServer.getInstance('fulaut')
 
@@ -38,17 +38,18 @@ class ACStarkRunner:
                                    date=self._launch_datetime.strftime("%b %d %Y"),
                                    return_all=True)
 
-        if known_results is not None:
+        if known_results is not None and not ACSTTSRunnerParameters().rerun:
             self._asts_result = known_results[-1]
 
         else:
             self._perform_asts(current)
 
-        self._asts_result.save()
 
         ACS = ACStarkOracle(self._asts_result, chi=.3e-3, plot=True)
         f_max, vna_power = ACS.launch()
         absolute_power = round(self._find_power(vna_power))
+
+        self._asts_result.save()
 
         self._logger.debug(
             "Transmon bare frequency: %.4f GHz, readout power (on SA): %d dBm (%d on VNA)" %
@@ -96,11 +97,11 @@ class ACStarkRunner:
 
         powers = linspace(self._vna_power - 15, self._vna_power + 5, 21)
 
-        mw_src_parameters = {"power": GlobalParameters().spectroscopy_excitation_power - 10}
+        mw_src_parameters = {"power": GlobalParameters().excitation_power-10}
 
         ASTS.set_fixed_parameters(vna=[vna_parameters], mw_src=[mw_src_parameters], current=current)
         ASTS.set_swept_parameters(mw_src_frequencies, powers)
 
-        ASTS._measurement_result._unwrap_phase = True
+        ASTS._measurement_result._unwrap_phase = False
 
         self._asts_result = ASTS.launch()

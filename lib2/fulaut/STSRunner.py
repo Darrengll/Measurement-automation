@@ -18,7 +18,7 @@ class STSRunner():
         self._cur_src = cur_src
 
         self._vna_parameters = STSRunnerParameters().vna_parameters
-        self._vna_parameters["power"] = GlobalParameters().spectroscopy_readout_power
+        self._vna_parameters["power"] = GlobalParameters().readout_power
 
 
         self._currents = linspace(-.1e-3, .1e-3, 101)
@@ -30,15 +30,14 @@ class STSRunner():
 
     def run(self):
 
-        # Check if today's anticrossing is present
+        # Check for any prior STS result
 
         known_results = \
             MeasurementResult.load(self._sample_name,
                                    self._sts_name,
-                                   date=self._launch_datetime.strftime("%b %d %Y"),
                                    return_all=True)
 
-        if known_results is not None:
+        if known_results is not None and not STSRunnerParameters().rerun:
             self._sts_result = known_results[-1]
             if hasattr(self._sts_result, "_fit_result"):
                 return known_results[-1]._fit_result

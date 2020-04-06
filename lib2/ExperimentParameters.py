@@ -13,160 +13,119 @@ resonator_type_map = {"reflection": ResonatorType.REFLECTION,
                       "transmission": ResonatorType.TRANSMISSION}
 
 
-class GlobalParameters:
-    parameters = None
-    path = "lib2/global_parameters.json"
+class ExperimentParameters:
+    _group_name = None
+    _subgroup_name = None
+    _path = "lib2/experiment_parameters.json"
+    _parameters = {}
 
     def __init__(self):
-        with open(self.path) as f:
-            self.parameters = load(f)
+        with open(self._path) as f:
+            self._parameters = load(f)[self._group_name]
+
+        if self._subgroup_name is not None:
+            self._parameters = self._parameters[self._subgroup_name]
+
+        self._init_fields()
+
+    def set_group_name(self, name):
+        self._group_name = name
+
+    def set_subgroup_name(self, name):
+        self._subgroup_name = name
+
+    def _init_fields(self):
+        for property_name in vars(self).keys():
+            if property_name[0] is not "_":
+                self.__setattr__(property_name, self._parameters[property_name])
+
+
+class GlobalParameters(ExperimentParameters):
+    def __init__(self):
+        self.set_group_name("global")
+        self.which_sweet_spot = None
+        self.readout_power = None
+        self.excitation_power = None
+        super().__init__()
 
     @property
     def resonator_type(self):
-        return resonator_type_map[self.parameters["resonator_type"]]
-
-    @property
-    def which_sweet_spot(self):
-        return self.parameters["which_sweet_spot"]
-
-    @property
-    def ro_ssb_power(self):
-        return self.parameters["ro_ssb_power"]
-
-    @property
-    def exc_ssb_power(self):
-        return self.parameters["exc_ssb_power"]
-
-    @property
-    def spectroscopy_readout_power(self):
-        return self.parameters["spectroscopy_readout_power"]
-
-    @property
-    def spectroscopy_excitation_power(self):
-        return self.parameters["spectroscopy_excitation_power"]
+        return resonator_type_map[self._parameters["resonator_type"]]
 
 
-class ResonatorOracleParameters:
-    parameters = None
-    path = "lib2/fulaut/fulaut_parameters.json"
+class FulautParameters(ExperimentParameters):
 
     def __init__(self):
-        with open(self.path) as f:
-            self.parameters = load(f)["resonator_oracle"]
-
-    @property
-    def peak_number(self):
-        return self.parameters["peak_number"]
-
-    @property
-    def vna_parameters(self):
-        return self.parameters["vna_parameters"]
+        self.set_group_name("fulaut")
+        self.rerun = None
+        super().__init__()
 
 
-class STSRunnerParameters:
-    parameters = None
-    path = "lib2/fulaut/fulaut_parameters.json"
+class ResonatorOracleParameters(FulautParameters):
+    def __init__(self):
+        self.set_subgroup_name("resonator_oracle")
+        self.peak_number = None
+        self.vna_parameters = None
+        super().__init__()
+
+
+class STSRunnerParameters(FulautParameters):
+    def __init__(self):
+        self.set_subgroup_name("sts_runner")
+        self.flux_nop = None
+        self.vna_parameters = None
+        self.anticrossing_oracle_hints = None
+        super().__init__()
+
+
+class TTSRunnerParameters(FulautParameters):
+    def __init__(self):
+        self.set_subgroup_name("tts_runner")
+        self.vna_parameters = None
+        super().__init__()
+
+
+class ACSTTSRunnerParameters(FulautParameters):
+    def __init__(self):
+        self.set_subgroup_name("acstts_runner")
+        self.vna_parameters = None
+        super().__init__()
+
+
+class TimeResolvedParameters(FulautParameters):
 
     def __init__(self):
-        with open(self.path) as f:
-            self.parameters = load(f)["sts_runner"]
-
-    @property
-    def flux_nop(self):
-        return self.parameters["flux_nop"]
-
-    @property
-    def vna_parameters(self):
-        return self.parameters["vna_parameters"]
-
-    @property
-    def anticrossing_oracle_hints(self):
-        return self.parameters["anticrossing_oracle_hints"]
-
-
-class TTSRunnerParameters:
-    parameters = None
-    path = "lib2/fulaut/fulaut_parameters.json"
-
-    def __init__(self):
-        with open(self.path) as f:
-            self.parameters = load(f)["tts_runner"]
-
-    @property
-    def vna_parameters(self):
-        return self.parameters["vna_parameters"]
-
-
-class ACSTTSRunnerParameters:
-    parameters = None
-    path = "lib2/fulaut/fulaut_parameters.json"
-
-    def __init__(self):
-        with open(self.path) as f:
-            self.parameters = load(f)["acstts_runner"]
-
-    @property
-    def vna_parameters(self):
-        return self.parameters["vna_parameters"]
-
-
-class TimeResolvedParameters:
-    name = None
-    parameters = None
-    path = "lib2/fulaut/fulaut_parameters.json"
-
-    def __init__(self):
-        with open(self.path) as f:
-            self.parameters = load(f)[self.name]
-
-    @property
-    def readout_duration(self):
-        return self.parameters["readout_duration"]
-
-    @property
-    def repetition_period(self):
-        return self.parameters["repetition_period"]
-
-    @property
-    def nop(self):
-        return self.parameters["nop"]
-
-    @property
-    def averages(self):
-        return self.parameters["averages"]
+        self.readout_duration = None
+        self.repetition_period = None
+        self.nop = None
+        self.averages = None
+        super().__init__()
 
 
 class RabiParameters(TimeResolvedParameters):
-    name = "rabi"
-
-    @property
-    def max_excitation_duration(self):
-        return self.parameters["max_excitation_duration"]
+    def __init__(self):
+        self.set_subgroup_name("rabi")
+        self.max_excitation_duration = None
+        super().__init__()
 
 
 class RamseyParameters(TimeResolvedParameters):
-    name = "ramsey"
-
-    @property
-    def max_ramsey_delay(self):
-        return self.parameters["max_ramsey_delay"]
-
-    @property
-    def detuning(self):
-        return self.parameters["detuning"]
+    def __init__(self):
+        self.set_subgroup_name("ramsey")
+        self.max_ramsey_delay = None
+        self.detuning = None
+        super().__init__()
 
 
 class DecayParameters(TimeResolvedParameters):
-    name = "decay"
-
-    @property
-    def max_readout_delay(self):
-        return self.parameters["max_readout_delay"]
+    def __init__(self):
+        self.set_subgroup_name("decay")
+        self.max_readout_delay = None
+        super().__init__()
 
 
 class HahnEchoParameters(TimeResolvedParameters):
-    name = "hahn_echo"
-
-    @property
-    def max_echo_delay(self):
-        return self.parameters["max_echo_delay"]
+    def __init__(self):
+        self.set_subgroup_name("hahn_echo")
+        self.max_echo_delay = None
+        super().__init__()
