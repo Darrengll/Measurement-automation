@@ -56,6 +56,7 @@ class DacAdcVNA():
         self._nop = nop
 
     def set_power(self, power):
+        self._power = power
         self._iqvg.set_power(power)
 
     def set_freq_limits(self, *freq_limits):
@@ -75,6 +76,8 @@ class DacAdcVNA():
         self._bandwidth = real_bw
         self._sample_length = real_sample_length
         self._iqadc_parameters_invalidated = True
+        # spectrum has rearm time of 80 ns between triggers in averaging mode
+        self._iqvg.set_marker_repetition_period((self._sample_length+100) / self._iqadc.get_sample_rate() * 1e9)
 
     def sweep_hold(self):
         pass
@@ -120,6 +123,8 @@ class DacAdcVNA():
             self.set_freq_limits(*parameters_dict["freq_limits"])
         if "adc_trigger_delay" in parameters_dict:
             self.set_adc_trigger_delay(parameters_dict["adc_trigger_delay"])
+        else:
+            self.set_adc_trigger_delay(0)
 
     def select_S_param(self, s_parameter):
         if s_parameter is not "S21":
@@ -141,13 +146,13 @@ class DacAdcVNA():
         Ts = arange(0, len(self._samples_I[0])) / self._iqadc.get_sample_rate()
         complex_IQ = (array(self._samples_I) + 1j * array(self._samples_Q))
         demodulated_IQ = complex_IQ * exp(-1j * self._iqvg.get_if_frequency() * Ts * 2 * pi)
-        return mean(conj(demodulated_IQ), axis=1)
+        # Downconversion attenuation is cancelled by 20 dB IF amplifiers
+        return mean(conj(demodulated_IQ), axis=1)/sqrt(10**(self._power/10))
 
     def get_calibration(self, frequency, power):
         return self._iqvg.get_calibration(frequency, power)
 
     def sweep_single(self):
-
         frequencies = self.get_frequencies()
         self._iqvg.set_frequency(frequencies[0])  # ensure
 
@@ -160,7 +165,7 @@ class DacAdcVNA():
             self._iqvg.set_frequency(freq)
 
             data = self._iqadc.measure()
-            data = data / 128 / self._averages * self._amplitude_window
+            data = data / 128 / self._averages * self._amplitude_window/1000
 
             self._samples_I += [data[0::2]]
             self._samples_Q += [data[1::2]]
