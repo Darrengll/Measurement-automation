@@ -7,7 +7,7 @@ from functools import reduce
 from operator import mul
 import sys
 import numpy as np
-from numpy import zeros, complex_
+from numpy import zeros, complex_, ptp
 
 from drivers import *
 from datetime import datetime as dt
@@ -356,24 +356,36 @@ class Measurement:
         """
         vna = self._vna[0]
         init_averages = vna.get_averages()
-        for i in range(1, tries_number + 1):
-            vna.set_averages(init_averages * i)
-            vna.avg_clear()
-            vna.prepare_for_stb()
-            vna.sweep_single()
-            vna.wait_for_stb()
-            frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
-            vna.autoscale_all()
-            self._resonator_detector.set_data(frequencies, sdata)
-            self._resonator_detector.set_plot(plot)
-            result = self._resonator_detector.detect()
+        init_freq_limits = vna.get_frequencies()[0], vna.get_frequencies()[-1]
+        init_span = ptp(init_freq_limits)
 
-            if result is not None:
-                break
-            else:
-                print("\rFit was inaccurate (try #%d), retrying" % i, end="")
-        # if result is None:
-        # print(frequencies, sdata)
+        def iterate_increasing_averages():
+            result = None
+            for i in range(1, tries_number + 1):
+                vna.set_averages(init_averages * i)
+                vna.avg_clear()
+                vna.prepare_for_stb()
+                vna.sweep_single()
+                vna.wait_for_stb()
+                frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
+                vna.autoscale_all()
+                self._resonator_detector.set_data(frequencies, sdata)
+                self._resonator_detector.set_plot(plot)
+                result = self._resonator_detector.detect()
+                if result is not None:
+                    break
+                else:
+                    print("\rFit was inaccurate (try #%d), retrying" % i, end="")
+            return result
+
+        result = iterate_increasing_averages()
+
+        if result is None:
+            print("\rFit was inaccurate (try #%d), doubling span", end="")
+            vna.set_freq_limits(init_freq_limits[0] - init_span/2,
+                                init_freq_limits[1] + init_span/2)
+            iterate_increasing_averages()
+
         vna.set_averages(init_averages)
         return result
 

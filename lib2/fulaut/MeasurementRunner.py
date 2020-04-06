@@ -109,9 +109,14 @@ class MeasurementRunner():
 
             vna.sweep_single()
             freqs, sdata = vna.get_frequencies(), vna.get_sdata()
-            rd = ResonatorDetector(freqs, sdata, False, False,
-                                   type=GlobalParameters().resonator_type)
-            self._ro_freqs[qubit_name], amp, phase = rd.detect()
+            try:
+                rd = ResonatorDetector(freqs, sdata, True, False,
+                                       type=GlobalParameters().resonator_type)
+                self._ro_freqs[qubit_name], amp, phase = rd.detect()
+            except:
+                rd = ResonatorDetector(freqs, sdata, True, True,
+                                       type=GlobalParameters().resonator_type)
+                self._ro_freqs[qubit_name], amp, phase = rd.detect()
 
             self._logger.debug("Readout frequency is set to %.5e" % self._ro_freqs[qubit_name] +
                                f" @ {amp:.2e} {phase:.2e}")
@@ -121,8 +126,6 @@ class MeasurementRunner():
                 current = sws_current + period_fraction * period
                 # q_freq = transmon_spectrum(current, *self._tts_fit_params[qubit_name][:-1])
                 q_freq = q_freq_sws
-
-                GlobalParameters().ro_ssb_power[qubit_name] = power
 
                 self._logger.debug("Pulsed measurements at %.3f GHz, %.2e A, "
                                    "%.2e periods away from sws" % (q_freq / 1e9, current, period_fraction))
@@ -177,7 +180,7 @@ class MeasurementRunner():
                           "freq_limits": [self._ro_freqs[qubit_name]] * 2,
                           "nop": 1,
                           "averages": DecayParameters().averages,
-                          "power": GlobalParameters().ro_ssb_power[qubit_name],
+                          "power": GlobalParameters().readout_power,
                           "adc_trigger_delay": pulse_sequence_parameters["repetition_period"]
                                                - pulse_sequence_parameters["readout_duration"]
 
@@ -185,12 +188,12 @@ class MeasurementRunner():
 
         ro_awg_params = {"calibration":
                              self._vna[0].get_calibration(self._ro_freqs[qubit_name],
-                                                          GlobalParameters().ro_ssb_power[qubit_name])}
+                                                          GlobalParameters().readout_power)}
         q_awg_params = {"calibration":
                             self._exc_iqvg[0].get_calibration(self._exact_qubit_freqs[qubit_name],
-                                                              GlobalParameters().spectroscopy_excitation_power)}
+                                                              GlobalParameters().excitation_power)}
 
-        exc_iqvg_parameters = {'power': GlobalParameters().spectroscopy_excitation_power,
+        exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
                                'frequency': exc_frequency}
 
         DD.set_fixed_parameters(pulse_sequence_parameters,
@@ -230,19 +233,19 @@ class MeasurementRunner():
             "freq_limits": [self._ro_freqs[qubit_name]] * 2,
             "nop": 1,
             "averages": RamseyParameters().averages,
-            "power": GlobalParameters().ro_ssb_power[qubit_name],
+            "power": GlobalParameters().readout_power,
             "adc_trigger_delay": pulse_sequence_parameters["repetition_period"]
                                  - pulse_sequence_parameters["readout_duration"]
         }
 
         ro_awg_params = {"calibration":
                              self._vna[0].get_calibration(self._ro_freqs[qubit_name],
-                                                          GlobalParameters().ro_ssb_power[qubit_name])}
+                                                          GlobalParameters().readout_power)}
         q_awg_params = {"calibration":
                             self._exc_iqvg[0].get_calibration(self._exact_qubit_freqs[qubit_name],
-                                                              GlobalParameters().spectroscopy_excitation_power)}
+                                                              GlobalParameters().excitation_power)}
 
-        exc_iqvg_parameters = {'power': GlobalParameters().spectroscopy_excitation_power,
+        exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
                                'frequency': exc_frequency}
 
         DR.set_fixed_parameters(pulse_sequence_parameters,
@@ -284,26 +287,26 @@ class MeasurementRunner():
                           "freq_limits": [self._ro_freqs[qubit_name]] * 2,
                           "nop": 1,
                           "averages": HahnEchoParameters().averages,
-                          "power": GlobalParameters().ro_ssb_power[qubit_name],
+                          "power": GlobalParameters().readout_power,
                           "adc_trigger_delay": pulse_sequence_parameters["repetition_period"]
                                                - pulse_sequence_parameters["readout_duration"]
                           }
 
         ro_awg_params = {"calibration":
                              self._vna[0].get_calibration(self._ro_freqs[qubit_name],
-                                                          GlobalParameters().ro_ssb_power[qubit_name])}
+                                                          GlobalParameters().readout_power)}
         q_awg_params = {"calibration":
                             self._exc_iqvg[0].get_calibration(self._exact_qubit_freqs[qubit_name],
-                                                              GlobalParameters().spectroscopy_excitation_power)}
+                                                              GlobalParameters().excitation_power)}
 
-        exc_iqvg_params = {'power': GlobalParameters().spectroscopy_excitation_power,
-                           'frequency': exc_frequency}
+        exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
+                               'frequency': exc_frequency}
 
         DHE.set_fixed_parameters(pulse_sequence_parameters,
                                  vna=[vna_parameters],
                                  ro_awg=[ro_awg_params],
                                  q_awg=[q_awg_params],
-                                 q_lo=[exc_iqvg_params])
+                                 q_lo=[exc_iqvg_parameters])
         DHE.set_swept_parameters(echo_delays)
         MeasurementResult.close_figure_by_window_name("Resonator fit")
 
@@ -335,20 +338,20 @@ class MeasurementRunner():
                           "freq_limits": [self._ro_freqs[qubit_name]] * 2,
                           "nop": 1,
                           "averages": RabiParameters().averages,
-                          "power": GlobalParameters().ro_ssb_power[qubit_name],
+                          "power": GlobalParameters().readout_power,
                           "adc_trigger_delay": rabi_sequence_parameters["repetition_period"]
                                                - rabi_sequence_parameters["readout_duration"]
                           }
 
-        exc_iqvg_parameters = {'power': GlobalParameters().spectroscopy_excitation_power,
-                               'frequency': exc_frequency}
-
         ro_awg_params = {"calibration":
                              self._vna[0].get_calibration(self._ro_freqs[qubit_name],
-                                                          GlobalParameters().ro_ssb_power[qubit_name])}
+                                                          GlobalParameters().readout_power)}
         q_awg_params = {"calibration":
                             self._exc_iqvg[0].get_calibration(self._exact_qubit_freqs[qubit_name],
-                                                              GlobalParameters().spectroscopy_excitation_power)}
+                                                              GlobalParameters().excitation_power)}
+
+        exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
+                               'frequency': exc_frequency}
 
         DRO.set_fixed_parameters(rabi_sequence_parameters,
                                  vna=[vna_parameters],

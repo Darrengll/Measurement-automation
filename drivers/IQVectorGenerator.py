@@ -42,7 +42,7 @@ class IQVectorGenerator:
             self._dac_overridden = False
 
     def get_iqawg(self):
-        self._iqawg.set_parameters({'calibration':self._current_cal}) # ensure
+        self._iqawg.set_parameters({'calibration':self._current_cal})  # ensure
         return self._iqawg
 
     def set_if_frequency(self, if_frequency):

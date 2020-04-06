@@ -529,7 +529,7 @@ class SpectrumOracle:
     def visualize(self):
         self._fine_opt_params[2] = self._fine_opt_params[2] / 1e9
 
-        plt.figure("Spectrum oracle fit")
+        plt.figure("Spectrum oracle all")
         plt.subplot(2, 1, 1)
 
         x = self._parameter_values
@@ -595,7 +595,7 @@ class SpectrumOracle:
 
         plt.savefig(os.path.join(self.get_save_path(), name + ".png"), bbox_inches='tight')
         plt.savefig(os.path.join(self.get_save_path(), name + ".pdf"), bbox_inches='tight')
-        plt.close("Spectrum oracle fit")
+        plt.close("Spectrum oracle all")
 
     def get_save_path(self):
 
