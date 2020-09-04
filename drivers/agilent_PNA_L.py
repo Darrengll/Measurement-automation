@@ -52,7 +52,8 @@ class Agilent_PNA_L(Instrument):
 
         self._address = address
         rm = visa.ResourceManager()
-        self._visainstrument = rm.open_resource(self._address) # no term_chars for GPIB!!!!!
+        self._visainstrument = rm.open_resource(self._address) # no
+        # term_chars for GPIB!!!!!
         self._zerospan = False
         self._freqpoints = 0
         self._ci = channel_index
@@ -426,9 +427,12 @@ class Agilent_PNA_L(Instrument):
         if "nop" in parameters_dict.keys():
             self.set_nop(parameters_dict["nop"])
         if "freq_limits" in parameters_dict.keys():
-            if (parameters_dict["sweep_type"] == "CW"):
-                self.do_set_CWfreq(numpy.mean(parameters_dict["freq_limits"]))
-            else:
+            try:
+                if (parameters_dict["sweep_type"] == "CW"):
+                    self.do_set_CWfreq(numpy.mean(parameters_dict["freq_limits"]))
+                else:
+                    self.set_freq_limits(*parameters_dict["freq_limits"])
+            except:
                 self.set_freq_limits(*parameters_dict["freq_limits"])
         if "span" in parameters_dict.keys():
             self.set_span(parameters_dict["span"])
@@ -884,16 +888,22 @@ class Agilent_PNA_L(Instrument):
         # then the Event Status Register bit in the Status Byte (bit 5 of that byte)
         # will become set.
         self._visainstrument.write("*ESE 1")
+        while self._visainstrument.read_stb():
+            sleep(0.02)
         return "OPC bit enabled (*ESE 1)."
 
     def wait_for_stb(self):
         self._visainstrument.write("*OPC")
         done = False
         while not(done):
-            bla = self._visainstrument.query("*STB?")
+            # bla = self._visainstrument.query("*STB?")
+            # The following command communicates over separate Control Channel
+            # and does not block SCPI I/O buffers.
+            bla = self._visainstrument.read_stb()
             try:
                 stb_value = int(bla)
-            except:
+            except Exception as e:
+                print("Exception text: ", e)
                 print("Error in wait(): value returned: {0}".format(bla))
             else:
                 done = (2**5 == (2**5 & stb_value))
@@ -911,7 +921,7 @@ class Agilent_PNA_L(Instrument):
     def read(self):
         return self._visainstrument.read()
 
-    def write(self,msg):
+    def write(self, msg):
         return self._visainstrument.write(msg)
 
     def query(self, msg):

@@ -3,22 +3,30 @@ from typing import Union, List
 from drivers.IQAWG import IQAWG
 from drivers.Spectrum_m4x import SPCM
 from drivers.E8257D import EXG, MXG
-from lib2.digitizerPulsedMeasurements import digitizerTimeResolvedDirectMeasurement
 
+from collections import OrderedDict
 
-# DEVELOPMENT BLOCK
-from . import digitizerTimeResolvedDirectMeasurement
+# DEVELOPMENT RELOAD BLOCK START #
 from importlib import reload
-reload(digitizerTimeResolvedDirectMeasurement)
 
+from . import digitizerTimeResolvedDirectMeasurement
+reload(digitizerTimeResolvedDirectMeasurement)
 from .digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
+
+from .. import VNATimeResolvedDispersiveMeasurement1D
+reload(VNATimeResolvedDispersiveMeasurement1D)
 from ..VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
+
+from .. import IQPulseSequence
+reload(IQPulseSequence)
 from ..IQPulseSequence import IQPulseBuilder
+
+# DEVELOPMENT RELOAD BLOCK END #
 
 
 class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
     def __init__(self, name, sample_name, plot_update_interval=1,
-                 q_lo=[], q_iqawg=[], dig=[]):
+                 q_lo=[], q_iqawg=[], dig=[], src=[], save_traces=False):
         """
 
         Parameters
@@ -33,9 +41,11 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
         """
         devs_aliases_map = {"q_lo": q_lo,
                             "q_iqawg": q_iqawg,
-                            "dig": dig}
+                            "dig": dig,
+                            "src": src}
 
-        super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
+        super().__init__(name, sample_name, devs_aliases_map,
+                         plot_update_interval, save_traces)
         self._measurement_result = None  # has to be initialized in child classes
         # initialize 'self._measurement_result' that is specific for particular child class
         self._init_measurement_result()
@@ -90,9 +100,10 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
         is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
         """
         longest_excitaion = None
-        if( "excitation duration" in self._swept_pars ):
-            longest_excitaion = np.max(self._swept_pars["excitation duration"][1])
-        elif ("excitation_duration" in self._pulse_sequence_parameters ):
+        if "excitation_durations" in self._swept_pars:
+            longest_excitaion = np.max(self._swept_pars[
+                                           "excitation_durations"][1])
+        elif "excitation_duration" in self._pulse_sequence_parameters:
             longest_excitaion = self._pulse_sequence_parameters["excitation_duration"]
         else:
             raise ValueError("Cannot estimate longest pulse duration based on 'self.pulse_sequence_parameters'"
@@ -108,7 +119,8 @@ class DirectRabiFromPulseDuration(DirectRabiBase):
         self._measurement_result = RabiFromPulseDurationResult(self._name, self._sample_name)
 
     def sweep_excitation_durations(self, excitation_durations):
-        super().set_swept_parameters(**{"excitation duration": (self._set_duration, excitation_durations)})
+        super().set_swept_parameters(**{"excitation_durations": (
+            self._set_duration, excitation_durations)})
 
     def _set_duration(self, excitation):
         self._pulse_sequence_parameters["excitation_duration"] = excitation
@@ -121,40 +133,86 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
         super().__init__(name, sample_name)
         self._x_axis_units = "ns"
 
-    def _model(self, t, A_r, A_i, T_R, Omega_R, offset_r, offset_i, offset_r2, offset_i2, phase1, phase2):
-        return -(A_r * np.cos(Omega_R * t + phase1) + 1j * A_i * np.cos(Omega_R * t + phase2)) * np.exp(-1 / T_R * t)\
-               + offset_r + 1j * offset_i + (1 - np.exp(-1 / T_R * t)) * (offset_r2 + 1j*offset_i2)
+    def _model(self, t, A_r, A_i, B_r, B_i, T1, T2, Omega_R, offset_r,
+               offset_i, offset_r2, offset_i2):
+        c1 = offset_r + 1j * offset_i
+        c2 = A_r + 1j * A_i
+        c3 = B_r + 1j * B_i
+        c4 = offset_r2 + 1j * offset_i2
+        return c1 + (c2 * np.cos(Omega_R * t) + c3 / Omega_R *
+                     np.sin(Omega_R * t)) * np.exp(-t * (1 / T1 + 1 / T2)) + \
+               c4 * np.exp(-t / T2)
 
+    # can be customized for different models
     def _generate_fit_arguments(self, x, data):
-        amp_r, amp_i = np.ptp(np.real(data))/2, np.ptp(np.imag(data))/2
-        if np.abs(np.max(np.real(data)) - np.real(data[0])) < np.abs(np.real(data[0]) - np.min(np.real(data))):
-            amp_r = -amp_r
-        if np.abs(np.max(np.imag(data)) - np.imag(data[0])) < np.abs(np.imag(data[0]) - np.min(np.imag(data))):
-            amp_i = -amp_i
-        offset_r, offset_i = np.max(np.real(data)) - np.abs(amp_r), np.max(np.imag(data)) - np.abs(amp_i)
+        amp_r, amp_i = np.ptp(np.real(data))/2, np.ptp(np.imag(data))/2  # > 0
+        offset_r, offset_i = np.mean(np.real(data)), np.mean(np.imag(data))
 
         time_step = x[1] - x[0]
-        max_frequency = 1 / time_step / 5
-        min_frequency = 1e-4
-        frequency = np.random.random(1) * (max_frequency - min_frequency) + min_frequency
-        p0 = [amp_r, amp_i, 1000, frequency * 2 * np.pi, offset_r, offset_i, offset_r, offset_i, 0, 0]
+        max_frequency = 1 / time_step / 5  # now less than 5 points per period
+        min_frequency = 1e-4  # GHz, = 0.1 MHz
+        # np.random.random returns scalar
+        frequency = np.random.random(1)[0] * (max_frequency -
+                                               min_frequency) + min_frequency
+        T_0 = 100
 
-        bounds = ([-np.abs(amp_r) * 1.5, -np.abs(amp_i) * 1.5, 100,
-                   min_frequency * 2 * np.pi, -10, -10, -10, -10, -np.pi, -np.pi],
-                  [np.abs(amp_r) * 1.5, np.abs(amp_i) * 1.5, 100000,
-                   max_frequency * 2 * np.pi, 10, 10, 10, 10, np.pi, np.pi])
+        p0_dict = OrderedDict(
+            [
+                ("A_r", amp_r),
+                ("A_i", amp_i),
+                ("B_r", amp_r * frequency),
+                ("B_i", amp_i * frequency),
+                ("T1", T_0),
+                ("T2", 2 * T_0),
+                ("Omega_R", 2*np.pi*frequency),
+                ("offset_r", offset_r),
+                ("offset_i", offset_i),
+                ("offset_r2", offset_r),
+                ("offset_i2", offset_i),
+            ]
+        )
+
+        m1p1 = np.array([-1, 1])
+        bounds_dict = OrderedDict(
+            [
+                ("A_r", 1.5 * np.abs(amp_r) * m1p1),
+                ("A_i", 1.5 * np.abs(amp_i) * m1p1),
+                ("B_r", 1.5 * np.abs(amp_r) * max_frequency * m1p1),
+                ("B_i", 1.5 * np.abs(amp_i) * max_frequency * m1p1),
+                ("T1", [5, 100e3]),
+                ("T2", [5, 100e3]),
+                ("Omega_R",
+                 2 * np.pi * np.array([min_frequency, max_frequency])),
+                ("offset_r", 1.1 * np.max(np.abs(np.real(data))) * m1p1),
+                ("offset_i", 1.1 * np.max(np.abs(np.imag(data))) * m1p1),
+                ("offset_r2", 2 * np.max(np.abs(np.real(data))) * m1p1),
+                ("offset_i2", 2 * np.max(np.abs(np.imag(data))) * m1p1),
+            ]
+        )
+
+        p0 = list(p0_dict.values())
+        bounds = tuple(
+            map(list, np.array(list(bounds_dict.values())).T)
+        )
+
         return p0, bounds
 
     def _generate_annotation_string(self, opt_params, err):
-        return f"$T_R={opt_params[2]*1e-3:.2f}\pm {err[2]*1e-3:.2f}~\mu$s\n" \
-               f"$\Omega_R/2\pi={opt_params[3] * 1e3 / 2 / np.pi:.2f}\pm {err[3] * 1e3 / 2 / np.pi:.2f}$ MHz" + "\n" \
-               f"$\Delta\phi={np.mod(opt_params[6] - opt_params[7], 2 * np.pi) - np.pi:.2f}$ rad"
+        T1 = opt_params[4]
+        T2 = opt_params[5]
+        T_R = 2 * T1 * T2 / (T1 + T2)
+        T_R_err = T_R**2 * (err[4] / T1**2 + err[5] / T2**2)
+        Om_R = opt_params[6] * 1e3 / 2 / np.pi
+        Om_R_err = err[6] * 1e3 / 2 / np.pi
+        return (f"$T_R={T1 * T2/(T1 + T2):.3f} \pm {T_R_err:.3f}~\mu$s\n"
+                f"$\Omega_R/(2\pi)={Om_R:.2f} \pm {Om_R_err:.2f}$ MHz\n"
+                rf"$\Delta \varphi$ = {self.get_phase_diff():.2f} rad")
 
     def _prepare_data_for_plot(self, data):
         return data[self._parameter_names[0]], data["data"]
 
     def get_pi_pulse_duration(self):
-        return np.pi / self._fit_params[3] # ns
+        return np.pi / self._fit_params[6] # ns
 
     def get_rabi_decay(self):
         """
@@ -177,6 +235,37 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
             tuple( Omega_R, standard deviation(Omega_R) )
         """
         return (self._fit_params[3] * 1e3, self._fit_errors[3] * 1e3)
+
+    def get_phase_real(self):
+        # return phase `phi` of the real part of oscillations `Cos(w t + phi)`
+        A_r = self._fit_params[0]
+        A_i = self._fit_params[1]
+        B_r = self._fit_params[2]
+        B_i = self._fit_params[3]
+        Omega = self._fit_params[6]
+        A = A_r + 1j * A_i
+        B = (B_r + 1j * B_i)/Omega
+
+        return np.arctan2(-np.real(B), np.real(A))
+
+    def get_phase_imag(self):
+        # return phase `phi` of the imaginary part of oscillations
+        # `Cos(w t + phi)`
+        A_r = self._fit_params[0]
+        A_i = self._fit_params[1]
+        B_r = self._fit_params[2]
+        B_i = self._fit_params[3]
+        Omega = self._fit_params[6]
+        A = A_r + 1j * A_i
+        B = (B_r + 1j * B_i) / Omega
+
+        return np.arctan2(-np.imag(B), np.imag(A))
+
+    def get_phase_diff(self):
+        # TODO: not working properly (see visuzalization and compare with this)
+        # return relative phase difference between cosine fits of
+        # real and imaginary parts
+        return self.get_phase_real() - self.get_phase_imag()
 
     def get_basis(self):
         fit = self._fit_params
@@ -219,11 +308,7 @@ class DirectRabiFromAmplitudeResult(VNATimeResolvedDispersiveMeasurement1DResult
 
     def _generate_fit_arguments(self, x, data):
         amp_r, amp_i = np.ptp(np.real(data)) / 2, np.ptp(np.imag(data)) / 2
-        if np.abs(np.max(np.real(data)) - np.real(data[0])) < np.abs(np.real(data[0]) - np.min(np.real(data))):
-            amp_r = -amp_r
-        if np.abs(np.max(np.imag(data)) - np.imag(data[0])) < np.abs(np.imag(data[0]) - np.min(np.imag(data))):
-            amp_i = -amp_i
-        offset_r, offset_i = np.max(np.real(data)) - np.abs(amp_r), np.max(np.imag(data)) - np.abs(amp_i)
+        offset_r, offset_i = np.mean(np.real(data)), np.mean(np.real(data))
         amp_step = x[1] - x[0]
         min_pi_pulse_amp = amp_step * 2 * 5
         max_pi_pulse_amp = (x[-1] - x[0]) * 2 * 10
@@ -237,7 +322,7 @@ class DirectRabiFromAmplitudeResult(VNATimeResolvedDispersiveMeasurement1DResult
     #     return data["amplitude multiplier"], data["data"]
 
     def _generate_annotation_string(self, opt_params, err):
-        return f"$(\pi) = {opt_params[2]:.2f} \pm {err[2]:.2f}$ a.u.\n" \
+        return f"$(\pi) = {opt_params[2]:.3f} \pm {err[2]:.3f}$ a.u.\n" \
                f"$\Delta\phi={np.mod(opt_params[5] - opt_params[6], 2 * np.pi) - np.pi:.2f}$ rad"
 
     def get_pi_pulse_amplitude(self):

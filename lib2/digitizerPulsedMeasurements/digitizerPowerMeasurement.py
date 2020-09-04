@@ -12,7 +12,6 @@ from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiv
 from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
 from drivers.IQAWG import IQAWG
 from drivers.E8257D import MXG
-from drivers.Yokogawa_GS200 import Yokogawa_GS210
 
 from typing import Dict, Union
 
@@ -24,7 +23,11 @@ def _default_args2dict():
     print(inspect.stack()[0])
 
 
-class DigitizerTimeResolvedDirectMeasurement(Measurement):
+class DigitizerPowerMeasurement(Measurement):
+    """
+    Measurement of average signal power, power density or optical tomography
+    implementing the Multiple Recording mode of a digitizer
+    """
 
     def __init__(self, name, sample_name, devs_aliases_map,
                  plot_update_interval=1, save_traces=False):
@@ -33,7 +36,6 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._q_iqawg: list[IQAWG] = None
         self._q_lo: list[MXG] = None
         self._dig: list[SPCM] = None
-        self._src: list[Yokogawa_GS210] = None
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval=plot_update_interval)
         self._sequence_generator = None
@@ -45,40 +47,23 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         self._pulse_sequence_parameters: Dict[Union[str, int, float]] = \
             {"modulating_window": "rectangular", "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
-        self._down_conversion_calibration = None
 
-        # ADC trace fourier component frequency [Hz]
-        self._downconv_freq = None
-
-        ''' DEBUG '''
-        # if 'True' all traces will be saved in 'dataI' and 'dataQ' for
-        # further manual investigation
+        # for debug purposes
+        self.dataIQ = []
         self._save_traces = save_traces
-        self.dataIQ = []  # `dataI + 1j*dataQ` traces
 
-        # measurement result
-        self._init_measurement_result()
-
-    def set_fixed_parameters(
-            self,
-            pulse_sequence_parameters,
-            freq_limits=(0,50e6), down_conversion_calibration=None,
-            q_lo_params=[], q_iqawg_params=[], dig_params=[]
-    ):
+    def set_fixed_parameters(self, pulse_sequence_parameters, q_lo_params=[],
+                             q_iqawg_params=[], dig_params=[]):
         """
+        :param dev_params:
+            Minimum expected keys and elements expected in each:
+                'vna': 0
+                'q_iqawg': 0
+                'ro_awg': 0
 
         Parameters
         ----------
-        pulse_sequence_parameters : Dict[str, Any]
-        freq_limits : tuple[float]
-        down_conversion_calibration : Any
-        q_lo_params : list[dict[str, Any]]
-        q_iqawg_params : list[dict[str, Any]]
-        dig_params : list[dict[str, Any]]
-
-        Returns
-        -------
-        None
+        pulse_sequence_parameters
 
         Notes
         ----------
@@ -87,54 +72,45 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         """
 
         # LO source initialization
-        calibration = q_iqawg_params[0]["calibration"]
-        q_lo_params[0]["power"] = calibration._lo_power
+        q_lo_params[0]["power"] = q_iqawg_params[0]["calibration"] \
+            .get_radiation_parameters()["lo_power"]
         self._q_lo[0].set_output_state("ON")
 
         # store sequence parameters for further usage
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
-        self._down_conversion_calibration = down_conversion_calibration
-        self._downconv_freq = calibration._if_frequency
 
-        # TODO: make check of the repetition period.
-        #  in order to verify if it is dividable by both AWG and digitizer clocks.
-        # repetition_period = self._pulse_sequence_parameters["repetition_period"]
+        # check of the repetition period in order to verify if it is
+        # dividable by both AWG and digitizer clocks.
+        period = self._pulse_sequence_parameters["repetition_period"]  # ns
+        n = 1
+        if "periods_per_segment" in self._pulse_sequence_parameters:
+            n = self._pulse_sequence_parameters["periods_per_segment"]
+        # check if dividable by digitizer clock
+        if n * period % 0.8 != 0 and n * period % 1 != 0:
+            raise ValueError("Duration of a segment must be an integer "
+                             "number of samples for both AWG and digitizer "
+                             "sample rates")
 
-        # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
+        # convert dict with parameters into form that is demanded by
+        # 'super().set_fixed_parameters()'
         dev_params = {"q_lo": q_lo_params,
                       "q_iqawg": q_iqawg_params,
                       "dig": dig_params}
         # for all child experiments this parameters are default for
         # digitizer acquisition mode
         if "mode" not in dig_params[0]:
-            dig_params[0]["mode"] = SPCM_MODE.AVERAGING
+            dig_params[0]["mode"] = SPCM_MODE.MULTIMODE
         if "trig_source" not in dig_params:
             dig_params[0]["trig_source"] = SPCM_TRIGGER.EXT0
 
         super().set_fixed_parameters(**dev_params)
-        # initialize 'self._measurement_result' that is specific for particular child class
         self._measurement_result.get_context().update({
-            "calibration_results": calibration.get_optimization_results(),
-            "radiation_parameters": calibration.get_radiation_parameters(),
+            "calibration_results": self._q_iqawg[0]._calibration.get_optimization_results(),
+            "radiation_parameters": self._q_iqawg[0]._calibration.get_radiation_parameters(),
             "pulse_sequence_parameters": pulse_sequence_parameters
         })
 
-    def _init_measurement_result(self):
-        """
-        Pure virtual function that allows child classes to initialize
-        measurement_result attribute in a 'hook' fasion
-
-        Returns
-        -------
-        None
-        """
-        raise NotImplementedError
-
-    def set_swept_parameters(self, **swept_pars):
-        super().set_swept_parameters(**swept_pars)
-        self._pulse_sequence_parameters["longest_duration"] = \
-            self._get_longest_pulse_sequence_duration(self._pulse_sequence_parameters, self._swept_pars)
-
+    # Andrei: I do not think this function is needed, but I will leave it stay
     def set_basis(self, basis):
         d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
         relation = d_real / d_imag
@@ -152,6 +128,12 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             basis = (ground_state, excited_state)
 
         self._basis = basis
+
+    def set_swept_parameters(self, **swept_pars):
+        super().set_swept_parameters(**swept_pars)
+        # self._pulse_sequence_parameters["longest_duration"] = \
+        #     self._get_longest_pulse_sequence_duration(
+        #         self._pulse_sequence_parameters, self._swept_pars)
 
     def _get_longest_pulse_sequence_duration(self, pulse_sequence_parameters, swept_pars):
         """
@@ -221,8 +203,6 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
 
     def _single_measurement(self):
         dig = self._dig[0]
-        # digitizer measurement setup is already configured in
-        # 'self.set_fixed_parameters'
         dig_data = dig.measure()
         # convertion to mV is according to
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
@@ -241,23 +221,16 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         data_q = data_q[:, self._n_samples_to_drop_by_delay: -self._n_samples_to_drop_in_end]
         data_q = data_q.flatten()
 
-        data = data_i + 1j * data_q
+        freq = np.fft.fftfreq(len(data_i), d=1/self._dig[0].get_sample_rate())
+        freq = np.fft.fftshift(freq)
+        signal = np.fft.fftshift(np.fft.fft(data_i + 1j * data_q))
+        # next row can be optimized with np.searchsorted and 2 comparisons with nearest elements
+        idx = np.argmin(np.abs(freq - (self._q_iqawg[0]._calibration._if_frequency)))
+        IQ = signal[idx] / len(data_i)
+
         # save full data in case of more detailed investigation
         if self._save_traces:
-            self.dataIQ.append(data)
-
-        if self._down_conversion_calibration is not None:
-            data = self._down_conversion_calibration.apply(data)
-
-        # exctacting Fourier component that exactly matches
-        # 'self._downconv_freq' (because if use FFT, frequency mesh may not
-        # exactly coincide with desired 'self._downconv_freq'
-        dt = 1/self._dig[0].get_sample_rate()  # sec
-        t = np.linspace(0, data.shape[-1]*dt, data.shape[-1], endpoint=False)
-        IQ = np.dot(data, np.exp(-2 * np.pi * 1j * self._downconv_freq * t))
-
-        # normalizing DFT
-        IQ /= len(data)
+            self.dataIQ.append(data_i + 1j*data_q)
 
         return IQ
 

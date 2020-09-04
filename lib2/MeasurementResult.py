@@ -10,10 +10,13 @@ from IPython.display import clear_output
 import matplotlib
 from matplotlib import animation, pyplot as plt
 from matplotlib._pylab_helpers import Gcf
-from numpy import array, where
+import numpy as np
 import copy
 import shutil
 import locale
+
+from typing import Union
+
 locale.setlocale(locale.LC_TIME, "C")
 
 def find(pattern, path):
@@ -35,8 +38,24 @@ class ContextBase():
         return self._equipment
 
     def to_string(self):
-        return "Equipment with parameters:\n" + str(self._equipment) + \
-               "\nComment:\n" + self._comment
+        self._equipment.update({"comment:": self._comment})
+
+        import json
+        import datetime
+        class Encoder(json.JSONEncoder):
+            def default(self, obj):
+                if hasattr(obj, "toJSON"):
+                    return obj.toJSON()
+                if isinstance(obj, np.ndarray) or \
+                        isinstance(obj, datetime.datetime):
+                    return obj.__str__()
+                else:
+                    return json.JSONEncoder.default(self, obj)
+
+        def nice_dict(d):
+            return json.dumps(d, indent=4, cls=Encoder)
+
+        return str(nice_dict(self._equipment))
 
     def update(self, equipment={}, comment=""):
         self._equipment.update(equipment)
@@ -103,6 +122,35 @@ class MeasurementResult:
     @staticmethod
     def load(sample_name, name, date='', subfolder="", return_all=False):
         """
+
+        Examples
+        ---------
+        >>> from lib2.MeasurementResult import MeasurementResult
+        >>> result = MeasurementResult.load("<sample_name>", "<name>")
+
+        Parameters
+        ----------
+        sample_name : str
+        name : str
+            measurement name
+        date : int
+            optional, date of measurement
+            format is "%b %d %Y" (see `datetime.strptime` for details)
+        subfolder : str
+            Not supported, I assume
+        return_all : Union[bool, int]
+            `True` - return all measurements with specified `name` and
+            `sample_name`
+            `False` - prompts user to choose specific measurement from
+            list sorted by date.
+            int - return specific measurement from sorted list of measurements
+            found
+
+        Returns
+        -------
+
+        """
+        """
         Finds all files with matching result name within the file structure
         of ./data/ folder and optionally prompts user to resolve any ambiguities.
 
@@ -110,9 +158,6 @@ class MeasurementResult:
             an instance of the child class containing the specific measurement
             result
 
-        Example usage:
-        >>> from lib2.MeasurementResult import MeasurementResult
-        >>> result = MeasurementResult.load("<sample_name>", "<name>")
 
         If the user hits EOF (*nix: Ctrl-D, Windows: Ctrl-Z+Return), raise EOFError.
         On *nix systems, readline is used if available.
@@ -134,7 +179,8 @@ class MeasurementResult:
         return results[0] if len(results) == 1 and not return_all else results
 
     @staticmethod
-    def _find_paths_by(sample_name, name, extension, date, subfolder, return_all=False):
+    def _find_paths_by(sample_name, name, extension, date, subfolder,
+                       return_all=False):
         paths = find(name + extension, os.path.join('data', sample_name, subfolder, date))
 
         if len(paths) == 0:
@@ -145,9 +191,14 @@ class MeasurementResult:
         dates = [datetime.strptime(path.split(os.sep)[-3], "%b %d %Y")
                  for path in paths]
         z = zip(dates, paths)
+
+        if isinstance(return_all, int):
+            return [paths[int(return_all)]]
+
         sorted_dates, sorted_paths = zip(*sorted(z))
 
         if not return_all and len(paths)>1:
+            # force user to choose
             return MeasurementResult._prompt_user_to_choose(sorted_paths)
 
         return sorted_paths
@@ -294,7 +345,7 @@ class MeasurementResult:
 
         Examples
         ------------------------
-        # waveMixing.py, waveMixingResult.
+        # pulseMixing.py, waveMixingResult.
             def _prepare_figure2D_re_n_im(self):
                 self._last_tr = None
                 self._peaks_last_tr = None

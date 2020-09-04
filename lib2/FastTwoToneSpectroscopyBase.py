@@ -101,7 +101,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         setter_function = self._adaptive_setter if self._adaptive else self._base_setter
 
         for swept_par in swept_pars.keys():  # only 1 parameter here
-            swept_pars[swept_par][0] = setter_function
+            swept_pars[swept_par] = setter_function
 
         super().set_swept_parameters(**swept_pars)
 

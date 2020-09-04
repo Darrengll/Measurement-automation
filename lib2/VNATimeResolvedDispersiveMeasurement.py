@@ -152,7 +152,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         # TODO: 'and (q_z_calibration is not None)'  hotfix by Shamil (below)
         # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
         # So hasattr(self, "_q_z_awg") is True
-        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
+        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequencyTEST.py
         if q_z_calibration is not None:
             q_z_pb = PulseBuilder(q_z_calibration)
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
@@ -174,7 +174,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         # TODO: 'and (self._q_z_awg[0] is not None)'  hotfix by Shamil (below)
         # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
         # So hasattr(self, "_q_z_awg") is True
-        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequency.py
+        # due to the fact that I had declared this parameter and initialized it with "[None]" in RabiFromFrequencyTEST.py
         if hasattr(self, '_q_z_awg') and (self._q_z_awg[0] is not None):
             q_z_pbs = [q_z_awg.get_pulse_builder() for q_z_awg in self._q_z_awg]
         else:

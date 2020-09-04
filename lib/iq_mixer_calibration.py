@@ -4,11 +4,13 @@ from scipy.optimize import minimize
 from datetime import datetime
 from IPython.display import clear_output
 
+
 class IQCalibrationData():
 
     def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,
-                 if_frequency, sideband_to_maintain, ssb_power, waveform_resolution, dc_offsets,
-                 dc_offsets_open, if_offsets, if_amplitudes, if_phase, spectral_values,
+                 if_frequency, sideband_to_maintain, ssb_power,
+                 waveform_resolution, dc_offsets, dc_offsets_open,
+                 if_offsets, if_amplitudes, if_phase, spectral_values,
                  optimization_time, end_date):
 
         self._mixer_id = mixer_id
@@ -20,12 +22,9 @@ class IQCalibrationData():
         self._sideband_to_maintain = sideband_to_maintain
         self._waveform_resolution = waveform_resolution
 
-        self._sideband_to_maintain_freq = None
-        if self._sideband_to_maintain == "right":
-            self._sideband_to_maintain_freq = self._lo_frequency + self._if_frequency
-        elif self._sideband_to_maintain == "left":
-            self._sideband_to_maintain_freq = self._lo_frequency - self._if_frequency
-
+        sidebands = {"left":    self._lo_frequency - self._if_frequency,
+                     "right":   self._lo_frequency + self._if_frequency}
+        self._sideband_to_maintain_freq = sidebands[self._sideband_to_maintain]
 
         self._dc_offsets = dc_offsets
         self._dc_offsets_open = dc_offsets_open
@@ -39,30 +38,61 @@ class IQCalibrationData():
 
     def get_optimization_results(self):
         """
-        Get the optimal paramters and the resulting spectral component values
+        Get optimal parameters and the resulting spectral component values
         Returns:
             parameters, results: tuple
         """
-        return dict(dc_offsets=self._dc_offsets, dc_offset_open=self._dc_offsets_open,
-                    if_offsets=self._if_offsets, if_amplitudes=self._if_amplitudes,
+        return dict(dc_offsets=self._dc_offsets,
+                    dc_offset_open=self._dc_offsets_open,
+                    if_offsets=self._if_offsets,
+                    if_amplitudes=self._if_amplitudes,
                     if_phase=self._if_phase), self._spectral_values
 
     def get_radiation_parameters(self):
         return dict(lo_frequency=self._lo_frequency, lo_power=self._lo_power,
                     if_frequency=self._if_frequency, ssb_power=self._ssb_power,
-                    sideband_to_maintain=self._sideband_to_maintain, waveform_resolution=self._waveform_resolution)
+                    sideband_to_maintain=self._sideband_to_maintain,
+                    waveform_resolution=self._waveform_resolution)
 
     def get_mixer_parameters(self):
-        return dict(mixer_id=self._mixer_id, iq_attenuation=self._iq_attenuation)
+        return dict(mixer_id=self._mixer_id,
+                    iq_attenuation=self._iq_attenuation)
 
     def __str__(self):
-        return "Calibration data for mixer "+self._mixer_id+\
-                "\nMixer parameters: "+str(self.get_mixer_parameters())+\
-                "\nRadiation parameters: "+str(self.get_radiation_parameters())+\
-                "\nOptimization results: "+str(self.get_optimization_results()[1])+\
-                "\nOptimization parameters "+str(self.get_optimization_results()[0])+\
-                "\nOptimization time: "+format_time_delta(self._optimization_time)+\
-                "\nFinished at: "+str(self._end_date)
+        import json
+        import datetime
+        class Encoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.ndarray) or \
+                        isinstance(obj, datetime.datetime):
+                    return obj.__str__()
+                return json.JSONEncoder.default(self, obj)
+
+        def nice_dict(d):
+            return json.dumps(d, indent=4, cls=Encoder)
+
+        return (f"Calibration data for mixer {nice_dict(self._mixer_id)}\n"
+                f"Mixer parameters: "
+                f"{nice_dict(self.get_mixer_parameters())}\n"
+                f"Radiation parameters: {nice_dict(self.get_radiation_parameters())}\n"
+                f"Optimization results: {nice_dict(self.get_optimization_results()[1])}\n"
+                f"Optimization parameters "
+                f"{nice_dict(self.get_optimization_results()[0])}\n"
+                f"Optimization time: "
+                f"{nice_dict(format_time_delta(self._optimization_time))}\n"
+                f"Finished at: {nice_dict(self._end_date)}")
+
+    def get_if_frequency(self):
+        return self._if_frequency
+
+    def get_lo_frequency(self):
+        return self._lo_frequency
+
+    def get_ssb_power(self):
+        return self._ssb_power
+
+    def get_lo_power(self):
+        return self._lo_power
 
 
 class IQCalibrator():
@@ -71,8 +101,9 @@ class IQCalibrator():
                  sideband_to_maintain="left", sidebands_to_suppress=6,
                  optimized_awg_calls = True):
         """
-        IQCalibrator is a class that allows you to calibrate automatically an IQ mixer to obtain a Single Sideband (SSB)
+        Automatically calibrate an IQ mixer to obtain a Single Sideband (SSB)
         with desired parameters.
+
         iqawg:
             reference to the IQAWG object
         sa:
@@ -341,7 +372,7 @@ class IQCalibrator():
             self._sa.set_continuous()
 
 def format_number_list(number_list):
-    formatted_string = "[ "
+    formatted_string = f"[ "
     for number in number_list:
         formatted_string += "%3.3f "%number
     return formatted_string + "]"

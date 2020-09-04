@@ -43,7 +43,6 @@ class SingleToneSpectroscopy(Measurement):
         self._vna[0].sweep_hold()
         super().set_fixed_parameters(**dev_params)
 
-
     def set_swept_parameters(self, swept_parameter):
         """
         SingleToneSpectroscopy only takes one swept parameter in format
@@ -103,7 +102,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         ax_amps, ax_phas = axes
         ax_amps.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
         ax_amps.set_ylabel("Frequency [GHz]")
-        xlabel = self._parameter_names[0][0].upper() + self._parameter_names[0][1:]
+        xlabel = self._parameter_names[0]
         ax_amps.set_xlabel(xlabel)
         ax_phas.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
         ax_phas.set_xlabel(xlabel)

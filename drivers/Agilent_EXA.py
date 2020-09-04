@@ -51,6 +51,11 @@ class Agilent_EXA_N9010A(Instrument):
             minval=1, maxval=1e9,
             units='Hz', tags=['sweep'])
 
+        self.add_parameter('video_bandwidth', type=float,
+            flags=Instrument.FLAG_GETSET,
+            minval=1, maxval=1e9,
+            units='Hz', tags=['sweep'])
+
         self.add_parameter('averages', type=int,
             flags=Instrument.FLAG_GETSET,
             minval=1, maxval=1024, tags=['sweep'])
@@ -533,7 +538,32 @@ class Agilent_EXA_N9010A(Instrument):
         self._stop = float(self._visainstrument.query('SENS%i:FREQ:STOP?' %(self._ci) ))
         return  self._stop
 
-    def do_set_bandwidth(self,band):
+    def do_set_video_bandwidth(self, band):
+        """
+        Set Video Bandwidth
+
+        Input:
+            band (float) : Bandwidth in Hz
+
+        Output:
+            None
+        """
+        self._visainstrument.write(f'SENS{self._ci:g}:BWID:VID {band:g}')
+
+    def do_get_video_bandwidth(self):
+        """
+        Get Video Bandwidth
+
+        Input:
+            None
+
+        Output:
+            band (float) : Bandwidth in Hz
+        """
+        # getting value from instrument
+        return float(self._visainstrument.query(f'SENS{self._ci:g}:BWID:VID?'))
+
+    def do_set_bandwidth(self, band):
         """
         Set Bandwidth
 

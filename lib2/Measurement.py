@@ -1,5 +1,6 @@
 import pyvisa
 from matplotlib._pylab_helpers import Gcf
+from collections import OrderedDict
 
 from drivers import *
 from datetime import datetime as dt
@@ -18,8 +19,6 @@ from numpy import zeros, complex_
 from lib2.GlobalParameters import *
 
 from typing import Dict, Tuple, List
-
-from loggingServer import LoggingServer
 
 
 class Measurement:
@@ -117,9 +116,9 @@ class Measurement:
 
         """
 
-        self._logger = LoggingServer.getInstance('manual_meas')
+        # self._logger = LoggingServer.getInstance('manual_meas')
 
-        self._logger.debug("Measurement " + name + " init, devs: "+ str(devs_aliases_map))
+        # self._logger.debug("Measurement " + name + " init, devs: "+ str(devs_aliases_map))
 
         self._interrupted = False
         self._name = name
@@ -204,7 +203,7 @@ class Measurement:
         swept_pars = {'par1_name': (par1_setter_func, [par1_val1, par1_val1 ]),
                       'par2_name': (par2_setter_func, par2_values_list), ...}
         """
-        self._swept_pars = swept_pars
+        self._swept_pars = OrderedDict(swept_pars)
         self._swept_pars_names = list(swept_pars.keys())
         self._measurement_result.set_parameter_names(self._swept_pars_names)
         self._last_swept_pars_values = \
@@ -250,7 +249,6 @@ class Measurement:
             self._measurement_result.finalize()
             plt.close(figure_number)
 
-
     def stop(self):
         self._interrupted = True
 
@@ -269,12 +267,15 @@ class Measurement:
         done_iterations = 0
         start_time = self._measurement_result.get_start_datetime()
 
-        parameters_values = [self._swept_pars[parameter_name][1] for parameter_name in par_names]
-        parameters_idxs = [list(range(len(self._swept_pars[parameter_name][1]))) for parameter_name in par_names]
+        parameters_values = [self._swept_pars[parameter_name][1]
+                             for parameter_name in par_names]
+        parameters_idxs = [list(range(len(self._swept_pars[parameter_name][1]))
+                                ) for parameter_name in par_names]
         raw_data_shape = [len(indices) for indices in parameters_idxs]
         total_iterations = reduce(mul, raw_data_shape, 1)
 
-        for idx_group, values_group in zip(product(*parameters_idxs), product(*parameters_values)):
+        for idx_group, values_group in zip(product(*parameters_idxs),
+                                           product(*parameters_values)):
             self._call_setters(values_group)
             # This should be implemented in child classes:
             data = self._recording_iteration()
@@ -283,19 +284,22 @@ class Measurement:
             # the returned data dimensions
             if done_iterations == 0:
                 try:
-                    self._raw_data = zeros(raw_data_shape + [len(data)], dtype=complex_)
+                    self._raw_data = zeros(raw_data_shape + [len(data)],
+                                           dtype=complex_)
                 except TypeError:  # data has no __len__ attribute
                     self._raw_data = zeros(raw_data_shape, dtype=complex_)
             self._raw_data[idx_group] = data
 
             # This may need to be extended in child classes:
-            measurement_data = self._prepare_measurement_result_data(par_names, parameters_values)
+            measurement_data = self._prepare_measurement_result_data(par_names,
+                                                             parameters_values)
             self._measurement_result.set_data(measurement_data)
             self._measurement_result._iter_idx_ready = idx_group
 
             done_iterations += 1
 
-            avg_time = (dt.now() - start_time).total_seconds() / done_iterations
+            avg_time = (dt.now() - start_time).total_seconds() / \
+                       done_iterations
             time_left = self._format_time_delta(avg_time * (total_iterations - done_iterations))
 
             formatted_values_group = "["
@@ -306,16 +310,17 @@ class Measurement:
                     formatted_values_group += "{}: {}, ".format(par_names[idx], value)
             formatted_values_group = formatted_values_group[:-2] + "]"
 
-            print("\rTime left: " + time_left + ", %s" % formatted_values_group +
-                  ", average cycle time: " + str(round(avg_time, 2)) + " s       ",
+            print(f"\rTime left: {time_left}, {formatted_values_group}, "
+                  f"average cycle time: {avg_time:.2f} s",
                   end="", flush=True)
 
             if self._interrupted:
                 return
 
-        self._measurement_result.set_recording_time(dt.now() - start_time)
-        print("\nElapsed time: %s" % self._format_time_delta((dt.now() - start_time)
-                                                             .total_seconds()))
+        time_elapsed = dt.now() - start_time
+        self._measurement_result.set_recording_time(time_elapsed)
+        print(f"\nElapsed time: "
+              f"{self._format_time_delta(time_elapsed.total_seconds())}")
         self._finalize()
 
     def _finalize(self):
@@ -434,4 +439,4 @@ class Measurement:
     def _format_time_delta(self, delta):
         hours, remainder = divmod(delta, 3600)
         minutes, seconds = divmod(remainder, 60)
-        return '%s h %s m %s s' % (int(hours), int(minutes), round(seconds, 2))
+        return f'{hours:g} h {minutes:g} m {seconds:.2f} s'

@@ -46,11 +46,10 @@ class DispersiveRabiChevronsResult(VNATimeResolvedDispersiveMeasurement2DResult)
         self._if_shift = None
         super().__init__(name, sample_name)
 
-
     def _prepare_data_for_plot(self, data):
-        return (data["excitation_frequency"] + self._if_shift) / 1e9, \
-               data["excitation_duration"] / 1e3, \
-               data["data"]
+        return ((data["excitation_frequency"] + self._if_shift) / 1e9,
+               data["excitation_duration"] / 1e3,
+               data["data"])
 
     def _annotate_axes(self, axes):
         axes[0].set_ylabel("Excitation duration [$\mu$s]")

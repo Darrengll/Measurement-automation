@@ -164,8 +164,8 @@ class DispersiveRabiFromFrequency(Measurement):
                     y_from_x_fit = interp1d(x, y, kind="cubic", copy=False, assume_sorted=False, fill_value="extrapolate")
                 self._tts_curves[curve_name] = y_from_x_fit
 
-        print("loaded tts_curves from file: " + filepath)
-        print("curve labels: ", self._tts_curves.keys())
+            print("loaded tts_curves from file: " + filepath)
+            print("curve labels: ", self._tts_curves.keys())
 
     def select_tts_curve(self, curve_key):
         self._current_curve = self._tts_curves[curve_key]
@@ -462,6 +462,7 @@ class DispersiveRabiFromFrequency(Measurement):
         self._snap.interpolate_yx_curve()
         return self._snap._target_y_func
     '''
+
 
 class RabiFromFrequencyResult(MeasurementResult):
     def __init__(self, name, sample_name):

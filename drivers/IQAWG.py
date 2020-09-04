@@ -126,7 +126,8 @@ class IQAWG():
     def output_continuous_IQ_waves(self, frequency, amplitudes, relative_phase,
         offsets, waveform_resolution, optimized=True):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form:
+        y = A*sin(2*pi*frequency + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
@@ -139,12 +140,13 @@ class IQAWG():
         offsets: float, V
             voltage offset of the waveforms
         waveform_resolution: float, ns
-            resolution in time of the arbitrary waveform representing one period
-            of the wave
+            resolution in time of the arbitrary waveform representing one
+            period of the wave
         channel: 1 or 2
             channel which will output the wave
         optimized: boolean
-            first channel will be called with asynchronous = True if optimized is True
+            first channel will be called with asynchronous = True if optimized
+            is True
         """
         self._output_continuous_wave(frequency, amplitudes[0], relative_phase,
             offsets[0], waveform_resolution, 1, asynchronous = optimized)
