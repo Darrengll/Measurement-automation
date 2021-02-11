@@ -9,16 +9,14 @@ https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_m
 datasheet:
 https://spectrum-instrumentation.com/sites/default/files/download/m4x22_datasheet_english.pdf
 '''
+import itertools
+import time
 
 import numpy as np
 from scipy import fftpack
-from scipy.fftpack import fft, fftfreq
 import matplotlib.pyplot as plt
-
 from drivers.pyspcm import *
 from enum import Enum
-
-from typing import Union
 
 
 class CardError(Exception):
@@ -57,13 +55,13 @@ class SPCM:
         self.__antialiasing: bool = 0
         self.__acdc = self.AC
 
-        self._requested_segment_size : float = None  # in samples
+        self._requested_segment_size: float = None  # in samples
         self._segment_size: int = None  # in samples
         self._bufsize: int = 0  # size of the card buffer allocated in bytes
         self._trigger_mode = SPC_TM_POS  # | SPC_TM_REARM
         self._trig_term = 0
         self._trig_acdc = 0
-        self._trig_level0 = 500  # mV
+        self._trig_level0 = 700  # mV
         self._trig_level1 = 1000  # mV
         # how many samples to drop at the start due to the fact that
         # trace length has to be multiple of 32
@@ -118,7 +116,7 @@ class SPCM:
         if "dur_seg" in pars_dict:
             self.dur_seg_ns = pars_dict["dur_seg"]
             self.dur_seg_samples = \
-                self.dur_seg_ns * (1e-9*self.get_sample_rate())
+                self.dur_seg_ns * (1e-9 * self.get_sample_rate())
         if "n_seg" in pars_dict:
             self.n_seg = pars_dict["n_seg"]
         if "pretrigger" in pars_dict:
@@ -249,7 +247,8 @@ class SPCM:
         Examples
         -------
         self.__handle_timeout(
-                self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)  # Wait till the card completes the current run
+                self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
+                # Wait till the card completes the current run
             )
         """
         if ret == ERR_TIMEOUT:
@@ -262,7 +261,7 @@ class SPCM:
         Set time overflow in the digitizer
 
         timeout : int
-            timeout in ms?
+            timeout in ms
         """
         self.__write_to_reg_32(SPC_TIMEOUT, timeout)
 
@@ -286,8 +285,10 @@ class SPCM:
         self.__handle_error()
 
     def setup_block_avg_STD(self, memsize, segmentsize, posttrigger, averages):
-        """ Setup Standard Single Acquisition mode with the Block Averaging Module
-            Acquire data immediately and save them in Spectrum memory"""
+        """
+        Setup Standard Single Acquisition mode with the Block Averaging Module
+        Acquire data immediately and save them in Spectrum memory
+        """
         if averages <= 256:
             # Enables Segment Statistic for standard acquisition 16 bit
             self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE_16BIT)
@@ -304,8 +305,11 @@ class SPCM:
         self.__handle_error()
 
     def setup_multi_rec_STD(self, memsize, segmentsize, posttrigger):
-        """Setup Multiple Reconding Acquisition mode
-            Acquires many segments (N = memsize/segmentsize) and saves them in Spectrum memory"""
+        """
+        Setup Multiple Reconding Acquisition mode
+        Acquires many segments (N = memsize/segmentsize) and saves them in
+        Spectrum memory
+        """
         self.__write_to_reg_32(SPC_CARDMODE,
                                SPC_REC_STD_MULTI)  # Enables Segment Statistic for standard acquisition
         self.__write_to_reg_32(SPC_MEMSIZE, memsize)
@@ -426,7 +430,7 @@ class SPCM:
         # Calculate and memorize how many samples to drop from
         # trace due to delay.
         # Calculation principle:
-        # first acquired point will be atleast
+        # first acquired point will be at least
         # 0 < tau <= dt before the signal is expected to start - t0 + dt
         # t0 is included into the trace
         self._n_samples_to_drop_by_delay = \
@@ -800,6 +804,14 @@ class SPCM:
                             "unknown value\n")
 
     def setup_trigger_source(self, trigger_source=None):
+        """
+        SPCM_TRIGGER.AUTOTRIG is the software trigger. The measurement
+        starts immediately after start_card() is called.
+        SPCM_TRIGGER.EXT0 is the frontpanel analog trigger. The measurement
+        starts when a pulse arrives to EXT0 port.
+        EXT1 and PXI triggers are supported, but not yet implemented in this
+        driver.
+        """
         def init_trigger():
             if self.trigger_source == SPCM_TRIGGER.AUTOTRIG:
                 self.setup_auto_trigger()
@@ -814,21 +826,66 @@ class SPCM:
 
     def measure(self):
         """
-
-        Parameters
-        ----------
-        bufsize
-
-        Returns
-        -------
-        np.ndarray
+        Launches measurement and returns data, normalized to milivolts.
+        It finishes faster than safe_measure method, but cannot be interrupted
+        during measurement.
+        Note:
+        Two channels A and B return data with samples intertwined with each
+        other, i.e. A0B0A1B1A2B2...ANBN
         """
         self.start_card()
         self.wait_for_card()  # wait till the end of a measurement
         data = self.obtain_data()  # download data from the card
+        # convertion to mV is according to
+        # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
+        # p.81
+        data = data.astype(float) / self.n_avg / 128 * self.ch_amplitude
         return data
 
+    def safe_measure(self):
+        """
+        Launches measurement and returns data normalized to milivolts.
+        Does not hang if something goes wrong like its counterpart measure()
+        does. Since it is slower, it must not be used when execution speed is
+        crucial.
+        Note:
+        Two channels A and B return data with samples intertwined with each
+        other, i.e. A0B0A1B1A2B2...ANBN
+        """
+        self.start_card()
+        try:
+            for char in itertools.cycle("|/-\\"):
+                print(f"{char} Measuring", end="\r", flush=True)
+                time.sleep(.1)
+                if self.is_ready():
+                    print("Finished   ", end="\r", flush=True)
+                    break
+        except KeyboardInterrupt:
+            self.stop_card()
+            print("Card was interrupted")
+            return None
+        data = self.obtain_data()  # download data from the card
+        # convertion to mV is according to
+        # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
+        # p.81
+        data = data.astype(float) / self.n_avg / 128 * self.ch_amplitude
+        return data
+
+    def is_ready(self):
+        """
+        False during an ongoing measurent.
+        True when it finishes.
+        """
+        return (self._get_status() & M2STAT_CARD_READY) > 0
+
+    def get_slot_number(self):
+        """
+        Returns the occupied slot number in the PXI chassis
+        """
+        return self.__read_reg_32(SPC_PXIHWSLOTNO)
+
     def measure_standard_mode(self, channels, ampl, memsize, pretrigger):
+        """Deprecated. Might not work"""
         if type(channels) is int:
             N = 1
             channels = [channels]
@@ -840,6 +897,7 @@ class SPCM:
 
     def measure_averaging_mode(self, channels, ampl, num_segments,
                                segment_size, pretrigger, num_averages):
+        """Deprecated. Might not work"""
         if type(channels) is int:
             N = 1
             channels = [channels]
@@ -856,6 +914,7 @@ class SPCM:
 
     def measure_multiple_recording_mode(self, channels, ampl, num_segments,
                                         segment_size, pretrigger):
+        """Deprecated. Might not work"""
         if type(channels) is int:
             N = 1
             channels = [channels]
@@ -870,7 +929,6 @@ class SPCM:
 
     @staticmethod
     def amps_to_dbm(amps):
-        # SHAMIL: are you sure it is not '... / 50 / 1e-3)' instead of '... / 50 * 1e-3'?
         return 10 * np.log10((amps / 1e3) ** 2 / 50 * 1e-3)
 
     @staticmethod
@@ -923,7 +981,7 @@ class SPCM:
         xdata = np.arange(0, len(data) / N) / samplerate
 
         for i in range(0, N):
-            ydata = data[i::N] / 128 * ampl / num_averages
+            ydata = data[i::N]
             plt.plot(xdata[start_x:end_x], ydata[start_x:end_x])
 
         legends = ["CH" + str(ch) for ch in channels]
@@ -1041,7 +1099,7 @@ class SPCM:
         a = np.arange(N * segment_size_optimal, len(data), N * segment_size)
         b = np.concatenate([a + i for i in range(0, N * (
                     segment_size - segment_size_optimal))])
-        data_cut = np.delete(data, b) * ampl / 128 / num_averages
+        data_cut = np.delete(data, b)
         SPCM.plot_spectrum(channels, data_cut, freq_from, freq_until,
                            self.get_sample_rate())
         return data_cut

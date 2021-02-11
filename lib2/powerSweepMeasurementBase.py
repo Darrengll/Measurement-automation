@@ -85,6 +85,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
             "pretrigger": 32,
 
         freq_limits : tuple[float]
+            fourier limits for visualization
         lo_parameters : list[dict[str, Any]]
 
         Returns
@@ -208,14 +209,15 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
         return measurement_data
 
     def _recording_iteration(self):
-        data = self._dig.measure(self._bufsize)
+        data = self._dig.measure(self._bufsize)  # data in mV
         # deleting extra samples from segments
         a = np.arange(self._segment_size_optimal, len(data), self._segment_size)
         b = np.concatenate([a + i for i in range(0, self._segment_size - self._segment_size_optimal)])
-        data_cut = np.delete(data, b) * self._adc_parameters["ch_amplitude"] / 128 / self._adc_parameters["n_avg"]
+        data_cut = np.delete(data, b)
         yf = np.abs(np.fft.fft(data_cut, self.nfft))[self._start_idx:self._end_idx + 1] * 2 / self.nfft
         self._measurement_result._iter += 1
         return yf
+
 
 class WMPulseBuilder(IQPulseBuilder):
     """IQ Pulse builder for wave mixing and for other measurements for a single qubit in line """

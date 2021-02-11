@@ -86,7 +86,8 @@ class PowerTwoToneSpectroscopy(TwoToneSpectroscopyBase):
                 detect_resonator = adaptive
             else:
                 detect_resonator = False
-            super().set_fixed_parameters(current=sweet_spot_current, voltage=sweet_spot_voltage,
+            super().set_fixed_parameters(current=sweet_spot_current,
+                                         voltage=sweet_spot_voltage,
                                          detect_resonator=detect_resonator,
                                          **dev_params)
 

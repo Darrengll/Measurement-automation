@@ -7,7 +7,7 @@ from importlib import reload
 from matplotlib import pyplot as plt
 from lib2.IQPulseSequence import IQPulseBuilder
 from lib2.MeasurementResult import MeasurementResult
-import lib2.pulseMixing
+import lib2.directMeasurements.waveMixing
 
 from typing import List
 from drivers.Spectrum_m4x import SPCM
@@ -15,9 +15,10 @@ from drivers.E8257D import MXG
 from drivers.IQAWG import IQAWG
 from drivers.Yokogawa_GS200 import Yokogawa_GS210
 
-reload(lib2.pulseMixing)
-from lib2.pulseMixing import PulseMixing
+reload(lib2.directMeasurements.waveMixing)
+from lib2.directMeasurements.waveMixing import PulseMixing
 from lib.iq_downconversion_calibration import IQDownconversionCalibrationResult
+
 
 class StimulatedEmission(PulseMixing):
 
@@ -30,7 +31,7 @@ class StimulatedEmission(PulseMixing):
 
         super().__init__(name, sample_name, comment, q_lo=q_lo,
                          q_iqawg=q_iqawg, dig=dig)
-
+        self._delay_constant = 0
         self._delay_correction = 0
         self._measurement_result = StimulatedEmissionResult(name, sample_name)
         self._sequence_generator = \
@@ -41,9 +42,24 @@ class StimulatedEmission(PulseMixing):
         # the default pulse edge interval (before and after main pulse)
         self._pulse_edge_mult = None
         self.option_abs = False
-        self._down_conversion_calibration : \
-            IQDownconversionCalibrationResult = None
         self.data_pi_backup = []
+        self.data_backup = []
+
+        # Variables used for getting rid of the pulse shape but subtracting
+        # a trace with driving frequency shifted by
+        # self._max_shift_frequency from resonance
+        self._main_current = 0
+        self._shifted_current = 0
+        self._shifted_traces = []
+        self._src = src
+
+        self._ro_cal = None
+        self._ro_cals = None
+        self._downconv_cals = None
+        self._shifts = None
+
+        # The flag that enables setting the trace to 0 outside the pulse
+        self._cut_everything_outside_the_pulse = True
 
         # in case of sweep when repetition period is changing between
         # different measurements
@@ -81,6 +97,7 @@ class StimulatedEmission(PulseMixing):
         -------
         Nothing
         """
+
         q_lo_params[0]["power"] = q_iqawg_params[0]["calibration"] \
             .get_radiation_parameters()["lo_power"]
         # a snapshot of initial seq pars structure passed into measurement
@@ -101,7 +118,7 @@ class StimulatedEmission(PulseMixing):
         self._pulse_edge_mult = pulse_edge_mult
         self._delay_correction = delay_correction
         self._measurement_result._freq_lims = freq_limits
-        self.apply_filter = filter
+        self.apply_filter = filter # Flag: apply a digital FIR filter
 
         # longest repetition period is initially set with data from
         # 'pulse_sequence_paramaters'
@@ -153,6 +170,42 @@ class StimulatedEmission(PulseMixing):
             self._pulse_sequence_parameters["periods_per_segment"] * period
         self._output_pulse_sequence()
 
+    def sweep_probe_currents(self, list_of_currents):
+        self.set_swept_parameters(**{"Current limits, A": (
+            self._sweep_current_setter, list_of_currents)})
+        self._measurement_result.set_parameter_name("Current limits, A")
+
+    def sweep_probe_frequency(self, frequencies, a, b, c):
+        self.current_frequency_params = (a, b, c)
+        self.set_swept_parameters(**{"Probe frequency, Hz": (
+            self._set_probe_frequency, frequencies)})
+        self._measurement_result.set_parameter_name("Probe frequency, Hz")
+
+    def _sweep_current_setter(self, current):
+        self._src[1].set_current(current)
+        self._output_pulse_sequence()
+
+    def _set_probe_frequency(self, frequency):
+        a, b, c = self.current_frequency_params
+        current = b + np.sqrt((frequency - c) / a)
+        self._src[1].set_current(current)
+        self._output_pulse_sequence()
+
+    def sweep_pulse_duration(self, duration_coefficients,
+                             current_digitizer_delay):
+        self.current_digitizer_delay = current_digitizer_delay
+        self._name += "_duration"
+        swept_pars = {"Pulse duration coefficient": (
+            self._set_pulse_duration, duration_coefficients)}
+        self.set_swept_parameters(**swept_pars)
+        self._measurement_result.set_parameter_name("Pulse duration, ns")
+
+    def _set_pulse_duration(self, duration_coefficient):
+        self._pulse_sequence_parameters["pulse_length"] = duration_coefficient
+        self._pulse_sequence_parameters["digitizer_delay"] = \
+            duration_coefficient #+ self.current_digitizer_delay
+        self._output_pulse_sequence()
+
     def sweep_pulse_phase(self, phases):
         self._name += "_phase"
         swept_pars = {"Pulse phase, radians": (self._set_phase_shift, phases)}
@@ -176,11 +229,19 @@ class StimulatedEmission(PulseMixing):
         self._q_lo[0].set_frequency(ro_cal.get_lo_frequency())
         self._q_iqawg[0].set_parameters({"calibration": ro_cal})
         self._down_conversion_calibration = self._downconv_cals[idx]
-        self._down_conversion_calibration.set_shift(shift)
+        if self._down_conversion_calibration is not None:
+            self._down_conversion_calibration.set_shift(shift)
         self._output_pulse_sequence()
+
+    def _obtain_shifted_trace(self):
+        self._src[0].set_current(self._shifted_current)
+        time, trace = self._measure_one_trace()
+        self._shifted_traces.append(trace)
+        self._src[0].set_current(self._main_current)
 
     def _recording_iteration(self):
         time, data = self._measure_one_trace()
+        self.data_backup.append(data.copy())
 
         if self._subtract_pi:
             phase = 0
@@ -192,6 +253,13 @@ class StimulatedEmission(PulseMixing):
             self.data_pi_backup.append(data_pi.copy())
             data -= data_pi
             self._pulse_sequence_parameters["phase_shifts"] = [phase]
+
+        # Subtract the trace with a pulse, that was shifted far from
+        # resonance. Can be used to subtract the pulse shape and preserve
+        # quantum oscillations
+        if self._subtract_shifted:
+            self._obtain_shifted_trace()
+            data -= self._shifted_traces[-1]
 
         # Parameters 'first_pulse_start' and 'last_pulse_end' are calculated
         # and stored into 'pulse_sequence_parameters' during the last call
@@ -221,7 +289,7 @@ class StimulatedEmission(PulseMixing):
             data = np.abs(data)**2
         else:
             if_freq = self._q_iqawg[0].get_calibration().get_if_frequency()
-            data = data * np.exp(-1j * 2 * np.pi * if_freq * time * 1e-9)
+            data = data * np.exp(-2j * np.pi * if_freq * time * 1e-9)
 
         # filtering
         if self.apply_filter:
@@ -229,24 +297,28 @@ class StimulatedEmission(PulseMixing):
                               fs=self._dig[0].get_sample_rate())
             data = signal.convolve(data, b, "same")
 
-        # # the signal outside pulses is set to zero
-        data[np.logical_not(pulses_mask)] = 0
-        max_length = int(
-            self.max_segment_duration * 1e-9 *  # seconds
-            self._dig[0].get_sample_rate()  # Hz
-        )
+        if self._cut_everything_outside_the_pulse:
+            # the signal outside pulses is set to zero
+            data[np.logical_not(pulses_mask)] = 0
+            max_length = int(
+                self.max_segment_duration * 1e-9 *  # seconds
+                self._dig[0].get_sample_rate()  # Hz
+            )
 
-        # CHANGE_1 place this after 'data = np.abs(data)'
-        # subtracting pulse amplitude from pulses
-        # + 'data -> data[pulse_mask]'
-        data[pulses_mask] -= np.mean(data[pulses_mask])
+            # CHANGE_1 place this after 'data = np.abs(data)'
+            # subtracting pulse amplitude from pulses
+            # + 'data -> data[pulse_mask]'
+            data[pulses_mask] -= np.mean(data[pulses_mask])
 
-        # CHANGE_1, copy is needed to insure reference count safety
-        # if copy is ommited, then "does not own it's value" exception
-        # is raised
-        data = data.copy()
-        data.resize(max_length)  # note that np.resize() works differently
+            # CHANGE_1, copy is needed to insure reference count safety
+            # if copy is ommited, then "does not own it's value" exception
+            # is raised
+            data = data.copy()
+            data.resize(max_length)  # note that np.resize() works differently
+
         return data
+
+
 
 
 class StimulatedEmissionResult(MeasurementResult):

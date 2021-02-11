@@ -203,10 +203,16 @@ class IQAWG():
         else:
             # 100 ns trigger length after every 'start' of the playing
             awg.trigger_output_config(trig_mode="ON", trig_length=100)
-        waveform0 = np.zeros(int(trigger_sync_every/awg.get_sample_rate()*1e9)) + cal._if_offsets[0]
-        waveform1 = np.zeros(int(trigger_sync_every/awg.get_sample_rate()*1e9)) + cal._if_offsets[1]
-        self._channels[0].output_arbitrary_waveform(waveform0, 1/trigger_sync_every*1e9)
-        self._channels[1].output_arbitrary_waveform(waveform1, 1/trigger_sync_every*1e9)
+        waveform0 = np.zeros(
+            int(trigger_sync_every / awg.get_sample_rate() * 1e9)) \
+            + cal._dc_offsets[0]
+        waveform1 = np.zeros(
+            int(trigger_sync_every / awg.get_sample_rate() * 1e9)) \
+            + cal._dc_offsets[1]
+        self._channels[0].output_arbitrary_waveform(
+            waveform0, 1 / trigger_sync_every * 1e9)
+        self._channels[1].output_arbitrary_waveform(
+            waveform1, 1 / trigger_sync_every * 1e9)
 
     def output_continuous_two_freq_IQ_waves(self, dfreq, ampl_coefs=(2, 2)):
         fs = self._channels[0]._host_awg.get_sample_rate()  # Hz

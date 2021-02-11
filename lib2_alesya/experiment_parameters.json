@@ -1,0 +1,98 @@
+{
+  "global": {
+    "resonator_type": "notch",
+    "which_sweet_spot": {
+      "I": "top",
+      "II": "top",
+      "III": "top",
+      "IV": "top",
+      "VI": "top",
+      "V": "top",
+      "VII": "top",
+      "VIII": "top"
+    },
+    "readout_power": -55,
+    "excitation_power": -30
+  },
+  "fulaut": {
+    "resonator_oracle": {
+      "rerun": false,
+      "vna_parameters": {
+        "nop": 5000,
+        "freq_limits": [
+          6.4e9,
+          7.5e9
+        ],
+        "bandwidth": 1e6,
+        "averages": 1000,
+        "power": -40
+      },
+      "peak_number": 8
+    },
+    "sts_runner": {
+      "rerun": false,
+      "vna_parameters": {
+        "nop": 101,
+        "bandwidth": 1e5,
+        "averages": 1000
+      },
+      "flux_nop": 101,
+      "anticrossing_oracle_hints": {
+        "fqmax_below": true,
+        "g": 35e6,
+        "d": 0.3
+      }
+    },
+    "tts_runner": {
+      "rerun": false,
+      "vna_parameters": {
+        "bandwidth": 1e5,
+        "averages": 2000,
+        "resonator_detection_nop": 201,
+        "resonator_detection_bandwidth": 1e5
+      }
+    },
+    "acstts_runner": {
+      "rerun": false,
+      "vna_parameters": {
+        "bandwidth": 5e4,
+        "averages": 20000,
+        "resonator_detection_nop": 201,
+        "resonator_detection_bandwidth": 5e4
+      }
+    },
+    "rabi": {
+      "rerun": false,
+      "nop": 101,
+      "max_excitation_duration": 1001,
+      "readout_duration": 4000,
+      "repetition_period": 50000,
+      "averages": 5000
+    },
+    "ramsey": {
+      "rerun": false,
+      "nop": 101,
+      "readout_duration": 4000,
+      "repetition_period": 100000,
+      "averages": 5000,
+      "max_ramsey_delay": 50000,
+      "detuning": 0.1e6
+    },
+    "decay": {
+      "rerun": false,
+      "nop": 51,
+      "averages": 5000,
+      "readout_duration": 4000,
+      "repetition_period": 200000,
+      "max_readout_delay": 150000
+    },
+    "hahn_echo": {
+      "rerun": false,
+      "nop": 51,
+      "averages": 20000,
+      "readout_duration": 4000,
+      "repetition_period": 100000,
+      "max_echo_delay": 80000
+    }
+  }
+}

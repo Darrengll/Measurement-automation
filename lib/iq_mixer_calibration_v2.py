@@ -5,7 +5,7 @@ import json
 from IPython.display import clear_output
 
 
-class IQCalibrationData():
+class IQCalibrationData:
 
     def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,
                  if_frequency, sideband_to_maintain, ssb_power,
@@ -35,6 +35,9 @@ class IQCalibrationData():
         self._spectral_values = spectral_values
         self._optimization_time = optimization_time
         self._end_date = end_date
+
+    def __init__(self, dictionary):
+        self.__dict__.update(dictionary)
 
     def get_optimization_results(self):
         """
@@ -132,6 +135,9 @@ class IQCalibrator():
         self._iq_attenuation = iq_attenuation
         self._sideband_to_maintain = sideband_to_maintain
         self._N_sup = sidebands_to_suppress
+        # Frequencies are indexed from least to largest value
+        # starting with 0.
+        # And frequency of interest index is as follows:
         self._target_freq_idx = self._N_sup // 2
         self._lo_freq_idx = None
         self._image_freq_idx = None
@@ -149,8 +155,8 @@ class IQCalibrator():
 
     def calibrate(self, lo_frequency, if_frequency, lo_power, ssb_power,
                   waveform_resolution=1, initial_guess=None,
-                  sa_res_bandwidth=500, iterations=5, minimize_iterlimit=20,
-                  sa_averages=10):
+                  sa_res_bandwidth=500, sa_vid_bandwidth=100,
+                  iterations=5, minimize_iterlimit=20, sa_averages=10):
         """
         Perform the calibration routine to suppress LO and upper sideband
         LO+IF
@@ -290,11 +296,11 @@ class IQCalibrator():
                        "xtol": 1e-3,
                        "ftol": 1e-2}
 
-            # res_dc_offs = minimize(loss_function_dc_offsets,
-            #                        prev_results["dc_offsets"],
-            #                        method="Powell",
-            #                        options=method_options)
-            # results["dc_offsets"] = res_dc_offs.x
+            res_dc_offs = minimize(loss_function_dc_offsets,
+                                   prev_results["dc_offsets"],
+                                   method="Powell",
+                                   options=method_options)
+            results["dc_offsets"] = res_dc_offs.x
 
             res_imbalance = minimize(
                 loss_function_image_rejection, np.array([0, 0]),
@@ -346,9 +352,8 @@ class IQCalibrator():
             else:
                 results = initial_guess
 
-            self._sa.setup_list_sweep([lo_frequency], [sa_res_bandwidth])
-            self._sa.set_average(True)
-            self._sa.set_averages(sa_averages)
+            self._sa.setup_list_sweep([lo_frequency], [sa_res_bandwidth],
+                                      [sa_vid_bandwidth])
 
             options = {"maxfev": minimize_iterlimit,
                        "xtol": 1e-4,
@@ -383,10 +388,10 @@ class IQCalibrator():
                     np.array([results["dc_offset_open"]]*2), None, None,
                     None, spectral_values, elapsed_time, datetime.now())
             else:
-                freqs = np.arange(
+                freqs = np.linspace(
                     lo_frequency - self._target_freq_idx * if_frequency,
-                    lo_frequency + (self._target_freq_idx + 1) * if_frequency,
-                    if_frequency
+                    lo_frequency + self._target_freq_idx * if_frequency,
+                    2*self._target_freq_idx + 1
                 )
 
                 if self._sideband_to_maintain == "left":
@@ -398,9 +403,8 @@ class IQCalibrator():
                     self._lo_freq_idx = self._target_freq_idx - 1
                     self._image_freq_idx = self._target_freq_idx - 2
 
-                self._sa.setup_list_sweep(list(freqs), [sa_res_bandwidth]*3)
-                self._sa.set_average(True)
-                self._sa.set_averages(sa_averages)
+                self._sa.setup_list_sweep(list(freqs), [sa_res_bandwidth]*3,
+                                          [sa_vid_bandwidth]*3)
 
                 results["if_offsets"] = res_dc_offs.x
                 iterate_minimization(results, iterations)

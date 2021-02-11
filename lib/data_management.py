@@ -2,8 +2,50 @@ import time
 import pickle as pkl
 import os
 from lib import plotting as pl
+from lib.iq_downconversion_calibration import IQDownconversionCalibrationResult
 from lib.measurement import Measurement
 import numpy as np
+
+
+#directory = 'Data\\IQMXCalibration'
+directory = r'C:\Users\PAINMASTER\Measurement\data\IQMXCalibrationData\IQMXCalibration'
+
+def save_downconversion_calibration(downconv_calibration):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    calibration = downconv_calibration.get_dict()
+
+    filename = calibration["_mixer_id"]
+    iffreq = downconv_calibration.get_if_frequency()
+    try:
+        with open(directory + "\\" + filename + '.pkl', 'rb') as f:
+            known_cal_data = pkl.load(f)
+
+            known_cal_data[iffreq] = calibration
+
+        with open(directory + "\\" + filename + '.pkl', 'wb') as f:
+            pkl.dump(known_cal_data, f)
+
+    except FileNotFoundError:
+        new_cal_data = {iffreq: calibration}
+
+        with open(directory + "\\" + filename + '.pkl', 'w+b') as f:
+            pkl.dump(new_cal_data, f)
+
+
+def load_downconversion_calibration(mixer_id, iffreq):
+    directory = 'Data\\IQMXCalibration'
+    filename = mixer_id
+
+    try:
+        with open(directory + "\\" + filename + '.pkl', 'rb') as f:
+            known_cal_data = pkl.load(f)
+
+    except FileNotFoundError:
+        return None
+    cal_dict = known_cal_data[iffreq]
+    return IQDownconversionCalibrationResult.load_dict(cal_dict)
 
 
 def save_IQMX_calibration(iqmx_calibration):
@@ -35,7 +77,7 @@ def save_IQMX_calibration(iqmx_calibration):
 
 
 def load_IQMX_calibration_database(mixer_id, iq_attenuation):
-    directory = 'Data\\IQMXCalibration'
+    directory = 'data\\IQMXCalibration'
     filename = mixer_id
 
     try:

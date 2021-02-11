@@ -1,4 +1,5 @@
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
+from matplotlib import colorbar
 from numpy import meshgrid, unwrap, append
 import numpy as np
 from scipy import fftpack as fp
@@ -172,4 +173,29 @@ def plot_fourier_of_trace(trace: np.ndarray, sampling_resolution: float = 0.8,
     ax.set_xlabel("Frequency, Hz")
     ax.set_ylabel("Voltage, dBm")
     ax.grid(True)
+    plt.show()
+
+
+def plot_2D(xx, yy, zz, xlabel='', ylabel='', title='',
+            xlim=None, ylim=None, savepath=None, grid=False):
+    fig, ax = plt.subplots(1, figsize=(9, 6), constrained_layout=True)
+    ax.set_title(title)
+    zmax = np.max(np.abs(zz))
+    step_X = xx[0, 1] - xx[0, 0]
+    step_Y = yy[1, 0] - yy[0, 0]
+    extent = [xx[0, 0] - 1 / 2 * step_X, xx[0, -1] + 1 / 2 * step_X,
+              yy[0, 0] - 1 / 2 * step_Y, yy[-1, 0] + 1 / 2 * step_Y]
+    ax_map = ax.imshow(zz, origin='lower', cmap="RdBu_r",
+                       aspect='auto', vmax=zmax, vmin=-zmax, extent=extent)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if xlim is not None:
+        ax.set_xlim(xlim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    ax.grid(grid)
+    cax, kw = colorbar.make_axes(ax)
+    plt.colorbar(ax_map, cax=cax)
+    if savepath is not None:
+        plt.savefig(savepath, dpi=300)
     plt.show()

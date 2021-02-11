@@ -129,7 +129,7 @@ class Measurement:
         self._swept_pars: Dict[str, Tuple] = None
         self._swept_pars_names: List[str] = None
         # TODO: explicit definition of members in child classes
-        # self._measurement_result = None  # should be initialized in child class
+        self._measurement_result = None  # should be initialized in child class
         if GlobalParameters().resonator_types['reflection'] == True:
             self._resonator_detector = ResonatorDetector(type= 'reflection')
         else:

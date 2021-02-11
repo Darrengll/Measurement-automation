@@ -254,8 +254,9 @@ class MeasurementResult:
         This method may be overridden in a child class but super().save()
         must be called in the beginning of the overridden method.
 
-        Saves the MeasurementResult object using pickle, creating the folder
-        structure if necessary.
+        NOTE: Changed for better usability 29.01.2021
+        Saves the __dict__ of the MeasurementResult object using pickle,
+        creating the folder structure if necessary.
 
         The path is structured as follows:
             data/<sample name>/DD MM YYYY/HH-MM-SS - <name>/
@@ -267,17 +268,23 @@ class MeasurementResult:
         """
         fig, axes, caxes = self.visualize(plot_maximized)
 
-        with self._data_lock:
-            with open(os.path.join(self.get_save_path(), self._name + '.pkl'), 'w+b') as f:
-                pickle.dump(self, f)
-            with open(os.path.join(self.get_save_path(), self._name + '_raw_data.pkl'), 'w+b') as f:
-                pickle.dump(self._data, f)
-            with open(os.path.join(self.get_save_path(), self._name + '_context.txt'), 'w+') as f:
-                f.write(self.get_context().to_string())
-
-        plt.savefig(os.path.join(self.get_save_path(), self._name + ".png"), bbox_inches='tight')
-        plt.savefig(os.path.join(self.get_save_path(), self._name + ".pdf"), bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(), self._name + ".png"),
+                    bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(), self._name + ".pdf"),
+                    bbox_inches='tight')
         plt.close(fig)
+
+        with self._data_lock:
+            with open(os.path.join(self.get_save_path(),
+                                   self._name + '_raw_data.pkl'), 'w+b') as f:
+                pickle.dump(self._data, f)
+            with open(os.path.join(self.get_save_path(),
+                                   self._name + '_context.txt'), 'w+') as f:
+                f.write(self.get_context().to_string())
+            # TypeError: can't pickle _thread.lock objects
+            # with open(os.path.join(self.get_save_path(),
+            #                        self._name + '.pkl'), 'w+b') as f:
+            #     pickle.dump(self.__dict__, f)
 
     def visualize(self, maximized=True):
         """
@@ -345,7 +352,7 @@ class MeasurementResult:
 
         Examples
         ------------------------
-        # pulseMixing.py, waveMixingResult.
+        # waveMixing.py, PulseMixingResult.
             def _prepare_figure2D_re_n_im(self):
                 self._last_tr = None
                 self._peaks_last_tr = None

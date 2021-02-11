@@ -410,7 +410,7 @@ class Agilent_EXA_N9010A(Instrument):
         span = self._visainstrument.query('SENS%i:FREQ:SPAN?' % (self._ci) ) #float( self.query('SENS1:FREQ:SPAN?'))
         return span
 
-    def setup_list_sweep(self, frequency_list, rbw_list):
+    def setup_list_sweep(self, frequency_list, rbw_list, vbw_list=None):
         """
         Setup the EXA for the list sweep measurement. See manual for details.
 
@@ -424,13 +424,18 @@ class Agilent_EXA_N9010A(Instrument):
         self._visainstrument.write(":CONFigure:LIST")
         self._list_sweep = True
 
-        freqs_str = "".join(["%f,"%freq for freq in frequency_list])
+        freqs_str = "".join([f"{freq:f}," for freq in frequency_list])
         self._visainstrument.write(":LIST:FREQ "+freqs_str[:-1])
 
-        rbws_str = "".join(["%f,"%rbw for rbw in rbw_list])
+        rbws_str = "".join([f"{rbw:f}," for rbw in rbw_list])
         self._visainstrument.write(":LIST:BAND:RES "+rbws_str[:-1])
 
-        sweep_times = "".join(["%f,"%swt for swt in ones_like(frequency_list)/1e3])
+        if vbw_list is not None:
+            vbws_str = "".join([f"{vbw:f}," for vbw in vbw_list])
+            self._visainstrument.write(":LIST:BAND:VID "+vbws_str[:-1])
+
+        sweep_times = "".join([f"{swt:f}," for swt in ones_like(
+            frequency_list)/1e3])
         self._visainstrument.write(":LIST:SWEep:TIME "+sweep_times[:-1])
 
     def setup_swept_sa(self, center_freq=5e9, span=1e9, nop=1001, rbw=1e6):

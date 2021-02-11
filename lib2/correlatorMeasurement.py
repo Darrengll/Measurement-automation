@@ -229,11 +229,7 @@ class CorrelatorMeasurement(StimulatedEmission):
             applied this array will differ from np.linspace
         """
         dig = self._dig[0]
-        # convertion to mV is according to
-        # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
-        # p.81
-        dig_data = dig.measure().astype(np.longdouble) / dig.n_avg / 128 * \
-                   dig.ch_amplitude
+        dig_data = dig.measure()  # data in mV
         # construct complex valued scalar signal
         data = dig_data[0::2] + 1j * dig_data[1::2]
         '''

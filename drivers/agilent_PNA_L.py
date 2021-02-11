@@ -24,7 +24,7 @@ import visa
 import types
 import logging
 from time import sleep
-import numpy
+import numpy as np
 
 class Agilent_PNA_L(Instrument):
     """
@@ -36,7 +36,7 @@ class Agilent_PNA_L(Instrument):
 
     """
 
-    def __init__(self, address, channel_index = 1):
+    def __init__(self, address, channel_index=1):
         """
         Initializes
 
@@ -246,6 +246,17 @@ class Agilent_PNA_L(Instrument):
             self._visainstrument.write(  "CALCulate:PARameter:DEF:EXT "+name+', S%s%s'%(i,j))
 
     def select_S_param(self, S_param):
+        """
+
+        Parameters
+        ----------
+        S_param : str
+            String in format "Sij". j is the source port.
+
+        Returns
+        -------
+
+        """
         self.preset()
 
         self._visainstrument.write("DISPlay:ARRange SPLit")
@@ -299,12 +310,12 @@ class Agilent_PNA_L(Instrument):
     def get_sdata(self):
         self._visainstrument.write(':FORMAT:DATA REAL,32; :FORMat:BORDer SWAP;')
         data = self._visainstrument.query_binary_values("CALCulate:DATA? SDATA")
-        data_size = numpy.size(data)
-        datareal = numpy.array(data[0:data_size:2])
-        dataimag = numpy.array(data[1:data_size:2])
+        data_size = np.size(data)
+        datareal = np.array(data[0:data_size:2])
+        dataimag = np.array(data[1:data_size:2])
         return datareal+1j*dataimag
 
-    def get_tracedata(self, format = 'AmpPha'):
+    def get_tracedata(self, format="REALIMAG"):
         """
         Get the data of the current trace
 
@@ -320,26 +331,26 @@ class Agilent_PNA_L(Instrument):
         #data = self._visainstrument.ask_for_values('FORM:DATA REAL; FORM:BORD SWAPPED; CALC%i:SEL:DATA:SDAT?'%(self._ci), format = visa.double)
         #test
         data = self._visainstrument.ask_for_values("CALCulate:DATA? SDATA")
-        data_size = numpy.size(data)
-        datareal = numpy.array(data[0:data_size:2])
-        dataimag = numpy.array(data[1:data_size:2])
+        data_size = np.size(data)
+        datareal = np.array(data[0:data_size:2])
+        dataimag = np.array(data[1:data_size:2])
 
         #print datareal,dataimag,len(datareal),len(dataimag)
         if format.upper() == 'REALIMAG':
           if self._zerospan:
-            return numpy.mean(datareal), numpy.mean(dataimag)
+            return np.mean(datareal), np.mean(dataimag)
           else:
             return datareal, dataimag
         elif format.upper() == 'AMPPHA':
           if self._zerospan:
-            datareal = numpy.mean(datareal)
-            dataimag = numpy.mean(dataimag)
-            dataamp = numpy.sqrt(datareal*datareal+dataimag*dataimag)
-            datapha = numpy.arctan(dataimag/datareal)
+            datareal = np.mean(datareal)
+            dataimag = np.mean(dataimag)
+            dataamp = np.abs(datareal + 1j*dataimag)
+            datapha = np.arctan2(datareal, dataimag)
             return dataamp, datapha
           else:
-            dataamp = numpy.sqrt(datareal*datareal+dataimag*dataimag)
-            datapha = numpy.arctan2(dataimag,datareal)
+            dataamp = np.abs(datareal + 1j*dataimag)
+            datapha = np.arctan2(dataimag, datareal)
             return dataamp, datapha
         else:
           raise ValueError('get_tracedata(): Format must be AmpPha or RealImag')
@@ -353,9 +364,9 @@ class Agilent_PNA_L(Instrument):
 
     def get_frequencies(self, query = False):
       #if query == True:
-        #self._freqpoints = numpy.array(self._visainstrument.ask_for_values('SENS%i:FREQ:DATA:SDAT?'%self._ci,format=1)) / 1e9
-        #self._freqpoints = numpy.array(self._visainstrument.ask_for_values(':FORMAT REAL,32;*CLS;CALC1:DATA:STIM?;*OPC',format=1)) / 1e9
-      self._freqpoints = numpy.linspace(self._start,self._stop,self._nop)
+        #self._freqpoints = np.array(self._visainstrument.ask_for_values('SENS%i:FREQ:DATA:SDAT?'%self._ci,format=1)) / 1e9
+        #self._freqpoints = np.array(self._visainstrument.ask_for_values(':FORMAT REAL,32;*CLS;CALC1:DATA:STIM?;*OPC',format=1)) / 1e9
+      self._freqpoints = np.linspace(self._start,self._stop,self._nop)
       return self._freqpoints
 
     def set_electrical_delay(self, delay):
@@ -421,6 +432,9 @@ class Agilent_PNA_L(Instrument):
         if "bandwidth" in parameters_dict.keys():
             self.set_bandwidth(parameters_dict["bandwidth"])
         if "averages" in parameters_dict.keys():
+            # TODO: not working properly
+            # causes error -113 (unknown header)
+            # debug `self.do_set_averages` for details
             self.set_averages(parameters_dict["averages"])
         if "power" in parameters_dict.keys():
             self.set_power(parameters_dict["power"])
@@ -429,7 +443,7 @@ class Agilent_PNA_L(Instrument):
         if "freq_limits" in parameters_dict.keys():
             try:
                 if (parameters_dict["sweep_type"] == "CW"):
-                    self.do_set_CWfreq(numpy.mean(parameters_dict["freq_limits"]))
+                    self.do_set_CWfreq(np.mean(parameters_dict["freq_limits"]))
                 else:
                     self.set_freq_limits(*parameters_dict["freq_limits"])
             except:
@@ -556,7 +570,7 @@ class Agilent_PNA_L(Instrument):
         Output:
             None
         """
-        self._visainstrument.write('SENS%i:AVER:COUN %i' % (self._ci,av))
+        self._visainstrument.write('SENS%i:AVER:COUN %i' % (self._ci, av))
         self._visainstrument.write('TRIGger:AVERage 1')
         # if av > 1:
         #     self.do_set_average(True)
@@ -879,6 +893,24 @@ class Agilent_PNA_L(Instrument):
         """
         self.logger.debug(__name__ + ' : getting channel index')
         return self._ci
+
+    def measure_and_get_data(self, data_format="REALIMAG"):
+        """
+
+        Parameters
+        ----------
+        data_format : str
+            "REALIMAG" - real and imaginary parts returned as tuple(real, imag)
+            "AMPPHA" - amplitude and phase returned as tuple (amp, phase)
+
+        Returns
+        -------
+
+        """
+        self.prepare_for_stb()
+        self.sweep_single()
+        self.wait_for_stb()
+        return self.get_tracedata(format=data_format)
 
     def prepare_for_stb(self):
         # Clear the instrument's Status Byte

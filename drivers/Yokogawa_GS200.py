@@ -110,9 +110,9 @@ class Yokogawa_GS210(Instrument):
             print("Tough luck, mode is voltage source, cannot set current.")
             return False
         else:
-            # if (self._mincurrent <= current <= self._maxcurrent):
-            self._visainstrument.write("SOUR:LEVEL %e"%current)
-            self._visainstrument.query("*OPC?")
+            if (self._mincurrent <= current <= self._maxcurrent):
+                self._visainstrument.write("SOUR:LEVEL %e"%current)
+                self._visainstrument.query("*OPC?")
             # else:
                 # print("Error: current limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
 
@@ -191,12 +191,16 @@ class Yokogawa_GS210(Instrument):
                 print("Given current range is invalid. Please enter valid current range in !!!Amperes!!!\nValid ranges are (in A): {0}".format(self.current_ranges_supported))
                 return False
             else:
+                self._mincurrent = -maxval
+                self._maxcurrent = maxval
                 self._visainstrument.write("SOUR:RANG %e"%maxval)
         if(self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
             if not (maxval in self.voltage_ranges_supported):
                 print("Given voltage range is invalid. Please enter valid voltage range in !!!Volts!!!\nValid ranges are (in A): {0}".format(self.voltage_ranges_supported))
                 return False
             else:
+                self._minvoltage = -maxval
+                self._maxvoltage = maxval
                 self._visainstrument.write("SOUR:RANG %e"%maxval)
 
     def set_appropriate_range(self, maxcurrent=1E-3, mincurrent=-1E-3):
@@ -226,7 +230,7 @@ class Yokogawa_GS210(Instrument):
             self.set_current_compliance(current_compliance)
             return True
 
-    def set_src_mode_curr(self, voltage_compliance = 1):
+    def set_src_mode_curr(self, voltage_compliance=1):
         """
         Changes mode from voltage to current source, compliance voltage is given as an argument
 
@@ -240,6 +244,7 @@ class Yokogawa_GS210(Instrument):
             self.set_voltage_compliance(voltage_compliance)
             return True
 
+    # TODO: pending to delete this function
     def set_current_limits(self, mincurrent = -1E-3, maxcurrent = 1E-3):
         """ Sets a limits within the range if needed for safe sweeping"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
@@ -254,6 +259,7 @@ class Yokogawa_GS210(Instrument):
         else:
             print("Go in current mode first.")
 
+    # TODO: pending to delete this function
     def set_voltage_limits(self, minvoltage = -1E-3, maxvoltage = 1E-3):
         """ Sets a voltage limits within the range if needed for safe sweeping"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):

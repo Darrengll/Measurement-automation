@@ -5,7 +5,7 @@ from datetime import datetime
 from IPython.display import clear_output
 
 
-class IQCalibrationData():
+class IQCalibrationData:
 
     def __init__(self, mixer_id, iq_attenuation, lo_frequency, lo_power,
                  if_frequency, sideband_to_maintain, ssb_power,

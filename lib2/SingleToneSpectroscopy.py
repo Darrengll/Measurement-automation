@@ -2,8 +2,42 @@
 Paramatric single-tone spectroscopy is perfomed with a Vector Network Analyzer
 (VNA) for each parameter value which is set by a specific function that must be
 passed to the SingleToneSpectroscopy class when it is created.
+
+Minimal working usage example in Jupyter Notebook:
+TODO: add reference to minimal working schematic (link to GDrive is ok).
+-------------------------------------
+from drivers.Yokogawa_GS200 import Yokogawa_GS210
+curr_src = Yokogawa_GS210("GS210_1")
+curr_src.set_src_mode_curr()  # set current source mode
+curr_src.set_range(1e-3)  # set 1 mA range regime
+
+from drivers.agilent_PNA_L import Agilent_PNA_L
+vna = Agilent_PNA_L("PNA-L2")
+-------------------------------------
+from lib2.SingleToneSpectroscopy import SingleToneSpectroscopy
+
+sts = SingleToneSpectroscopy("STS QOP2 Probe qubit", sample_name, vna=[vna], src=[curr_src])
+vna.select_S_param("S21")
+vna.set_output_state("ON")
+q_freq = 5.2185e9  #Hz
+span = 30e6  # Hz
+freq_limits = (q_freq - span/2, q_freq + span/2)
+currents = np.linspace(-0.1e-3, 0.1e-3, 21)  # Amper
+vna_params_q ={
+    "bandwidth": 100,  # Hz
+    "power": -45,  # dBm
+    "averages": 1,
+    "nop": 1001,
+    "freq_limits": freq_limits
+}
+sts.set_fixed_parameters(vna_params=[vna_params_q])
+sts.sweep_current(currents)
+---------------------------------------------------
+sts_res = sts.launch()
+sts_res.visualize()
+sts_res.save()
 """
-from numpy import *
+import numpy as np
 from scipy import fftpack
 
 from lib2.MeasurementResult import *
@@ -11,7 +45,7 @@ from matplotlib import colorbar
 from lib2.Measurement import *
 from time import sleep
 
-from lib2.digitizerPulsedMeasurements.digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
+from lib2.directMeasurements.digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
 
 
 class SingleToneSpectroscopy(Measurement):
@@ -25,22 +59,48 @@ class SingleToneSpectroscopy(Measurement):
         For internal aliases/classes see Measurement._devs_dict dictionary in lib2/Measurement.py
     """
 
-    def __init__(self, name, sample_name, plot_update_interval=5, **devs_aliases_map):
+    def __init__(self, name, sample_name, plot_update_interval=5, vna=[],
+                 src=[]):
+        """
+
+        Parameters
+        ----------
+        name
+        sample_name
+        plot_update_interval
+        vna : list
+            vna = list of vector network analyzers classes or internal aliases
+        src : list
+            src = list of voltage/current sources classes or internal aliases
+        """
         self._vna = None  # vector network analyzers list
         self._src = None  # voltage/current sources list
+        devs_aliases_map = {"vna": vna, "src": src}
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
         self._measurement_result = SingleToneSpectroscopyResult(name, sample_name)
         self._measurement_result.set_unwrap_phase(True)
         self._frequencies = []
 
-    def set_fixed_parameters(self, **dev_params):
+    def set_fixed_parameters(self, vna_params=[]):
         """
-        SingleToneSpectroscopy only requires vna parameters in format
-        {"bandwidth":int, ...}
+
+        Parameters
+        ----------
+        vna_params : list[dict]
+            list with dictionary of parameters for each `vna`
+            from self._vna list
+
+        Returns
+        -------
+        None
         """
-        self._frequencies = linspace(*dev_params['vna'][0]["freq_limits"],
-                                     dev_params['vna'][0]["nop"])
+        freq_limits = vna_params[0]["freq_limits"]
+        nop = vna_params[0]["nop"]
+
+        self._frequencies = np.linspace(*freq_limits, nop)
         self._vna[0].sweep_hold()
+        self._vna[0].set_output_state("ON")
+        dev_params = {"vna": vna_params}
         super().set_fixed_parameters(**dev_params)
 
     def set_swept_parameters(self, swept_parameter):
@@ -51,6 +111,23 @@ class SingleToneSpectroscopy(Measurement):
         super().set_swept_parameters(**swept_parameter)
         par_name = list(swept_parameter.keys())[0]
         par_setter, par_values = swept_parameter[par_name]
+        # NOTE: first value of the current/voltage source is set by
+        # DISCONTINUOUS jump to this starting value
+        par_setter(par_values[0])
+        sleep(1)
+
+    def sweep_current(self, currents):
+        """
+        SingleToneSpectroscopy only takes one swept parameter in format
+        {"parameter_name":(setter, values)}
+        """
+        swept_parameters = {"current, [A]": (self._src[0].set_current,
+                                            currents)}
+        super().set_swept_parameters(**swept_parameters)
+        par_name = list(swept_parameters.keys())[0]
+        par_setter, par_values = swept_parameters[par_name]
+        # NOTE: first value of the current/voltage source is set by
+        # DISCONTINUOUS jump to this starting value
         par_setter(par_values[0])
         sleep(1)
 
@@ -58,6 +135,8 @@ class SingleToneSpectroscopy(Measurement):
         vna = self._vna[0]
         vna.avg_clear()
         vna.prepare_for_stb()
+        vna.do_set_average(True) #
+
         vna.sweep_single()
 
         vna.wait_for_stb()
@@ -172,24 +251,22 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         if self._amps_map is None or not self._dynamic:
             self._amps_map = ax_amps.imshow(abs(Z).T, origin='lower', cmap="RdBu_r",
                                             aspect='auto', vmax=self.max_abs, vmin=self.min_abs,
-                                            extent=extent)
+                                            extent=extent, interpolation='none')
             self._amp_cb = plt.colorbar(self._amps_map, cax=cax_amps)
             self._amp_cb.formatter.set_powerlimits((0, 0))
             self._amp_cb.update_ticks()
         else:
             self._amps_map.set_data(abs(Z).T)
             self._amps_map.set_clim(self.min_abs, self.max_abs)
-            self._amp_cb.set_clim(self.min_abs, self.max_abs)
 
         if self._phas_map is None or not self._dynamic:
             self._phas_map = ax_phas.imshow(phases, origin='lower', aspect='auto',
                                             cmap="RdBu_r", vmin=self.min_phase, vmax=self.max_phase,
-                                            extent=extent)
+                                            extent=extent, interpolation='none')
             self._phas_cb = plt.colorbar(self._phas_map, cax=cax_phas)
         else:
             self._phas_map.set_data(phases)
             self._phas_map.set_clim(self.min_phase, self.max_phase)
-            self._phas_cb.set_clim(self.min_phase, self.max_phase)
             plt.draw()
 
     def set_plot_range(self, min_abs, max_abs, min_phas=None, max_phas=None):
@@ -204,7 +281,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         if parameter_list[0] > parameter_list[-1]:
             parameter_list = parameter_list[::-1]
             s_data = s_data[::-1, :]
-        #s_data = self.remove_background('avg_cur')
+        # s_data = self.remove_background('avg_cur')
         return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
 
     def remove_delay(self):
