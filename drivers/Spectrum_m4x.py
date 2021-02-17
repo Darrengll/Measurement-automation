@@ -58,6 +58,7 @@ class SPCM:
         self._requested_segment_size: float = None  # in samples
         self._segment_size: int = None  # in samples
         self._bufsize: int = 0  # size of the card buffer allocated in bytes
+        self._pcdata = None
         self._trigger_mode = SPC_TM_POS  # | SPC_TM_REARM
         self._trig_term = 0
         self._trig_acdc = 0
@@ -142,7 +143,7 @@ class SPCM:
             if (self.mode == SPCM_MODE.AVERAGING) and (n_avg < 4):
                 raise ValueError(
                     f"Minimum number of averages: 4;"
-                    f"you requested n_avg = {n_avg}")
+                    f"you requested n_avg = {n_avg} for `SPCM_MODE.AVERAGING`")
             self.n_avg = n_avg
         if "trig_source" in pars_dict:
             trig_source = pars_dict["trig_source"]
@@ -191,7 +192,7 @@ class SPCM:
         spcm_dwGetParam_i64(self.hCard, REG, byref(val))
         return val.value
 
-    def __write_to_reg_32(self, REG, VALUE):
+    def _write_to_reg_32(self, REG, VALUE):
         """Write to a 32-bit register"""
         val = int32(VALUE)
         return spcm_dwSetParam_i32(self.hCard, REG, val)
@@ -201,14 +202,14 @@ class SPCM:
         val = int64(VALUE)
         return spcm_dwSetParam_i64(self.hCard, REG, val)
 
-    def __def_simp_transfer(self, buffer, notifysize=0, offset=0):
+    def _def_simp_transfer(self, buffer, notifysize=0, offset=0):
         """Define simple transfer"""
         return spcm_dwDefTransfer_i64(self.hCard, SPCM_BUF_DATA,
                                       SPCM_DIR_CARDTOPC, int32(notifysize),
                                       byref(buffer),
                                       int64(offset), int64(buffer.__len__()))
 
-    def __invalidate_buffer(self):
+    def _invalidate_buffer(self):
         """Invalidate the buffer in the digitizer"""
         return spcm_dwInvalidateBuf(self.hCard, SPCM_BUF_DATA)
 
@@ -263,7 +264,7 @@ class SPCM:
         timeout : int
             timeout in ms
         """
-        self.__write_to_reg_32(SPC_TIMEOUT, timeout)
+        self._write_to_reg_32(SPC_TIMEOUT, timeout)
 
     def setup_SSA(self, memsize, posttrigger_mem):
         """ Setup Standart Single Aquisition mode
@@ -275,12 +276,12 @@ class SPCM:
                 memsize = pretrigger_mem + posttrigger_mem
             posttrigger_mem: int, samples
                 Posttrigger memory size for a single data acquisition in samples"""
-        self.__write_to_reg_32(SPC_CARDMODE,
-                               SPC_REC_STD_SINGLE)  # Standard Single acquisition mode
+        self._write_to_reg_32(SPC_CARDMODE,
+                              SPC_REC_STD_SINGLE)  # Standard Single acquisition mode
         self.__write_to_reg_64(SPC_MEMSIZE,
                                memsize)  # Set memory size for a single data acquisition
-        self.__write_to_reg_32(SPC_POSTTRIGGER,
-                               posttrigger_mem)  # Post trigger memory size
+        self._write_to_reg_32(SPC_POSTTRIGGER,
+                              posttrigger_mem)  # Post trigger memory size
         self.AVG_ON = False  # Set the averaging flag off
         self.__handle_error()
 
@@ -291,16 +292,16 @@ class SPCM:
         """
         if averages <= 256:
             # Enables Segment Statistic for standard acquisition 16 bit
-            self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE_16BIT)
+            self._write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE_16BIT)
         else:
             # Enables Segment Statistic for standard acquisition
-            self.__write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE)
+            self._write_to_reg_32(SPC_CARDMODE, SPC_REC_STD_AVERAGE)
 
-        self.__write_to_reg_32(SPC_AVERAGES, averages)
-        self.__write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
-        self.__write_to_reg_32(SPC_POSTTRIGGER,
-                               posttrigger)  # Post trigger memory size (pretrigger  = segmentsize - posttrigger)
-        self.__write_to_reg_32(SPC_MEMSIZE, memsize)
+        self._write_to_reg_32(SPC_AVERAGES, averages)
+        self._write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
+        self._write_to_reg_32(SPC_POSTTRIGGER,
+                              posttrigger)  # Post trigger memory size (pretrigger  = segmentsize - posttrigger)
+        self._write_to_reg_32(SPC_MEMSIZE, memsize)
         self.AVG_ON = True  # Set the averaging flag on
         self.__handle_error()
 
@@ -310,12 +311,12 @@ class SPCM:
         Acquires many segments (N = memsize/segmentsize) and saves them in
         Spectrum memory
         """
-        self.__write_to_reg_32(SPC_CARDMODE,
-                               SPC_REC_STD_MULTI)  # Enables Segment Statistic for standard acquisition
-        self.__write_to_reg_32(SPC_MEMSIZE, memsize)
-        self.__write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
-        self.__write_to_reg_32(SPC_POSTTRIGGER,
-                               posttrigger)  # Post trigger memory size (pretrigger  = segmentsize - posttrigger)
+        self._write_to_reg_32(SPC_CARDMODE,
+                              SPC_REC_STD_MULTI)  # Enables Segment Statistic for standard acquisition
+        self._write_to_reg_32(SPC_MEMSIZE, memsize)
+        self._write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
+        self._write_to_reg_32(SPC_POSTTRIGGER,
+                              posttrigger)  # Post trigger memory size (pretrigger  = segmentsize - posttrigger)
         self.AVG_ON = False
         self.__handle_error()
 
@@ -328,14 +329,14 @@ class SPCM:
             amplitude: int, mV
                 Amplitude window of a channel is (-amplitude, +amplitude),
                 possible values are 200, 500, 1000, 2500 mV"""
-        self.__write_to_reg_32(SPC_CHENABLE,
-                               CHANNEL0 << channelnum)  # Enable the selected channel
-        self.__write_to_reg_32(SPC_AMP0 + 100 * channelnum,
-                               amplitude)  # Set the input amplitude (valid values: 200, 500, 1000, 2500 mV)
-        self.__write_to_reg_32(SPC_ACDC0 + 100 * channelnum,
-                               self.__acdc)  # 0 - DC input, 1 - AC input
-        self.__write_to_reg_32(SPC_FILTER0,
-                               self.__antialiasing)  # 0 - off, 1 - anti aliasing filter for all channels
+        self._write_to_reg_32(SPC_CHENABLE,
+                              CHANNEL0 << channelnum)  # Enable the selected channel
+        self._write_to_reg_32(SPC_AMP0 + 100 * channelnum,
+                              amplitude)  # Set the input amplitude (valid values: 200, 500, 1000, 2500 mV)
+        self._write_to_reg_32(SPC_ACDC0 + 100 * channelnum,
+                              self.__acdc)  # 0 - DC input, 1 - AC input
+        self._write_to_reg_32(SPC_FILTER0,
+                              self.__antialiasing)  # 0 - off, 1 - anti aliasing filter for all channels
         self.__handle_error()
 
     def setup_channels(self, channels, amplitude):
@@ -351,15 +352,15 @@ class SPCM:
         for chan in channels:
             mask |= CHANNEL0 << chan
             # Set the input amplitude (valid values: 200, 500, 1000, 2500 mV)
-            self.__write_to_reg_32(SPC_AMP0 + 100 * chan,
-                                   amplitude)
+            self._write_to_reg_32(SPC_AMP0 + 100 * chan,
+                                  amplitude)
             # 0 - DC input, 1 - AC input
-            self.__write_to_reg_32(SPC_ACDC0 + 100 * chan,
-                                   self.__acdc)
+            self._write_to_reg_32(SPC_ACDC0 + 100 * chan,
+                                  self.__acdc)
         # 0 - off, 1 - anti aliasing filter for all channels
-        self.__write_to_reg_32(SPC_FILTER0,
-                               self.__antialiasing)
-        self.__write_to_reg_32(SPC_CHENABLE, mask)
+        self._write_to_reg_32(SPC_FILTER0,
+                              self.__antialiasing)
+        self._write_to_reg_32(SPC_CHENABLE, mask)
         self.__handle_error()
 
     def set_antialiasing(self, on):
@@ -535,10 +536,10 @@ class SPCM:
         return self._n_samples_to_drop_in_end
 
     def setup_internal_clock(self):
-        self.__write_to_reg_32(SPC_CLOCKMODE, SPC_CM_INTPLL)
+        self._write_to_reg_32(SPC_CLOCKMODE, SPC_CM_INTPLL)
 
     def setup_pxi_clock(self):
-        self.__write_to_reg_32(SPC_CLOCKMODE, SPC_CM_PXIREFCLOCK)
+        self._write_to_reg_32(SPC_CLOCKMODE, SPC_CM_PXIREFCLOCK)
 
     def set_oversampling_factor(self, factor):
         """ Set oversampling factor.
@@ -559,7 +560,7 @@ class SPCM:
                              "Allowed factors are 1, 2, 4, 8, ..., 262144")
 
     def setup_sample_rate(self):
-        self.__write_to_reg_32(SPC_SAMPLERATE, self.__samplerate)
+        self._write_to_reg_32(SPC_SAMPLERATE, self.__samplerate)
         # setsamplerate = self.__read_reg_32(SPC_SAMPLERATE)
         # oversamplingfactor = self.__read_reg_32(SPC_OVERSAMPLINGFACTOR)
         # print("Sample rate is set to {samplerate} Hz\n"
@@ -576,35 +577,35 @@ class SPCM:
 
     def set_sample_rate(self, samplerate):
         # sets the sample rate manually
-        self.__write_to_reg_32(SPC_SAMPLERATE, samplerate)
+        self._write_to_reg_32(SPC_SAMPLERATE, samplerate)
         self.__samplerate = self.__read_reg_32(SPC_SAMPLERATE)
 
     def set_trigger_mode(self, mode):
         self._trigger_mode = mode
 
     def setup_ext0_trigger(self):
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, self._trig_level0)
-        self.__write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, self._trig_level1)
-        self.__write_to_reg_32(SPC_TRIG_EXT0_MODE,
-                               self._trigger_mode)  # trigger on the rising edge (voltage crosses 0-level barrier)
-        self.__write_to_reg_32(SPC_TRIG_ORMASK,
-                               SPC_TMASK_EXT0)  # Enable the external trigger
-        self.__write_to_reg_32(SPC_TRIG_TERM, self._trig_term)
-        self.__write_to_reg_32(SPC_TRIG_EXT0_ACDC, self._trig_acdc)
+        self._write_to_reg_32(SPC_TRIG_EXT0_LEVEL0, self._trig_level0)
+        self._write_to_reg_32(SPC_TRIG_EXT0_LEVEL1, self._trig_level1)
+        self._write_to_reg_32(SPC_TRIG_EXT0_MODE,
+                              self._trigger_mode)  # trigger on the rising edge (voltage crosses 0-level barrier)
+        self._write_to_reg_32(SPC_TRIG_ORMASK,
+                              SPC_TMASK_EXT0)  # Enable the external trigger
+        self._write_to_reg_32(SPC_TRIG_TERM, self._trig_term)
+        self._write_to_reg_32(SPC_TRIG_EXT0_ACDC, self._trig_acdc)
 
     def setup_pxi_trigger(self):
-        self.__write_to_reg_32(SPC_PXITRG1_MODE, SPCM_PXITRGMODE_IN)
-        self.__write_to_reg_32(SPC_TRIG_ORMASK,
-                               SPC_TMASK_PXI1)  # Enable the external trigger
+        self._write_to_reg_32(SPC_PXITRG1_MODE, SPCM_PXITRGMODE_IN)
+        self._write_to_reg_32(SPC_TRIG_ORMASK,
+                              SPC_TMASK_PXI1)  # Enable the external trigger
 
     def setup_auto_trigger(self):
-        self.__write_to_reg_32(SPC_TRIG_ORMASK,
-                               SPC_TMASK_SOFTWARE)  # Trigger the card immediately after start
+        self._write_to_reg_32(SPC_TRIG_ORMASK,
+                              SPC_TMASK_SOFTWARE)  # Trigger the card immediately after start
 
     def start_card(self):
         """Start the card execution"""
-        self.__write_to_reg_32(SPC_M2CMD,
-                               M2CMD_CARD_START | M2CMD_CARD_ENABLETRIGGER)
+        self._write_to_reg_32(SPC_M2CMD,
+                              M2CMD_CARD_START | M2CMD_CARD_ENABLETRIGGER)
         self.__handle_error()
 
     def wait_for_card(self):
@@ -612,7 +613,7 @@ class SPCM:
         self.set_timeout(0)
         try:
             self.__handle_timeout(
-                self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
+                self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
                 # Wait till the card completes the current run
             )
         except KeyboardInterrupt:
@@ -624,17 +625,17 @@ class SPCM:
         """Wait until the first trigger"""
         self.set_timeout(1000)
         self.__handle_timeout(
-            self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITTRIGGER)
+            self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITTRIGGER)
         )
         self.__handle_error()
 
     def stop_card(self):
         """Stop the card execution"""
-        self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_STOP)
+        self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_STOP)
 
     def reset_card(self):
         """Stop the configured parameters of the card to default"""
-        self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_RESET)
+        self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_RESET)
 
     def get_trigger_counter(self):
         """Get the trigger counter value"""
@@ -643,17 +644,43 @@ class SPCM:
         return cnt
 
     def obtain_data(self):
+        if (self._pcdata is None) or (len(self._pcdata) != self._bufsize):
+            self._pcdata = (int8 * self._bufsize)()
+        res = self._def_simp_transfer(
+            self._pcdata)  # define Card -> PC transfer buffer
+        if res is not 0:
+            print("Error: %d" % res)
+            return None
+        # Start the transfer and wait till it's completed
+        self._write_to_reg_32(SPC_M2CMD,
+                              M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)
+        # Explicitly stop DMA transfer
+        self._write_to_reg_32(SPC_M2CMD, M2CMD_DATA_STOPDMA)
+        # Invalidate the buffer
+        self._invalidate_buffer()
+        if self.mode == SPCM_MODE.AVERAGING:
+            if self.n_avg <= 256:
+                # 16 bit averagin mode
+                return np.frombuffer(self._pcdata, dtype=np.int16)
+            else:
+                return np.frombuffer(self._pcdata, dtype=np.int32)
+        else:
+            return np.frombuffer(self._pcdata, dtype=np.int8)
+
+    def obtain_data_to_gpu(self):
         pcData = (int8 * self._bufsize)()
-        res = self.__def_simp_transfer(
+        res = self._def_simp_transfer(
             pcData)  # define Card -> PC transfer buffer
         if res is not 0:
             print("Error: %d" % res)
             return None
-        self.__write_to_reg_32(SPC_M2CMD,
-                               M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)  # Start the transfer and wait till it's completed
-        self.__write_to_reg_32(SPC_M2CMD,
-                               M2CMD_DATA_STOPDMA)  # Explicitly stop DMA transfer
-        self.__invalidate_buffer()  # Invalidate the buffer
+        # Start the transfer and wait till it's completed
+        self._write_to_reg_32(SPC_M2CMD,
+                              M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)
+        # Explicitly stop DMA transfer
+        self._write_to_reg_32(SPC_M2CMD, M2CMD_DATA_STOPDMA)
+        # Invalidate the buffer
+        self._invalidate_buffer()
         if self.mode == SPCM_MODE.AVERAGING:
             if self.n_avg <= 256:
                 # 16 bit averagin mode
@@ -756,11 +783,11 @@ class SPCM:
         memsize = num_segments * segment_size
 
         # card driver does not throw error on exceeding the segment size
-        # see manual p.158
+        # see manual p.158. So we implement segment size check here.
         max_seg_size = 0
         if num_averages <= 256:
             # 128 kSa / len(channels)
-            max_seg_size = 128 * 2*10 / len(channels)
+            max_seg_size = 128 * 2**10 / len(channels)
         else:
             # 64 kSa / len(channels)
             max_seg_size = 64 * 2**10 / len(channels)

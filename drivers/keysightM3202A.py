@@ -27,6 +27,14 @@ class KeysightM3202A(Instrument):
     MAX_OUTPUT_VOLTAGE = 1.5  # V
 
     def __init__(self, name, slot, chassis=0):
+        '''
+
+        Parameters
+        ----------
+        name : redundant parameter for `Instrument` class
+        slot
+        chassis
+        '''
         super().__init__(name, tags=['physical'])
         self.mask = 0
         self.module = SD_AOU()
@@ -70,7 +78,7 @@ class KeysightM3202A(Instrument):
 
     def _handle_error(self, ret_val):
         if ret_val < 0:
-            print(ret_val)
+            print(ret_val, SD_Error.getErrorMessage(ret_val))
             raise Exception
 
     def clear(self):
