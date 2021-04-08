@@ -8,7 +8,7 @@ import numpy as np
 
 
 #directory = 'Data\\IQMXCalibration'
-directory = r'C:\Users\PAINMASTER\Measurement\data\IQMXCalibrationData\IQMXCalibration'
+directory = r'D:\GitHub\Measurement-automation\data\IQMXCalibrationData\IQMXCalibration'
 
 def save_downconversion_calibration(downconv_calibration):
     if not os.path.exists(directory):
@@ -35,7 +35,7 @@ def save_downconversion_calibration(downconv_calibration):
 
 
 def load_downconversion_calibration(mixer_id, iffreq):
-    directory = 'Data\\IQMXCalibration'
+    # directory = 'data\\IQMXCalibration'
     filename = mixer_id
 
     try:
@@ -49,7 +49,7 @@ def load_downconversion_calibration(mixer_id, iffreq):
 
 
 def save_IQMX_calibration(iqmx_calibration):
-    directory = 'Data\\IQMXCalibration'
+    # directory = 'data\\IQMXCalibration'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -77,7 +77,7 @@ def save_IQMX_calibration(iqmx_calibration):
 
 
 def load_IQMX_calibration_database(mixer_id, iq_attenuation):
-    directory = 'data\\IQMXCalibration'
+    # directory = 'data\\IQMXCalibration'
     filename = mixer_id
 
     try:

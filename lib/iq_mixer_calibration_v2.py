@@ -36,9 +36,6 @@ class IQCalibrationData:
         self._optimization_time = optimization_time
         self._end_date = end_date
 
-    def __init__(self, dictionary):
-        self.__dict__.update(dictionary)
-
     def get_optimization_results(self):
         """
         Get optimal parameters and the resulting spectral component values
@@ -296,11 +293,12 @@ class IQCalibrator():
                        "xtol": 1e-3,
                        "ftol": 1e-2}
 
-            res_dc_offs = minimize(loss_function_dc_offsets,
-                                   prev_results["dc_offsets"],
-                                   method="Powell",
-                                   options=method_options)
-            results["dc_offsets"] = res_dc_offs.x
+            # res_dc_offs = minimize(loss_function_dc_offsets,
+            #                        prev_results["dc_offsets"],
+            #                        method="Powell",
+            #                        options=method_options)
+            # results["dc_offsets"] = res_dc_offs.x
+            results['dc_offsets'] = prev_results['dc_offsets']
 
             res_imbalance = minimize(
                 loss_function_image_rejection, np.array([0, 0]),
@@ -345,7 +343,7 @@ class IQCalibrator():
                     "dc_offsets": (0, 0),
                     "dc_offset_open": (0, 0),
                     "if_offsets": (0, 0),
-                    "if_amplitudes": (0.7, 0.7),
+                    "if_amplitudes": (0.1, 0.1),
                     "if_phase": np.array([self._phases[
                         self._sideband_to_maintain]]),
                 }

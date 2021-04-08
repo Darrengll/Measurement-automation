@@ -39,6 +39,48 @@ class SPCM_TRIGGER(str, Enum):
     EXT0 = "EXT0"
 
 
+class ADCParameters:
+    def __init__(self, mode, oversampling_factor, channels, ch_amplitude,
+                 dur_seg, trigger_source,
+                 n_seg, n_avg, digitizer_delay):
+        """
+        Class that contains only field and represents ADC parameters.
+
+        Parameters
+        ----------
+        mode : SPCM_MODE
+            mode of digitizer
+        oversampling_factor : int
+            sampling rate = base_sampling_rate/oversampling_factor
+        channels : list
+            list of channels to activate
+        ch_amplitude : float
+            Amplitude of internal analog reference voltage source in mV.
+        dur_seg : float
+            segment duration in nanoseconds
+        trigger_source : SPCM_TRIGGER
+            trigger source (automatic, from PXI trigger lines, external)
+        n_seg : int
+            number of segments in case `mode = SPCM_MODE.MULTIPLE`
+            1 otherwise
+        n_avg : int
+            number of amplitude averages performed by ADC hardware.
+            For Spectrum_m4x this value should be >= 4.
+        digitizer_delay : float
+            delay of digitizer acquisitiion start after a trigger has been
+            received
+        """
+        self.oversampling_factor = oversampling_factor
+        self.channels = channels
+        self.ch_amplitude = ch_amplitude
+        self.dur_seg = dur_seg
+        self.n_seg = n_seg
+        self.mode = mode
+        self.n_avg = n_avg
+        self.trigger_source = trigger_source
+        self.digitizer_delay = digitizer_delay
+
+
 class SPCM:
     DC, AC = 0, 1
     AVG_ON = False
@@ -65,7 +107,7 @@ class SPCM:
         self._trig_level0 = 700  # mV
         self._trig_level1 = 1000  # mV
         # how many samples to drop at the start due to the fact that
-        # trace length has to be multiple of 32
+        # trace length has to be multiple of 32 (to exclude pretrigger values)
         self._n_samples_to_drop_by_delay: int = 0  #
         # how many samples to drop in end due to the fact that
         # trace length has to be multiple of 32
@@ -107,7 +149,12 @@ class SPCM:
     def __del__(self):
         self.close()
 
-    def set_parameters(self, pars_dict):
+    def set_parameters(self, parameters):
+        if isinstance(parameters, dict):
+            pars_dict = parameters
+        elif isinstance(parameters, ADCParameters):
+            pars_dict = ADCParameters.__dict__
+
         if "oversampling_factor" in pars_dict:
             self.set_oversampling_factor(pars_dict["oversampling_factor"])
         if "channels" in pars_dict:
@@ -900,7 +947,7 @@ class SPCM:
 
     def is_ready(self):
         """
-        False during an ongoing measurent.
+        False during an ongoing measurement.
         True when it finishes.
         """
         return (self._get_status() & M2STAT_CARD_READY) > 0

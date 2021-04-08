@@ -2,8 +2,11 @@
 product link:
 https://www.keysight.com/en/pd-2747446-pn-M3202A/pxie-arbitrary-waveform-generator-1-gs-s-14-bit-400-mhz?cc=RU&lc=en
 
-user's guide
+user's guide for Keysight SD1 version 2.x
 https://literature.cdn.keysight.com/litweb/pdf/M3201-90001.pdf?id=2787170
+
+user's guide for Keysight SD1 version 3.x
+https://literature.cdn.keysight.com/litweb/pdf/M3XXX-90003.pdf?id=3120777
 """
 
 from drivers.instrument import Instrument
@@ -38,25 +41,25 @@ class KeysightM3202A(Instrument):
         super().__init__(name, tags=['physical'])
         self.mask = 0
         self.module = SD_AOU()
-        self.module_id = self.module.openWithSlotCompatibility("M3202A",
-                                                               chassis, slot,
-                                                               compatibility=SD_Compatibility.LEGACY)
+        self.module_id = self.module.openWithSlotCompatibility(
+            "M3202A", chassis, slot, compatibility=SD_Compatibility.LEGACY)
+        self._handle_error(self.module_id)
 
         # Shamil a.k.a. 'BATYA' code here
         self.waveforms = [None] * 4
         # store `waveform_number` parameter, see manual for details
         self.waveform_ids = [-1] * 4
-        self.waveshape_types = [
-                                   SD_Waveshapes.AOU_AWG] * 4  # in case of AM or FM
+        # in case of AM or FM
+        self.waveshape_types = [SD_Waveshapes.AOU_AWG] * 4
         self.repetition_frequencies = [None] * 4
         self.output_voltages = [None] * 4
         # deviation gains `G` for modulated signals, see manual for details
         self.deviation_gains = [0.0] * 4
         self.trigger_modes = [SD_TriggerModes.AUTOTRIG] * 4
-        self.trigger_ext_sources = [
-                                       SD_TriggerExternalSources.TRIGGER_EXTERN] * 4  # from front panel, can be also from PXI_n triggering bus
-        self.trigger_behaviours = [
-                                      SD_TriggerBehaviors.TRIGGER_RISE] * 4  # rising edge by default
+        # from front panel, can be also from PXI_n triggering bus
+        self.trigger_ext_sources = [SD_TriggerExternalSources.TRIGGER_EXTERN] * 4
+        # rising edge by default
+        self.trigger_behaviours = [SD_TriggerBehaviors.TRIGGER_RISE] * 4
         self.trigger_output = True
         # default and only option at MIPT is synchronizing with PXI 10 MHz
         # clock
@@ -76,6 +79,12 @@ class KeysightM3202A(Instrument):
 
         self.clear()  # clear internal memory and AWG queues according to p.67 of the user guide
 
+    def __del__(self):
+        if self.module.isOpen():
+            self.clear()
+            self.module.close()
+            del self.module
+
     def _handle_error(self, ret_val):
         if ret_val < 0:
             print(ret_val, SD_Error.getErrorMessage(ret_val))
@@ -83,12 +92,13 @@ class KeysightM3202A(Instrument):
 
     def clear(self):
         # clear internal memory and AWG queues
-        ret = self.module.waveformFlush()
+        self._handle_error(
+            self.module.waveformFlush()
+        )
 
         # stop all modulations
         for channel in [1, 2, 3, 4]:
             self.stop_modulation(channel)
-        self._handle_error(ret)
 
     def synchronize_channels(self, *channels):
         self.synchronized_channels = channels
@@ -113,14 +123,14 @@ class KeysightM3202A(Instrument):
             if trigger_string == "EXT":  # front panel
                 # for each 'cycle' (see 'cycle' definition in docs)
                 self.trigger_modes[channel - 1] = SD_TriggerModes.EXTTRIG_CYCLE
-                ret = self.module.AWGtriggerExternalConfig(channel - 1,
-                                                           self.trigger_ext_sources[
-                                                               channel - 1],
-                                                           # front panel only
-                                                           self.trigger_behaviours[
-                                                               channel - 1],
-                                                           # on rising edge by default
-                                                           SD_SyncModes.SYNC_CLK10)  # sync with internal 100 MHz clock
+                ret = self.module.AWGtriggerExternalConfig(
+                    channel - 1,
+                    self.trigger_ext_sources[channel - 1],  # front panel only
+                    # on rising edge by default
+                    self.trigger_behaviours[channel - 1],
+                    # sync with PXI 10 MHz clock
+                    SD_SyncModes.SYNC_CLK10
+                )
                 self._handle_error(ret)
             elif trigger_string == "CONT":
                 self.trigger_modes[channel - 1] = SD_TriggerModes.AUTOTRIG
@@ -157,29 +167,34 @@ class KeysightM3202A(Instrument):
             raise NotImplementedError(
                 "trig_mode argument can be only 'ON' or 'OFF' ")
 
-        # if channel is equal to -1, then output trigger is configured for all synchronized channels
+        # if channel is equal to -1 or is stored in
+        # `self.synchronized_channels`,
+        # then output trigger is configured for all synchronized channels
         if (channel == - 1) or (channel in self.synchronized_channels):
             channels_to_config = self.synchronized_channels
         else:
             channels_to_config = [channel]
 
         for chan in channels_to_config:
-            if self.trigger_output:  # enable trigger for the first channel from group
+            if self.trigger_output:  #
                 # configuring trigger IO as output
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_OUT)
                 # here was changed to PXI trigger output
                 # adding marker to the specified channel
                 trgPXImask = 0b0
                 trgIOmask = 0b1
-                self.module.AWGqueueMarkerConfig(chan - 1,
-                                                 SD_MarkerModes.EVERY_CYCLE,
-                                                 trgPXImask, trgIOmask, 1,
-                                                 syncMode=self.sync_mode,
-                                                 # trigger sync with internal CLKsys
-                                                 length=int(trig_length / 10),
-                                                 # trigger length (100a.u. x 10ns => 1000 ns trigger length)
-                                                 delay=0)
-                break  # first channel from group is enough to produce output marker
+                self.module.AWGqueueMarkerConfig(
+                    chan - 1, SD_MarkerModes.EVERY_CYCLE,
+                    trgPXImask, trgIOmask, 1,
+                    # trigger sync with internal CLKsys by default
+                    syncMode=self.sync_mode,
+                    # trigger length (100a.u. x 10ns => 1000 ns trigger length)
+                    length=int(trig_length / 10),
+                    delay=0
+                )
+                #  enabling trigger for the first channel from group is
+                # enough to produce output marker
+                break
             else:  # disable trigger for all channels form group
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_OUT)
                 self.module.triggerIOwrite(0,

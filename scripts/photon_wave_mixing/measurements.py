@@ -7,8 +7,7 @@ import scripts.photon_wave_mixing.devices as dev
 from drivers.Spectrum_m4x import SPCM_MODE, SPCM_TRIGGER
 
 
-def measure_reflection_from_sps(sps_devices, probe_devices,
-                                              params):
+def measure_reflection_from_sps(sps_devices, probe_devices, params):
     """
     Measurement of the average field reflected from the single-photon source.
 

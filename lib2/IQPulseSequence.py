@@ -399,8 +399,15 @@ class IQPulseBuilder():
                 derivative = 0
             return window, derivative
 
+        def decaying_exponent():
+            window = exp(-window_parameter * linspace(0, N_time_steps,
+                                                     N_time_steps,
+                                                      endpoint=False) / N_time_steps)
+            return window
+
         windows = {"rectangular": rectangular, "gaussian": gaussian,
-                   "hahn": hahn, "tukey": tukey, "kaiser": kaiser}
+                   "hahn": hahn, "tukey": tukey, "kaiser": kaiser,
+                   "decaying_exponent": decaying_exponent}
         window, derivative = windows[window]()
 
         hd_correction = - derivative * hd_amplitude / 2 / (
@@ -600,6 +607,62 @@ class IQPulseBuilder():
 
         window_parameter = pulse_sequence_parameters["window_parameter"] \
             if "window_parameter" in pulse_sequence_parameters else 0.1
+
+        # no need in starting_phase if end time of pulse ending is fixed
+        # phase is accumulated and accounted for automatically
+        # in pulse builders.
+        starting_phase = 0
+
+        exc_pb.add_zero_pulse(
+            start_delay + longest_pulse_duration - excitation_duration) \
+            .add_sine_pulse(excitation_duration,
+                            window=window,
+                            window_parameter=window_parameter,
+                            phase=starting_phase,
+                            amplitude_mult=amplitude) \
+            .add_zero_until(repetition_period)
+        return {'q_seqs': [exc_pb.build()]}\
+
+    @staticmethod
+    def build_decaying_exponent_sequence(pulse_sequence_parameters, **pbs):
+        """
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict[str,float]
+        pbs : Dict[str,List[IQPulseBuilder]]
+
+        Returns
+        -------
+        Dict[str,List[IQPulseSequence]]
+            Dictionary that contain pulse sequences for devices groups.
+            Devices group lists id's are denoted by dictionary keys.
+
+        Notes
+        -------
+            Actually, it is "build_direct_rabi_sequences" with the exponent
+            window
+        """
+        exc_pb = pbs['q_pbs'][0]
+        start_delay = \
+            pulse_sequence_parameters["start_delay"]
+        repetition_period = \
+            pulse_sequence_parameters["repetition_period"]
+        excitation_duration = \
+            pulse_sequence_parameters["excitation_duration"]
+        longest_pulse_duration = \
+            pulse_sequence_parameters["longest_duration"]
+        amplitude = \
+            pulse_sequence_parameters["excitation_amplitude"]
+        window = \
+            pulse_sequence_parameters["modulating_window"]
+
+        if window == "decaying_exponent":
+            window_parameter = pulse_sequence_parameters["gamma"] \
+                if "gamma" in pulse_sequence_parameters else print(
+                'WHERE IS GAMMA?????')
+        else:
+            print('not exponent window')
 
         # no need in starting_phase if end time of pulse ending is fixed
         # phase is accumulated and accounted for automatically

@@ -149,7 +149,8 @@ class SingleToneSpectroscopy(Measurement):
 
     def _finalize(self):
         for src in self._src:
-            if((hasattr(src, "set_current")) and ( src._visainstrument.ask(":SOUR:FUNC?") == "VOLT\n" )):  # voltage src
+            if((hasattr(src, "set_current")) and ( src._visainstrument.query(
+                    ":SOUR:FUNC?") == "VOLT\n" )):  # voltage src
                 src.set_voltage(0)
 
 
@@ -245,9 +246,10 @@ class SingleToneSpectroscopyResult(MeasurementResult):
             self.max_phase = max(phases[phases != 0])
             self.min_phase = min(phases[phases != 0])
 
-        step_x = X[1] - X[0]
-        step_y = Y[1] - Y[0]
-        extent = [X[0] - step_x / 2, X[-1] + step_x / 2, Y[0] - step_y / 2, Y[-1] + step_y / 2]
+        step_x = np.min(np.abs(np.diff(X)))
+        step_y = np.min(np.abs(np.diff(Y)))
+        extent = [np.min(X) - step_x / 2, np.max(X) + step_x / 2,
+                  np.min(Y) - step_y / 2, np.max(Y) + step_y / 2]
         if self._amps_map is None or not self._dynamic:
             self._amps_map = ax_amps.imshow(abs(Z).T, origin='lower', cmap="RdBu_r",
                                             aspect='auto', vmax=self.max_abs, vmin=self.min_abs,
@@ -278,9 +280,9 @@ class SingleToneSpectroscopyResult(MeasurementResult):
     def _prepare_data_for_plot(self, data):
         s_data = self._remove_delay(data["Frequency [Hz]"], data["data"])
         parameter_list = data[self._parameter_names[0]]
-        if parameter_list[0] > parameter_list[-1]:
-            parameter_list = parameter_list[::-1]
-            s_data = s_data[::-1, :]
+        # if parameter_list[0] > parameter_list[-1]:
+        #     parameter_list = parameter_list[::-1]
+        #     s_data = s_data[::-1, :]
         # s_data = self.remove_background('avg_cur')
         return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
 

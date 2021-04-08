@@ -12,9 +12,6 @@ from ctypes import POINTER, byref, cast
 MAXDEVICES = 128
 MAXDESCRIPTORSIZE = 9
 
-
-
-
 class SC5502A():
 
     def __init__(self, idx=0, master=True):

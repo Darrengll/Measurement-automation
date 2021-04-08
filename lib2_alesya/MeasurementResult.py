@@ -197,7 +197,7 @@ class MeasurementResult:
         self.__dict__.update(state)
         self._data_lock = Lock()
 
-    def save(self, plot_maximized = True):
+    def save(self, plot_maximized=True):
         """
         This method may be overridden in a child class but super().save()
         must be called in the beginning of the overridden method.

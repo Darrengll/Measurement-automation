@@ -9,7 +9,7 @@ import copy
 import lib.data_management as dm
 
 
-class IQDownconversionCalibrationResult():
+class IQDownconversionCalibrationResult:
 
     def __init__(self, mixer_id, samplerate, if_frequency, dig_params=None,
                  offsets=None, phase=0, r=1):
@@ -91,6 +91,14 @@ class IQDownconversionCalibrationResult():
                 1j / self.r / np.cos(self.phase) *
                 (np.imag(trace) - self.offsets[1]))
 
+    def get_coefficients(self):
+        """Apply these coefficient to a trace for calibration"""
+        a = np.exp(-1j * self.cryostat_delay * self.shift) \
+            * (1 + 1j * np.tan(self.phase))
+        b = 1 / self.r / np.cos(self.phase)
+        return np.array([[np.real(a), 0, -np.real(a) * self.offsets[0]],
+                         [np.imag(a), b, -b * self.offsets[1]]])
+
     def show_before_and_after(self):
         fig, axs = plt.subplots(2, 2, sharey="row", sharex="row")
         ax_tr_before = axs[0, 0]
@@ -167,7 +175,7 @@ class IQDownconversionCalibrationResult():
         plt.show()
 
 
-class IQDownconversionCalibrator():
+class IQDownconversionCalibrator:
 
     def __init__(self, iqawg, dig, downconv_mixer_id):
         self._iqawg : IQAWG = iqawg

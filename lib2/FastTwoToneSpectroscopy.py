@@ -9,12 +9,12 @@ class FastFluxTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
                          flux_control_type, devs_aliases_map)
 
     def set_fixed_parameters(self, flux_control_parameter = None,
-                             bandwidth_factor=10, **dev_params):
+                             bandwidth_factor=10, adaptive=True, **dev_params):
 
         vna_parameters = dev_params['vna'][0]
         mw_src_parameters = dev_params['mw_src'][0]
         self._resonator_area = vna_parameters["freq_limits"]
-        self._adaptive = True if flux_control_parameter is None else False
+        self._adaptive = adaptive
 
         # trigger layout is detected via mw_src_parameters in TTSBase class
 
@@ -24,7 +24,7 @@ class FastFluxTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
                                      bandwidth_factor=bandwidth_factor)
 
     def set_swept_parameters(self, flux_parameter_values):
-        setter = self._adaptive_setter if self._adaptive else self._triggering_setter
+        setter = self._adaptive_setter if self._adaptive else self._base_setter
         swept_pars = {self._parameter_name: (setter, flux_parameter_values)}
         super().set_swept_parameters(**swept_pars)
 

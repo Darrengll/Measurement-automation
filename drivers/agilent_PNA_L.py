@@ -75,7 +75,7 @@ class Agilent_PNA_L(Instrument):
 
         self.add_parameter('averages', type=int,
             flags=Instrument.FLAG_GETSET,
-            minval=1, maxval=1024, tags=['sweep'])
+            minval=1, maxval=65536, tags=['sweep'])
 
         self.add_parameter('average', type=bool,
             flags=Instrument.FLAG_GETSET)
@@ -315,27 +315,35 @@ class Agilent_PNA_L(Instrument):
         dataimag = np.array(data[1:data_size:2])
         return datareal+1j*dataimag
 
-    def get_tracedata(self, format="REALIMAG"):
+    def get_tracedata(self, format="RAW"):
         """
-        Get the data of the current trace
 
-        Input:
-            format (string) : 'AmpPha': Amp in dB and Phase, 'RealImag',
+        Parameters
+        ----------
+        format : str
+            'AmpPha'- Amp in dB and Phase,
+            'RealImag' - Re[data], Im[data]
+            'Raw' - data (S21 as complex numbers)
 
-        Output:
-            'AmpPha':_ Amplitude and Phase
+        Returns
+        -------
+            'Raw' : raw S21 data as complex numbers
+            'AmpPha': Amplitudes, Phase
+            'RealImag' : Re[data], Im[data]
         """
         self._visainstrument.write(':FORMAT:DATA REAL,32; :FORMat:BORDer SWAP;')
         #data = self._visainstrument.ask_for_values(':FORMAT REAL,32; FORMat:BORDer SWAP;*CLS; CALC:DATA? SDATA;*OPC',format=visa.single)
         #data = self._visainstrument.ask_for_values(':FORMAT REAL,32;CALC:DATA? SDATA;',format=visa.double)
         #data = self._visainstrument.ask_for_values('FORM:DATA REAL; FORM:BORD SWAPPED; CALC%i:SEL:DATA:SDAT?'%(self._ci), format = visa.double)
         #test
-        data = self._visainstrument.ask_for_values("CALCulate:DATA? SDATA")
+        data = self.get_sdata()
         data_size = np.size(data)
         datareal = np.array(data[0:data_size:2])
         dataimag = np.array(data[1:data_size:2])
 
         #print datareal,dataimag,len(datareal),len(dataimag)
+        if format.upper() == "RAW":
+            return data
         if format.upper() == 'REALIMAG':
           if self._zerospan:
             return np.mean(datareal), np.mean(dataimag)
@@ -540,10 +548,12 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : setting Average to "%s"' % (status))
         if status:
             status = 'ON'
-            self._visainstrument.write('SENS%i:AVER:STAT %s' % (self._ci,status))
+            self._visainstrument.write('SENS%i:AVER:STAT %s' % (self._ci,
+                                                                status))
         elif status == False:
             status = 'OFF'
-            self._visainstrument.write('SENS%i:AVER:STAT %s' % (self._ci,status))
+            self._visainstrument.write('SENS%i:AVER:STAT %s' % (self._ci,
+                                                                status))
         else:
             raise ValueError('set_Average(): can only set on or off')
 
@@ -560,24 +570,29 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : getting average status')
         return bool(int(self._visainstrument.query('SENS%i:AVER:STAT?' % (self._ci))))
 
-    def do_set_averages(self, av):
+    def do_set_averages(self, av, mode="POINT"):
         """
-        Set number of averages
 
-        Input:
-            av (int) : Number of averages
+        Parameters
+        ----------
+        av : int
+            number of aveges (assumed <= 1024?)
+        mode : str
+            "POINT", "SWEEP"
 
-        Output:
-            None
+        Returns
+        -------
+        None
         """
         self._visainstrument.write('SENS%i:AVER:COUN %i' % (self._ci, av))
-        self._visainstrument.write('TRIGger:AVERage 1')
-        # if av > 1:
-        #     self.do_set_average(True)
-        #     self._visainstrument.write('SENS:SWE:GRO:COUN %i'%av)
-        # else:
-        #     self.do_set_average(False)
-        #     self._visainstrument.write('SENS:SWE:GRO:COUN 1')
+        if av > 1:
+            self._visainstrument.write("SENS%i:AVER ON" % self._ci)
+        else:
+            self._visainstrument.write("SENS%i:AVER OFF" % self._ci)
+        if mode == "POINT":
+            self._visainstrument.write("SENS%i:AVER:MODE POIN" % self._ci)
+        elif mode == "SWEEP":
+            raise NotImplementedError
 
     def do_get_averages(self):
         """
@@ -894,7 +909,7 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : getting channel index')
         return self._ci
 
-    def measure_and_get_data(self, data_format="REALIMAG"):
+    def measure_and_get_data(self, data_format="RAW"):
         """
 
         Parameters
@@ -905,7 +920,8 @@ class Agilent_PNA_L(Instrument):
 
         Returns
         -------
-
+        np.ndarray
+            pairs with respect to data format requested
         """
         self.prepare_for_stb()
         self.sweep_single()

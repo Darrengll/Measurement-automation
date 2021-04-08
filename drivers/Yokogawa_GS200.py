@@ -55,7 +55,7 @@ class Yokogawa_GS210(Instrument):
 
 
 
-    def __init__(self, address, volt_compliance = 3, current_compliance = .001):
+    def __init__(self, address, volt_compliance = 3, current_compliance = .01):
         """Create a default Yokogawa_GS210 object as a current source"""
         Instrument.__init__(self, 'Yokogawa_GS210', tags=['physical'])
         self._address = address

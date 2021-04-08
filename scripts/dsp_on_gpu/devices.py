@@ -31,10 +31,10 @@ print("REPORT ON LOADED DEVICES")
 
 # ## RF generators ##
 exec(my_import("drivers.sc5502a", "SC5502A"))
-# mw_sps = SC5502A(idx=1, master=True)
-mw_probe = SC5502A(idx=0, master=False)
-# print("Microwave source 'mw_sps' is loaded")
-print("Microwave source 'mw_probe' is loaded")
+mw_sps = SC5502A(idx=1, master=True)
+# mw_probe = SC5502A(idx=0, master=False)
+print("Microwave source 'mw_sps' is loaded")
+# print("Microwave source 'mw_probe' is loaded")
 
 ## AWGs ##
 exec(my_import("drivers.keysightM3202A", "KeysightM3202A"))
@@ -42,79 +42,79 @@ exec(my_import("drivers.keysightM3202A", "KeysightM3202A"))
 channelI = 1
 channelQ = 2
 
-# awg_sps_slot = 13
-# awg_sps = KeysightM3202A("M3202A", awg_sps_slot, chassis=1)
-# awg_sps.synchronize_channels(channelI, channelQ)
-# awg_sps.trigger_output_config(channel=channelI, trig_length=100)
-# awg_sps.stop_AWG(channel=channelI)
+awg_sps_slot = 13
+awg_sps = KeysightM3202A("M3202A", awg_sps_slot, chassis=1)
+awg_sps.synchronize_channels(channelI, channelQ)
+awg_sps.trigger_output_config(channel=channelI, trig_length=100)
+awg_sps.stop_AWG(channel=channelI)
 
-awg_probe_slot = 14
-awg_probe = KeysightM3202A("M3202A", awg_probe_slot, chassis=1)
-awg_probe.synchronize_channels(channelI, channelQ)
-awg_probe.trigger_output_config(channel=channelI, trig_length=100)
-awg_probe.stop_AWG(channel=channelI)
-# print(f"AWG 'awg_sps' is loaded. Slot #{awg_sps_slot}")
-print(f"AWG 'awg_probe' is loaded. Slot #{awg_probe_slot}")
+# awg_probe_slot = 14
+# awg_probe = KeysightM3202A("M3202A", awg_probe_slot, chassis=1)
+# awg_probe.synchronize_channels(channelI, channelQ)
+# awg_probe.trigger_output_config(channel=channelI, trig_length=100)
+# awg_probe.stop_AWG(channel=channelI)
+print(f"AWG 'awg_sps' is loaded. Slot #{awg_sps_slot}")
+# print(f"AWG 'awg_probe' is loaded. Slot #{awg_probe_slot}")
 
 
 # ## IQAWGs ##
 exec(my_import("drivers.IQAWG", "IQAWG, AWGChannel"))
-# iqawg_sps = IQAWG(AWGChannel(awg_sps, channelI),
-#                   AWGChannel(awg_sps, channelQ))
-iqawg_probe = IQAWG(AWGChannel(awg_probe, channelI),
-                    AWGChannel(awg_probe, channelQ))
-# print("IQAWG 'iqawg_sps' is loaded")
-print("IQAWG 'iqawg_probe' is loaded")
+iqawg_sps = IQAWG(AWGChannel(awg_sps, channelI),
+                  AWGChannel(awg_sps, channelQ))
+# iqawg_probe = IQAWG(AWGChannel(awg_probe, channelI),
+#                     AWGChannel(awg_probe, channelQ))
+print("IQAWG 'iqawg_sps' is loaded")
+# print("IQAWG 'iqawg_probe' is loaded")
 
 # Digitizers
 # exec(my_import("drivers.Spectrum_m4x", "SPCM, SPCM_MODE, SPCM_TRIGGER"))
-# if "dig_probe" not in globals():
-    # global dig_sps
-    # global dig_probe
-    # dig_sps = SPCM(b"/dev/spcm0")
-    # dig_probe = SPCM(b"/dev/spcm2")
+# if "dig_sps" not in globals():
+#     global dig_sps
+#     # global dig_probe
+#     dig_sps = SPCM(b"/dev/spcm0")
+#     # dig_probe = SPCM(b"/dev/spcm2")
 # print(f"Digitizer 'dig_sps' is loaded. Slot #{dig_sps.get_slot_number()}")
 # print(f"Digitizer 'dig_probe' is loaded. Slot #{dig_probe.get_slot_number()}")
 
 # stabilized current sources ##
 exec(my_import("drivers.Yokogawa_GS200", "Yokogawa_GS210"))
-# sps_coil = Yokogawa_GS210("yok1")
-# sps_coil.set_src_mode_curr()  # set current source mode
-# sps_coil.set_range(0.01)  # set 10 mA range regime
-probe_coil = Yokogawa_GS210("yok2")
-probe_coil.set_src_mode_curr()  # set current source mode
-probe_coil.set_range(0.01)  # set 10 mA range regimeregime
+sps_coil = Yokogawa_GS210("yok1")
+sps_coil.set_src_mode_curr()  # set current source mode
+sps_coil.set_range(0.01)  # set 10 mA range regime
+# probe_coil = Yokogawa_GS210("yok2")
+# probe_coil.set_src_mode_curr()  # set current source mode
+# probe_coil.set_range(0.01)  # set 10 mA range regimeregime
 # sps_loop = Yokogawa_GS210("yok3")
 # sps_loop.set_src_mode_curr()  # set current source mode
 # sps_loop.set_range(0.01)  # set 10 mA range regime
-# print(f"Current source 'sps_coil' is loaded. Address {sps_coil._address}")
-print(f"Current source 'probe_coil' is loaded. Address {probe_coil._address}")
+print(f"Current source 'sps_coil' is loaded. Address {sps_coil._address}")
+# print(f"Current source 'probe_coil' is loaded. Address {probe_coil._address}")
 # print(f"Current source 'sps_loop' is loaded. Address {sps_loop._address}")
 
 # Spectral analyzers
-from drivers.Agilent_EXA import Agilent_EXA_N9010A
-exa = Agilent_EXA_N9010A("EXA")
-print("Spectral analyzer 'exa' is loaded")
+# from drivers.Agilent_EXA import Agilent_EXA_N9010A
+# exa = Agilent_EXA_N9010A("EXA")
+# print("Spectral analyzer 'exa' is loaded")
 
 # Devices dictionaries
-# sps_devices = {
-#     'awg': awg_sps,
-#     'dig': dig_sps,
-#     'iqawg': iqawg_sps,
-#     'mw': mw_sps,
-#     'coil': sps_coil,
-#     'downconv_cal': None,
-#     'upconv_cal': None,
-# }
-probe_devices = {
-    'awg': awg_probe,
-    # 'dig': dig_probe,
-    'iqawg': iqawg_probe,
-    'mw': mw_probe,
-    'coil': probe_coil,
+sps_devices = {
+    'awg': awg_sps,
+    # 'dig': dig_sps,
+    'iqawg': iqawg_sps,
+    'mw': mw_sps,
+    'coil': sps_coil,
     'downconv_cal': None,
-    'upconv_cal': None
+    'upconv_cal': None,
 }
+# probe_devices = {
+#     'awg': awg_probe,
+#     'dig': dig_probe,
+#     'iqawg': iqawg_probe,
+#     'mw': mw_probe,
+#     'coil': probe_coil,
+#     'downconv_cal': None,
+#     'upconv_cal': None
+# }
 
 
 # IQ MIXERS CALIBRATION
@@ -218,13 +218,13 @@ def turn_off_current_sources():
 
 
 def turn_off_mw_sources():
-    # mw_sps.set_output_state("OFF")
-    mw_probe.set_output_state("OFF")
+    mw_sps.set_output_state("OFF")
+    # mw_probe.set_output_state("OFF")
 
 
 def turn_on_mw_sources():
-    # mw_sps.set_output_state("ON")
-    mw_probe.set_output_state("ON")
+    mw_sps.set_output_state("ON")
+    # mw_probe.set_output_state("ON")
 
 
 def plot_trace(trace, dt):
@@ -264,7 +264,7 @@ def downconvert(trace, if_freq = 50):
 
 import lib2.directMeasurements.directRabi
 reload(lib2.directMeasurements.directRabi)
-from lib2.directMeasurements.directRabi import DirectRabiFromPulseDuration,\
+from lib2.directMeasurements.directRabi import DirectRabiFromPulseDuration, \
     DirectRabiFromAmplitude
 
 def setup_rabi_from_delay(devices_dict, params):
@@ -402,8 +402,8 @@ def check_amplitude_linearity(devices_dict, params):
     freq = devices_dict['iqawg'].get_calibration().get_if_frequency()
     for i in tqdm(range(len(awg_amps))):
         devices_dict['iqawg'].output_IQ_waves_from_calibration(
-                                        trigger_sync_every=params['period'],
-                                        amp_coeffs=(awg_amps[i], awg_amps[i]))
+            trigger_sync_every=params['period'],
+            amp_coeffs=(awg_amps[i], awg_amps[i]))
         data = devices_dict['dig'].safe_measure()
         trace = data[0::2] + 1j * data[1::2]
         # trace_cal = devices_dict['downconv_cal'].apply(trace)

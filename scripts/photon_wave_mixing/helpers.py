@@ -9,7 +9,7 @@ import lib.plotting as plt2
 
 def parse_probe_qubit_sts(freqs, S21):
     amps = np.abs(S21)
-    frequencies = freqs[gaussian_filter1d(amps, sigma=2).argmin(axis=-1)]
+    frequencies = freqs[gaussian_filter1d(amps, sigma=1).argmin(axis=-1)]
     return frequencies
 
 

@@ -9,7 +9,7 @@ class FastFluxTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
                          flux_control_type,
                          devs_aliases_map)
 
-    def set_fixed_parameters(self, flux_control_parameter = None,
+    def set_fixed_parameters(self, flux_control_parameter=None,
                              **dev_params):
         self._adaptive = True if flux_control_parameter is None else False
 

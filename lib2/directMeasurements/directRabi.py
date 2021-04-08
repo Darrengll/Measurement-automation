@@ -204,7 +204,7 @@ class RabiFromPulseDurationResult(VNATimeResolvedDispersiveMeasurement1DResult):
         T_R_err = T_R**2 * (err[4] / T1**2 + err[5] / T2**2)
         Om_R = opt_params[6] * 1e3 / 2 / np.pi
         Om_R_err = err[6] * 1e3 / 2 / np.pi
-        return (f"$T_R={T1 * T2/(T1 + T2):.3f} \pm {T_R_err:.3f}~\mu$s\n"
+        return (f"$T_R={T1 * T2/(T1 + T2):.3f} \pm {T_R_err:.3f}~ns\n"
                 f"$\Omega_R/(2\pi)={Om_R:.2f} \pm {Om_R_err:.2f}$ MHz\n"
                 rf"$\Delta \varphi$ = {self.get_phase_diff():.2f} rad")
 

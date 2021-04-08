@@ -292,8 +292,8 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         Change is introduced on 16.03.2020 by Shamil
         """
         self._q_iqawg[0].output_zero(
-            trigger_every_period=True,
-            repetition_period_ns=self._pulse_sequence_parameters["repetition_period"]
+            trigger_sync_every=self._pulse_sequence_parameters[
+                "repetition_period"]
         )
 
 

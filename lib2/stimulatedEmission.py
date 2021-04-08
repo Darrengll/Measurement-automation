@@ -175,15 +175,15 @@ class StimulatedEmission(PulseMixing):
             self._sweep_current_setter, list_of_currents)})
         self._measurement_result.set_parameter_name("Current limits, A")
 
+    def _sweep_current_setter(self, current):
+        self._src[1].set_current(current)
+        self._output_pulse_sequence()
+
     def sweep_probe_frequency(self, frequencies, a, b, c):
         self.current_frequency_params = (a, b, c)
         self.set_swept_parameters(**{"Probe frequency, Hz": (
             self._set_probe_frequency, frequencies)})
         self._measurement_result.set_parameter_name("Probe frequency, Hz")
-
-    def _sweep_current_setter(self, current):
-        self._src[1].set_current(current)
-        self._output_pulse_sequence()
 
     def _set_probe_frequency(self, frequency):
         a, b, c = self.current_frequency_params

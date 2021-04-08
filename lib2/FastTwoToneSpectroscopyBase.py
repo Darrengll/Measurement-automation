@@ -12,14 +12,14 @@ from scipy.optimize import curve_fit
 from enum import Enum
 
 
-class FluxControlType(Enum):
+class FLUX_CONTROL_TYPE(Enum):
     CURRENT = 1
     VOLTAGE = 2
 
 
 class FastTwoToneSpectroscopyBase(Measurement):
-    FLUX_CONTROL_PARAM_NAMES = {FluxControlType.CURRENT: ("Current", "A"),
-                                FluxControlType.VOLTAGE: ("Voltage", "V")}
+    FLUX_CONTROL_PARAM_NAMES = {FLUX_CONTROL_TYPE.CURRENT: ("Current", "A"),
+                                FLUX_CONTROL_TYPE.VOLTAGE: ("Voltage", "V")}
 
     def __init__(self, name, sample_name, flux_control_type,
                  devs_aliases_map, plot_update_interval=5):
@@ -49,9 +49,9 @@ class FastTwoToneSpectroscopyBase(Measurement):
         # external hardware signal and those who can trigger other devices. This is simple class with 2
         # attributes at most. The deal is to verify a consistency of the idea before starting actual coding
 
-        if flux_control_type is FluxControlType.CURRENT:
+        if flux_control_type is FLUX_CONTROL_TYPE.CURRENT:
             self._base_parameter_setter = self._current_src[0].set_current
-        elif flux_control_type is FluxControlType.VOLTAGE:
+        elif flux_control_type is FLUX_CONTROL_TYPE.VOLTAGE:
             self._base_parameter_setter = self._voltage_src[0].set_voltage
         else:
             raise ValueError("Flux parameter type invalid")
@@ -60,8 +60,9 @@ class FastTwoToneSpectroscopyBase(Measurement):
         self._parameter_name = param_name + " [%s]" % param_dim
         self._info_suffix = "at %.4f " + param_dim
 
-    def set_fixed_parameters(self, flux_control_parameter, detect_resonator = True, **dev_params):
-
+    def set_fixed_parameters(self, flux_control_parameter,
+                             detect_resonator=True,
+                             **dev_params):
         vna_parameters = dev_params['vna'][0]
         mw_src_parameters = dev_params['mw_src'][0]
         self._frequencies = mw_src_parameters["frequencies"]
@@ -80,7 +81,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         if flux_control_parameter is not None:
             self._base_parameter_setter(flux_control_parameter)
 
-        
+        print(detect_resonator)
         if detect_resonator:
             self._mw_src[0].set_output_state("OFF")
             msg = "Detecting a resonator within provided frequency range of the VNA %s \
@@ -145,7 +146,6 @@ class FastTwoToneSpectroscopyBase(Measurement):
         return measurement_data
 
     def _detect_resonator(self, vna_parameters, plot=True):
-
         self._vna[0].set_nop(100)
         self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
         if "res_find_power" in vna_parameters.keys():
@@ -183,7 +183,8 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
                                            ec="black", lw=1, alpha=0.5)
 
     def _tr_spectrum(self, parameter_value, parameter_value_at_sweet_spot, frequency, period):
-        return frequency * sqrt(cos((parameter_value - parameter_value_at_sweet_spot) / period))
+        return frequency * np.sqrt(
+            np.cos((parameter_value - parameter_value_at_sweet_spot) / period))
 
     def _lorentzian_peak(self, frequency, amplitude, offset, res_frequency, width):
         return amplitude * (0.5 * width) ** 2 / (
@@ -194,12 +195,12 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
         for row in data:
             try:
                 popt = curve_fit(self._lorentzian_peak,
-                                 freqs, row, p0=(ptp(row), median(row),
+                                 freqs, row, p0=(ptp(row), np.median(row),
                                                  freqs[argmax(row)], 10e6))[0]
                 peaks.append(popt[2])
             except:
                 peaks.append(freqs[argmax(row)])
-        return array(peaks)
+        return np.array(peaks)
 
     def find_transmon_spectrum(self, axes, parameter_limits=(0, -1),
                                format="abs"):
