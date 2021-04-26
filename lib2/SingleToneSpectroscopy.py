@@ -231,7 +231,10 @@ class SingleToneSpectroscopyResult(MeasurementResult):
             return
 
         X, Y, Z = self._prepare_data_for_plot(data)
-        phases = abs(np.angle(Z).T)
+        if not self._unwrap_phase:
+            phases = abs(np.angle(Z).T)
+        else:
+            phases = np.unwrap(np.angle(Z)).T
 
         phases[Z.T == 0] = 0
         phases = phases if self._phase_units == "rad" else phases * 180 / np.pi

@@ -53,7 +53,7 @@ class TwoToneSpectroscopyBase(Measurement):
             msg = "Detecting a resonator within provided frequency range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
             print(msg + msg1, flush=True)
-            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters)
+            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, True)
             print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
             res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
             vna_parameters["freq_limits"] = (res_freq, res_freq)
@@ -65,19 +65,14 @@ class TwoToneSpectroscopyBase(Measurement):
 
     def _detect_resonator(self, vna_parameters, plot=False):
         vna = self._vna[0]
-        vna.set_nop(vna_parameters["resonator_detection_nop"])
-        vna.set_freq_limits(*vna_parameters["freq_limits"])
-        vna.set_power(vna_parameters["power"])
-        vna.set_bandwidth(vna_parameters["resonator_detection_bandwidth"])
-        vna.set_averages(vna_parameters["averages"])
-        result = super()._detect_resonator(plot)
-        if result is None:
-            lims = array(vna_parameters["freq_limits"])
-            lims = (lims-mean(lims))*3+mean(lims)
-            vna_parameters["freq_limits"] = lims
-            vna.set_freq_limits(*vna_parameters["freq_limits"])
-            result = super()._detect_resonator(plot)
+        parameters = {"nop": vna_parameters["resonator_detection_nop"],
+                      "freq_limits": vna_parameters["freq_limits"],
+                      "power": vna_parameters["power"],
+                      "bandwidth": vna_parameters["resonator_detection_bandwidth"],
+                      "averages": vna_parameters["averages"]}
+        vna.set_parameters(parameters)
 
+        result = super()._detect_resonator(plot)
         return result
 
     def _recording_iteration(self):

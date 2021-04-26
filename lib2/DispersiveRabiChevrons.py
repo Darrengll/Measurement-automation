@@ -12,7 +12,8 @@ class DispersiveRabiChevrons(VNATimeResolvedDispersiveMeasurement2D):
                              detect_resonator=True, plot_resonator_fit=True,
                              **dev_params):
         super().set_fixed_parameters(pulse_sequence_parameters,
-                                     detect_resonator=detect_resonator, plot_resonator_fit=plot_resonator_fit,
+                                     detect_resonator=detect_resonator,
+                                     plot_resonator_fit=plot_resonator_fit,
                                      **dev_params)
 
     def set_swept_parameters(self, excitation_durations, excitation_freqs):
@@ -31,7 +32,7 @@ class DispersiveRabiChevrons(VNATimeResolvedDispersiveMeasurement2D):
                           (self._output_pulse_sequence,
                            excitation_durations),
                       "excitation_frequency":
-                          (lambda x: self._q_lo[0].set_frequency(x),
+                          (lambda x: self._q_lo[0].set_frequency(x - self._measurement_result._if_shift),
                            excitation_freqs)}
         super().set_swept_parameters(**swept_pars)
 
@@ -47,9 +48,9 @@ class DispersiveRabiChevronsResult(VNATimeResolvedDispersiveMeasurement2DResult)
         super().__init__(name, sample_name)
 
     def _prepare_data_for_plot(self, data):
-        return ((data["excitation_frequency"] + self._if_shift) / 1e9,
-               data["excitation_duration"] / 1e3,
-               data["data"])
+        return (data["excitation_frequency"]) / 1e9, \
+               data["excitation_duration"] / 1e3, \
+               data["data"]
 
     def _annotate_axes(self, axes):
         axes[0].set_ylabel("Excitation duration [$\mu$s]")

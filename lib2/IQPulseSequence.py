@@ -127,8 +127,7 @@ class PulseBuilder():
         duration: float, ns
             Duration of the pulse in nanoseconds
         """
-        offset = self._calibration.get_optimization_results()[0]["dc_offsets"][
-            0] \
+        offset = self._calibration.get_optimization_results()[0]["dc_offsets"][0] \
             if dc_offsets is None else dc_offsets
         N_time_steps = int(round(duration / self._waveform_resolution))
         self._pulse_seq.append_pulse(zeros(N_time_steps + 1) + offset)
@@ -150,8 +149,7 @@ class PulseBuilder():
             Specifies the smoothing coefficient for tanh window, 0 for no
             smoothing
         """
-        offset = self._calibration.get_optimization_results()[0]["dc_offsets"][
-                     0] + offset_voltage
+        offset = self._calibration.get_optimization_results()[0]["dc_offsets"][0] + offset_voltage
         N_time_steps = int(round(duration / self._waveform_resolution))
 
         if tanh_sigma == 0:
@@ -400,9 +398,11 @@ class IQPulseBuilder():
             return window, derivative
 
         def decaying_exponent():
-            window = exp(-window_parameter * linspace(0, N_time_steps,
-                                                     N_time_steps,
-                                                      endpoint=False) / N_time_steps)
+            window = exp(
+                -window_parameter *
+                linspace(0, N_time_steps,N_time_steps,vendpoint=False) /
+                N_time_steps
+            )
             return window
 
         windows = {"rectangular": rectangular, "gaussian": gaussian,
@@ -552,15 +552,18 @@ class IQPulseBuilder():
         amplitude = \
             pulse_sequence_parameters["excitation_amplitude"]
 
-        exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
-            .add_sine_pulse(excitation_duration, 0, amplitude_mult=amplitude,
-                            window=window) \
-            .add_zero_pulse(readout_duration) \
-            .add_zero_until(repetition_period)
+        readout_excitation_gap = 10
+        exc_pb.add_zero_pulse(awg_trigger_reaction_delay
+                              + (repetition_period-readout_duration-excitation_duration)
+                              - readout_excitation_gap)\
+              .add_sine_pulse(excitation_duration, 0,
+                              amplitude_mult=amplitude,
+                              window=window) \
+              .add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(excitation_duration + 10) \
-            .add_dc_pulse(readout_duration) \
-            .add_zero_until(repetition_period)
+        ro_pb.add_zero_pulse(repetition_period - readout_duration) \
+             .add_pulse(readout_duration) \
+             .add_zero_until(repetition_period)
 
         return {'q_seqs': [exc_pb.build()],
                 'ro_seqs': [ro_pb.build()]}
@@ -1292,17 +1295,21 @@ class IQPulseBuilder():
         exc_pb = pbs['q_pbs'][0]
         ro_pb = pbs['ro_pbs'][0]
 
-        exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
+        readout_excitation_gap = 10
+
+        total_qubit_sequence_duration = half_pi_pulse_duration*2 + ramsey_delay
+        exc_pb.add_zero_pulse(awg_trigger_reaction_delay+
+                              repetition_period - total_qubit_sequence_duration - readout_duration
+                              -readout_excitation_gap) \
             .add_sine_pulse(half_pi_pulse_duration,
                             amplitude_mult=amplitude, window=window) \
             .add_zero_pulse(ramsey_delay) \
             .add_sine_pulse(half_pi_pulse_duration,
                             amplitude_mult=amplitude, window=window) \
-            .add_zero_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(2 * half_pi_pulse_duration + ramsey_delay + 10) \
-            .add_dc_pulse(readout_duration) \
+        ro_pb.add_zero_pulse(repetition_period - readout_duration) \
+            .add_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
         return {'q_seqs': [exc_pb.build()],
@@ -1323,14 +1330,16 @@ class IQPulseBuilder():
         exc_pb = pbs['q_pbs'][0]
         ro_pb = pbs['ro_pbs'][0]
 
-        exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
+
+        readout_excitation_gap = 10
+        exc_pb.add_zero_pulse(awg_trigger_reaction_delay +
+                              repetition_period - pi_pulse_duration - readout_delay - readout_duration
+                              -readout_excitation_gap) \
             .add_sine_pulse(pi_pulse_duration, 0) \
-            .add_zero_pulse(readout_delay + readout_duration) \
             .add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(pi_pulse_duration + readout_delay) \
-            .add_dc_pulse(readout_duration) \
-            .add_zero_until(repetition_period)
+        ro_pb.add_zero_pulse(repetition_period - readout_duration) \
+            .add_pulse(readout_duration)
 
         return {'q_seqs': [exc_pb.build()],
                 'ro_seqs': [ro_pb.build()]}
@@ -1354,9 +1363,13 @@ class IQPulseBuilder():
             pulse_sequence_parameters["excitation_amplitude"]
         exc_pb = pbs['q_pbs'][0]
         ro_pb = pbs['ro_pbs'][0]
-        exc_pb.add_zero_pulse(awg_trigger_reaction_delay) \
-            .add_sine_pulse(half_pi_pulse_duration, amplitude_mult=amplitude,
-                            window=window) \
+
+        readout_excitation_gap = 10
+
+        exc_pb.add_zero_pulse(awg_trigger_reaction_delay +
+                              repetition_period - 4*half_pi_pulse_duration - echo_delay - readout_duration
+                              - readout_excitation_gap) \
+            .add_sine_pulse(half_pi_pulse_duration, amplitude_mult=amplitude, window=window) \
             .add_zero_pulse(echo_delay / 2) \
             .add_sine_pulse(half_pi_pulse_duration,
                             amplitude_mult=2 * amplitude, window=window) \
@@ -1366,9 +1379,8 @@ class IQPulseBuilder():
             .add_zero_pulse(readout_duration) \
             .add_zero_until(repetition_period)
 
-        ro_pb.add_zero_pulse(4 * half_pi_pulse_duration + echo_delay + 10) \
-            .add_dc_pulse(readout_duration) \
-            .add_zero_until(repetition_period)
+        ro_pb.add_zero_pulse(repetition_period - readout_duration) \
+            .add_pulse(readout_duration)
 
         return {'q_seqs': [exc_pb.build()],
                 'ro_seqs': [ro_pb.build()]}

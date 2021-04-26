@@ -22,23 +22,33 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 
-class KeysightError(Exception):
-    pass
-
-
-class KeysightM3202A(Instrument):
+class KeysightM3202A:
     MAX_OUTPUT_VOLTAGE = 1.5  # V
 
-    def __init__(self, name, slot, chassis=0):
+    def __init__(self, slot, chassis=0, allow_unmatched_waveforms = True):
         '''
 
         Parameters
         ----------
-        name : redundant parameter for `Instrument` class
-        slot
-        chassis
+        slot: int
+            Slot where the m3202 is physically installed, written on the chassis or
+            can be found in the Windows Device Manager
+        chassis: int
+            If several chassis are mounted, will be used to specify in which one the
+            AWG is installed
+        allow_unmatched_waveforms: bool
+            If true, the waveforms on different channels will be allowed to have different durations.
+            This may be not safe when we share the AWG channel pairs between two virtual IQ devices since
+            it may lead to leftover sequences and thus m3202-state-dependent behaviours of the virtual
+            IQ devices (e.g. we can't set the repetition rate for IQAWG(ch1, ch2) higher than already set in
+            IQAWG(ch3,ch4) because its trailing sequence will remain too long, and will have to manually clear ch3,ch4
+            to work around this, see also output_arbitraty_waveform())
+            Therefore, as for the Tektronix5014c device which does not allow different-duration waveforms, setting
+            this parameter to False will ensure that all waveforms that do not match the most recently loaded waveform
+            are deleted. This way the user will always get what he requests though will have to make sure he loads
+            the waveforms of same duration. Fortunately, this is the case for all PulseSequences that we usually use and
+            for synchronized channels, in general.
         '''
-        super().__init__(name, tags=['physical'])
         self.mask = 0
         self.module = SD_AOU()
         self.module_id = self.module.openWithSlotCompatibility(
@@ -71,11 +81,14 @@ class KeysightM3202A(Instrument):
         self.sync_mode = SD_SyncModes.SYNC_CLK10  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
 
         self._source_channels_group = []  # channels that are the source of the waveforms for dependent group
-        self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms from _source_channels_group
+        self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms
+                                             # from _source_channels_group
         self._update_dependent_on_start = False
 
         self._prescaler = 0
         self.trigger_length = 100  # ns
+
+        self._allow_unmatched_waveforms = allow_unmatched_waveforms
 
         self.reset()  # clear internal memory and AWG queues according to p.67 of the user guide
 
@@ -90,15 +103,31 @@ class KeysightM3202A(Instrument):
             print(ret_val, SD_Error.getErrorMessage(ret_val))
             raise Exception
 
-    def reset(self):
-        # clear internal memory and AWG queues
-        self._handle_error(
-            self.module.waveformFlush()
-        )
+    def reset(self, channels=None):
+        if channels is None:
+            channels = [1, 2, 3, 4]
 
-        # stop all modulations
-        for channel in [1, 2, 3, 4]:
+        for channel in channels:
+            # stop modulations
             self.stop_modulation(channel)
+            # clear queues (theres no command to clear memory;
+            # however, leaving internal memory as is
+            # is not a problem: it will inevitably be overwritten by following
+            # requests to the AWG via module.reloadWaveform...)
+            ret = self.module.AWGflush(channel - 1)
+            self._handle_error(ret)
+
+            # clearing software variables
+            self.waveforms[channel - 1] = None
+            self.waveform_ids[channel - 1] = None
+            self.repetition_frequencies[channel - 1] = None
+            self.waveshape_types[
+                channel - 1] = SD_Waveshapes.AOU_AWG  # default
+
+        if channels == [1, 2, 3, 4]:
+            # clear ALL: internal memory and AWG queues
+            ret = self.module.waveformFlush()
+            self._handle_error(ret)
 
     def synchronize_channels(self, *channels):
         self.synchronized_channels = channels
@@ -265,6 +294,29 @@ class KeysightM3202A(Instrument):
         # stopping AWG so the changes will take place according to the documentation
         # (not neccessary but a good practice)
         self.stop_AWG(channel)
+        self.stop_modulation(channel)
+
+        def clear_unmatched_waveforms():
+            # Checks if other channels' waveforms have matching length,
+            # otherwise clear them (similar to Tektronix implementation)
+            # This helps avoiding situations when 2 channels are inadvertently still
+            # outputting very long sequences while other 2 are short (e.g. switching from
+            # time-resolved measurements to single-tone spectroscopy when only 2 channels are
+            # controlled by the VNA and set to continuous IF sine and the other 2 remain
+            # in the pulsed mode -- STS class doesn't control them)
+            # Alternative solution is to explicitly control every device in every class,
+            # however I think we should make the low-level drivers smart enough to avoid that
+            to_clear = []
+            for idx, existing_freq in enumerate(self.repetition_frequencies):
+                if idx != channel - 1:
+                    if existing_freq is not None:
+                        if (existing_freq - frequency) != 0:
+                            to_clear.append(idx+1)
+            self.clear(to_clear)
+
+        if not self._allow_unmatched_waveforms:
+            clear_unmatched_waveforms()
+
         # loading a waveform to internal RAM and putting waveform into the channel's AWG queue
         self.load_waveform_to_channel(waveform, frequency, channel)
         # starting operation
@@ -384,6 +436,12 @@ class KeysightM3202A(Instrument):
         self._handle_error(ret)
 
     def stop_modulation(self, channel):
+        '''
+        Sets that channel out of any of the modulation modes (Amp, Freq or IQ)
+        and removes any phase and, most importantly, DC offset
+        :param channel:
+        :return:
+        '''
         self.deviation_gains[channel - 1] = 0
         self.module.modulationAmplitudeConfig(channel - 1,
                                               SD_ModulationTypes.AOU_MOD_OFF,
@@ -397,8 +455,13 @@ class KeysightM3202A(Instrument):
         self.module.channelOffset(channel - 1, 0)
         # setting output to sample from channel queue
         self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_AWG
-        self.module.channelWaveShape(channel - 1,
-                                     self.waveshape_types[channel - 1])
+        self.module.channelWaveShape(channel - 1, self.waveshape_types[channel - 1])
+        self.module.channelPhase(channel - 1, 0)
+        self.module.channelOffset(channel - 1, 0)
+        # not calling channelFrequency and channelAmplitude as
+        # the prescaler will control the sample rate
+        # and thus the repetition frequency in non-modulated mode,
+        # and channelAmplitude will be always called there
 
     def change_amplitude_of_carrier_signal(self, amplitude, channel,
                                            ampl_coef=1):
@@ -513,6 +576,9 @@ class KeysightM3202A(Instrument):
             ret = self.module.waveformReLoad(wave, waveform_number)
 
         self._handle_error(ret)
+
+        # clear channel queue
+        self.module.AWGflush(channel - 1)
 
         # put waveform as the first and only member of the
         # channel's AWG queue
@@ -630,7 +696,7 @@ class KeysightM3202A(Instrument):
                 # print(self.waveforms[source_chan-1]*self.output_voltages[source_chan-1],self.output_voltages[dependent_chan-1]*self.waveforms[source_chan-1])
 
     def get_prescaler(self):
-        self._prescaler
+        return self._prescaler
 
     def plot_waveforms(self, voltage_output=False):
         import matplotlib.pyplot as plt

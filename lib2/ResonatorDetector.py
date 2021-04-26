@@ -3,8 +3,9 @@ from resonator_tools.circuit import notch_port, reflection_port
 from numpy import abs, pi, exp, angle, unwrap, arctan
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
-from lib2.GlobalParameters import *
+from lib2.ExperimentParameters import *
 from scipy.optimize import curve_fit
+from loggingserver import LoggingServer
 
 class ResonatorDetector():
 
@@ -12,16 +13,19 @@ class ResonatorDetector():
         self._plot = plot
         self._fast = fast
         self._type = type
+        self._logger = LoggingServer.getInstance("")
         self._discarded_result = None
         self.set_data(frequencies, s_data)
 
     def set_data(self, frequencies, s_data):
         self._freqs = frequencies
         self._s_data = s_data
-        if self._type == 'reflection':
+        if self._type == ResonatorType.REFLECTION:
             self._port = reflection_port(frequencies, s_data)
-        else:
+        elif self._type == ResonatorType.NOTCH:
             self._port = notch_port(frequencies, s_data)
+        else:
+            raise ValueError("Resonator type %s not supported"%str(self._type))
 
     def set_plot(self, plot):
         self._plot = plot
@@ -34,15 +38,16 @@ class ResonatorDetector():
 
             if self._plot:
                 self._port.plotall()
+
+            return result
         else:
-            if GlobalParameters().resonator_types['transmission'] == True:
+            if self._type is ResonatorType.NOTCH:
                 amps = abs(self._s_data)
                 phas = angle(self._s_data)
                 min_idx = argmin(amps)
                 result = frequencies[min_idx], min(amps), phas[min_idx]
                 return result
             else:
-
                 unwrapped_phase = unwrap(angle(self._s_data))
                 filter_window = len(self._s_data) // 10
                 if filter_window % 2 == 0:
@@ -86,7 +91,6 @@ class ResonatorDetector():
 
         if not self._freqs[0] < self._port.fitresults["fr"] < self._freqs[-1] \
                 or self._port.fitresults["Ql"] > 20000:
-            # fit failed
             return None
 
         min_idx = argmin(abs(self._s_data))
@@ -120,11 +124,12 @@ class ResonatorDetector():
         fit_amplitude = min(abs(self._port.z_data_sim))
         fit_angle = angle(self._port.z_data_sim)[fit_min_idx]
         res_width = fit_frequency / self._port.fitresults["Ql"]
-        if self._type == 'transmission':
+        if self._type == ResonatorType.NOTCH:
             if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \
-                    abs(fit_amplitude - expected_amplitude) < .2*ptp(abs(self._port.z_data_sim)):
+                    abs(fit_amplitude - expected_amplitude) < .2 * ptp(abs(self._port.z_data_sim)):
                 return fit_frequency, fit_amplitude, fit_angle
             else:
+                self._discarded_result = fit_frequency, fit_amplitude, fit_angle
                 return None
         else:
             return fit_frequency, fit_amplitude, fit_angle

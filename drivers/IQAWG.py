@@ -347,7 +347,7 @@ class IQAWG():
         deviationGainQ = cal._if_amplitudes[1] * ampl_coeffs[1]
         awg.module.modulationAmplitudeConfig(chanI-1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM, deviationGainI)
         awg.module.modulationAmplitudeConfig(chanQ-1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM, deviationGainQ)
-        awg.start_AWG(chanI)
+        awg._start_AWG(chanI)
 
     def stop_modulated_IQ_waves(self):
         awg = self._channels[0]._host_awg
