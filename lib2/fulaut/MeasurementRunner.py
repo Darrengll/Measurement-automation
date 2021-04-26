@@ -20,7 +20,7 @@ from loggingserver import LoggingServer
 from drivers.keysightAWG import *
 from drivers.Tektronix_AWG5014 import *
 from drivers.IQAWG import *
-from drivers.Agilent_EXA import *
+from drivers.agilent_EXA import *
 
 from scipy.constants import pi
 import pickle

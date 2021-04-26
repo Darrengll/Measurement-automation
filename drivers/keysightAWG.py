@@ -101,7 +101,7 @@ class KeysightAWG(Instrument):
     def set_trigger(self, trigger_string: str):
         """
         trigger_string : string
-           'EXT' - external trigger on the front panel is used as trigger signal source
+           'EXT' - external trigger on the front panel is used as trigger trace source
            'CONT' - continious output
         """
         if( trigger_string == "EXT"):
@@ -197,9 +197,9 @@ class KeysightAWG(Instrument):
         freq: float
             frequency of the applied waveform, i.e. 1000 or 1e3
         amp: float
-            amplitude of the applied signal
+            amplitude of the applied trace
         offset: float
-            dc-offset added to the signal
+            dc-offset added to the trace
         channel = 1: int
             channel which will be set to ON and used as output, 1 or 2
 
@@ -220,9 +220,9 @@ class KeysightAWG(Instrument):
         freq: float
             frequency of the applied waveform, i.e. 1000 or 1e3
         amp: float
-            amplitude of the applied signal
+            amplitude of the applied trace
         offset: float
-            dc-offset added to the signal
+            dc-offset added to the trace
         channel = 1: int
             channel which will be set to ON and used as output, 1 or 2
 

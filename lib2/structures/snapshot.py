@@ -282,7 +282,7 @@ class Snapshot:
                     method = CV_TM_CCORR_NORMED - match function implemented in this function
         @params:
                     snapshot2find : class Snapshot
-                        represents an image that participates as a second variable in scipy.signal.correlate method
+                        represents an image that participates as a second variable in scipy.trace.correlate method
         @return:    (res,res_norm)
                     res : 1D numpy array.
                         len(res) = self.shape[1] + snapshot2find.shape[1] - 1

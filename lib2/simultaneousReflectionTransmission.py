@@ -251,7 +251,7 @@ class SimulataneousReflectionTransmission(
             data = signal.convolve(data, b, "same")
 
         if self._cut_everything_outside_the_pulse:
-            # the signal outside pulses is set to zero
+            # the trace outside pulses is set to zero
             data[np.logical_not(pulses_mask)] = 0
             max_length = int(
                 self.max_segment_duration * 1e-9 *  # seconds
@@ -509,7 +509,7 @@ class ReflectionTransmissionResult(MeasurementResult):
             )
         yfft_db[np.isneginf(yfft_db)] = 0
         # exclude singularity in logarithmic scale
-        # that arises due to signal's dc offset equals zero
+        # that arises due to trace's dc offset equals zero
         dc_freq_idx = np.argmin(np.abs(freqs))
         for i in range(len(yfft_db)):
             yfft_db[i, dc_freq_idx] = np.mean(yfft_db[i])

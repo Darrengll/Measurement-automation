@@ -15,8 +15,8 @@ from typing import Dict, List
 class PulseSequence():
     def __init__(self, waveform_resolution):
         self._waveform = np.empty(0)
-        # signal interpreted as having this resolution in ns
-        # then AWG tries it best to output this signal with the resolution involved
+        # trace interpreted as having this resolution in ns
+        # then AWG tries it best to output this trace with the resolution involved
         self._waveform_resolution = waveform_resolution
         self._pulses = []
 
@@ -250,7 +250,7 @@ class IQPulseBuilder():
     def add_dc_pulse(self, duration, dc_offsets_open=None):
         """
         Adds a pulse by putting a dc voltage at the I and Q inputs of the mixer
-        This pulse will let signal through with calibrated power
+        This pulse will let trace through with calibrated power
 
         Parameters:
         -----------
@@ -273,7 +273,7 @@ class IQPulseBuilder():
     def add_zero_pulse(self, duration, dc_offsets=None):
         """
         Adds a pulse with zero amplitude to the sequence
-        This pulse will block signal effectively according to calibration results
+        This pulse will block trace effectively according to calibration results
 
         Parameters:
         -----------
@@ -304,7 +304,7 @@ class IQPulseBuilder():
             Duration of the pulse in nanoseconds. For pulses other than rectangular
             will be interpreted as t_g (see F. Motzoi et al. PRL (2009))
         phase: float, rad
-            Adds a relative phase to the outputted signal.
+            Adds a relative phase to the outputted trace.
         amplitude: float
             Calibration if_amplitudes will be scaled by the
             amplitude_value.
@@ -624,6 +624,96 @@ class IQPulseBuilder():
         return {'q_seqs': [exc_pb.build()]}\
 
     @staticmethod
+    def build_dispersive_rabi_sequences2(pulse_sequence_parameters, **pbs):
+        """
+
+        Parameters
+        ----------
+        pulse_sequence_parameters : dict[str,float]
+        pbs : Dict[str,List[IQPulseBuilder]]
+
+        Returns
+        -------
+        Dict[str,List[IQPulseSequence]]
+            Dictionary that contain pulse sequences for devices groups.
+            Devices group lists id's are denoted by dictionary keys.
+
+        Notes
+        -------
+            The previous solution forced digitizer acquisition window (which is placed after the pulse sequence, usually)
+        to shift further in timeline following the extension of the length of the pulse sequence.
+        And due to the fact that extension length does not always coincide with acquisition
+        window displacement (due to difference in AWG and digitizer clock period) the phase jumps
+        arise as a problem.
+            The solution is that end of the last pulse stays at the same distance from the trigger event and
+        pulse sequence length extendends "back in timeline". Together with requirement that 'repetition_period"
+        is dividable by both AWG and digitizer clocks this will ensure that phase jumps will be neglected completely.
+        """
+        exc_pb = pbs['q_pbs'][0]
+        ro_pb = pbs['ro_pbs'][0]
+
+        start_delay = \
+            pulse_sequence_parameters["start_delay"]
+        repetition_period = \
+            pulse_sequence_parameters["repetition_period"]
+        excitation_duration = \
+            pulse_sequence_parameters["excitation_duration"]
+        longest_pulse_duration = \
+            pulse_sequence_parameters["longest_duration"]
+        amplitude = \
+            pulse_sequence_parameters["excitation_amplitude"]
+        window = \
+            pulse_sequence_parameters["modulating_window"]
+        window_parameter = pulse_sequence_parameters["window_parameter"] \
+            if "window_parameter" in pulse_sequence_parameters else 0.1
+
+        ro_amplitude_mul = pulse_sequence_parameters["readout_amplitude_mul"]
+        ro_delay = pulse_sequence_parameters["readout_delay"]
+        ro_duration = pulse_sequence_parameters["readout_duration"]
+        ro_window = pulse_sequence_parameters["readout_window"]
+        ro_window_parameter = pulse_sequence_parameters[
+            "readout_window_parameter"] if \
+            "readout_window_parameter" in pulse_sequence_parameters\
+            else 0.1
+        ro_phase = pulse_sequence_parameters["readout_phase"] if \
+            "readout_phase" in pulse_sequence_parameters else 0
+
+
+        window_parameter = pulse_sequence_parameters["window_parameter"] \
+            if "window_parameter" in pulse_sequence_parameters else 0.1
+
+        # no need in starting_phase if end time of pulse ending is fixed
+        # phase is accumulated and accounted for automatically
+        # in pulse builders.
+        # TODO: acquisition window should be placed right after the end
+        # of the excitation, not at the end of the longest excitation
+        # to increase SNR ratio
+        starting_phase = 0
+
+        # qubit exctitaion sequence construction
+        exc_pb.add_zero_pulse(
+            start_delay + longest_pulse_duration - excitation_duration) \
+            .add_sine_pulse(excitation_duration,
+                            window=window,
+                            window_parameter=window_parameter,
+                            phase=starting_phase,
+                            amplitude_mult=amplitude) \
+            .add_zero_until(repetition_period)
+
+        # readout pulse sequence construction
+        ro_pb.add_zero_pulse(
+            start_delay + longest_pulse_duration + ro_delay) \
+            .add_sine_pulse(ro_duration,
+                            window=ro_window,
+                            window_parameter=ro_window_parameter,
+                            phase=ro_phase,
+                            amplitude_mult=ro_amplitude_mul)\
+            .add_zero_until(repetition_period)
+
+        return {'q_seqs': [exc_pb.build()],
+                'ro_seqs': [ro_pb.build()]}
+
+    @staticmethod
     def build_decaying_exponent_sequence(pulse_sequence_parameters, **pbs):
         """
 
@@ -816,7 +906,7 @@ class IQPulseBuilder():
         guarantee linearity of overlapping pulse summation in mixer.
         
         Whether pulses are overlapping or not may change during the sweep. 
-        This leads to changing signal power (ampltiude divided by 2 or not) 
+        This leads to changing trace power (ampltiude divided by 2 or not) 
         during the sweep, if pulses are overlapping.
         Hence, the behaviour of the pulse summation is forced to be the same 
         during the whole sweep by the assignment below, that does not allow

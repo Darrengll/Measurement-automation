@@ -179,9 +179,9 @@ class DispersiveRadialTomographyResult(VNATimeResolvedDispersiveMeasurementResul
         r_2d, theta_2d = meshgrid(r, theta)
 
         for idx, name in enumerate(['real', 'imag']):
-            caxes[idx].clear()
+            caxes[idx].reset()
             ax = axes[idx]
-            ax.clear()
+            ax.reset()
 
             Z = self._data_formats[name][0](Z_raw)
             max_Z = max(Z[Z != 0])

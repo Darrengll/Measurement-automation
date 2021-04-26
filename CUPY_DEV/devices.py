@@ -253,7 +253,7 @@ def plot_trace_IQ(trace):
 
 def turn_off_awg(devices_dict):
     awg = devices_dict['awg']
-    awg.clear()
+    awg.reset()
     awg.synchronize_channels(channelI, channelQ)
     awg.trigger_output_config(channel=channelI, trig_length=100)
     awg.stop_AWG(channel=channelI)

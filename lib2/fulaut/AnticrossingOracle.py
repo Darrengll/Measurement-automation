@@ -363,7 +363,7 @@ class AnticrossingOracle():
 # import scipy
 # from scipy import *
 # from scipy.optimize import *
-# from scipy.signal import *
+# from scipy.trace import *
 #
 # class AnticrossingOracle():
 #

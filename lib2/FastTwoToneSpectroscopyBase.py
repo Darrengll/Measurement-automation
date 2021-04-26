@@ -46,7 +46,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         # be able to determine such situation and skip cycling through this parameters,
         # maybe by some additional parameter like swept_automatically=["par_name1",...,"par_nameN"]
         # or maybe by implementing trigger interface in all device classes that could be triggered by
-        # external hardware signal and those who can trigger other devices. This is simple class with 2
+        # external hardware trace and those who can trigger other devices. This is simple class with 2
         # attributes at most. The deal is to verify a consistency of the idea before starting actual coding
 
         if flux_control_type is FLUX_CONTROL_TYPE.CURRENT:
@@ -159,6 +159,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         self._vna[0].set_bandwidth(vna_parameters["resonator_detection_bandwidth"])
         self._vna[0].set_averages(vna_parameters["averages"])
         result = super()._detect_resonator(plot)
+        self._vna[0].set_output_state("ON")
         self._vna[0].set_parameters(vna_parameters)  # restore initial parameters values
         return result
 

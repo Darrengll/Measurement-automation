@@ -43,13 +43,13 @@ class IQDownconversionCalibrationResult:
         self._dig_params: dict = dig_params
         self._samplerate : float = samplerate
         # influence of the length of all wires in cryostat on the phase of
-        # a demodulated signal
+        # a demodulated trace
         self.cryostat_delay = 0
         self.shift = 0
         self._IQ_delay_correction = 0
 
-        # number of samlpes to drop from signal, due to shifting one
-        # of the quadratures in process of applying calibration to signal
+        # number of samlpes to drop from trace, due to shifting one
+        # of the quadratures in process of applying calibration to trace
         self.samples_per_period = int(
             round(self._samplerate / self._if_frequency)
         )
@@ -191,10 +191,10 @@ class IQDownconversionCalibrator:
                   trigger_period=1000, amps=(1.0, 1.0)):
         """
         Calibration of the IQ trace, measured by the digitizer, so that
-        I**2 + Q**2 signal would be constant when I and Q are pure sine and
+        I**2 + Q**2 trace would be constant when I and Q are pure sine and
         cosine.
         This method calibrates simultaneously offsets, phase and amplitude
-        discrepancies by minimizing the peaks of the squared signal at the
+        discrepancies by minimizing the peaks of the squared trace at the
         intermittent frequency and the double intermittent frequency. Uses
         IQDownconversionCalibrationResult.apply to shift offsets, phase and
         amplitudes.
@@ -226,7 +226,7 @@ class IQDownconversionCalibrator:
         self._trigger_period = trigger_period
         if_freq = upconv_cal.get_if_frequency()
 
-        # output calibrating signal
+        # output calibrating trace
         self._iqawg.set_parameters({"calibration": upconv_cal})
         self._iqawg.output_IQ_waves_from_calibration(
             trigger_sync_every=self._trigger_period,

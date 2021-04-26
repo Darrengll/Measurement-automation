@@ -62,7 +62,7 @@ class DirectRabiChevrons(DirectRabiBase):
         # IF frequency where frequency shift is counted from
         self._central_if_freq = None
         # downconvertion frequency should be changed according to IF
-        # frequency change in order to exctract RF signal at qubit frequency
+        # frequency change in order to exctract RF trace at qubit frequency
         # no matter the freq_shift value
         self._downconv_freq = None
 

@@ -346,7 +346,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
     def _measure_one_trace(self):
         """
         Function starts digitizer measurement.
-        Digitizer assumed already configured and waiting for start signal.
+        Digitizer assumed already configured and waiting for start trace.
 
         Returns
         -------
@@ -357,7 +357,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         """
         dig = self._dig[0]
         dig_data = dig.measure()
-        # construct complex valued scalar signal
+        # construct complex valued scalar trace
         data = dig_data[0::2] + 1j * dig_data[1::2]
         '''
         In order to allow digitizer to don't miss very next 
@@ -365,7 +365,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         the trigger period, acquisition window is shrank
         by 'self.__pause_in_samples_before_trigger' samples.
         In order to obtain data of the desired length the code below extends
-        signal to the requested length by appending averages to each 
+        trace to the requested length by appending averages to each 
         corresponding segment.
         Note: adding averages to an array does not changes its average value.
         TODO: check previous note statement (someone but Shamil).
@@ -467,7 +467,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
                 target_interval
             )
 
-            # the rest of the signal is equalized to the average value
+            # the rest of the trace is equalized to the average value
             trace[np.logical_not(sampling_points_mask)] = np.mean(
                 trace[sampling_points_mask])
 
@@ -475,7 +475,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
     def data_cutting_config(self, cut=True, cut_pulses=False, padding=2):
         """
-        Sets whether or not to exclude noisy signal from the measured traces.
+        Sets whether or not to exclude noisy trace from the measured traces.
         Every point that is excluded (e.g. it belongs to pulses interval or
         values beyond readout interval are set to be equal to the mean value
          of that trace)
@@ -489,7 +489,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             Pulse interval and readout values will stay untouched.
 
         cut_pulses : bool
-            If True pulse intervals will be set to signal average as well.
+            If True pulse intervals will be set to trace average as well.
             Only readout data will remain untouched.
 
         padding : int
@@ -527,7 +527,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
         # not working somehow, but rearming time
         # equals'80 + pretrigger' samples
         # maybe due to the fact that some extra values are sampled at the end
-        # of the signal in order to make 'segment_size' in samples to be
+        # of the trace in order to make 'segment_size' in samples to be
         # dividable by 32 as required by digitizer
 
         self._n_samples_to_drop_in_end =\
@@ -560,17 +560,17 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
             self.seqs = seqs
 
         for (seq, q_iqawg) in zip(seqs['q_seqs'], self._q_iqawg):
-            # check if output signal length is dividable by awg's output
+            # check if output trace length is dividable by awg's output
             # trigger clock period
             # TODO: The following lines are moved to the KeysightM3202A
             #  driver. Should be deleted later from here
             # if seq.get_duration() % \
-            #         q_iqawg._channels[0]._host_awg.trigger_clock_period != 0:
+            #         q_iqawg._channels[0].host_awg.trigger_clock_period != 0:
             #     raise ValueError(
             #         "AWG output duration has to be multiple of the AWG's "
             #         "trigger clock period\n"
             #         f"requested waveform duration: {seq.get_duration()} ns\n"
-            #         f"trigger clock period: {q_iqawg._channels[0]._host_awg.trigger_clock_period}"
+            #         f"trigger clock period: {q_iqawg._channels[0].host_awg.trigger_clock_period}"
             #     )
             q_iqawg.output_pulse_sequence(seq)
 
@@ -1334,7 +1334,7 @@ class WMPulseBuilder(IQPulseBuilder):
         delta_freq: int, Hz
             The shift of two sidebands from the central frequency. Ought to be > 0 Hz
         phase: float, rad
-            Adds a relative phase to the outputted signal.
+            Adds a relative phase to the outputted trace.
         amplitude: float
             Calibration if_amplitudes will be scaled by the
             amplitude_value.

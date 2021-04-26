@@ -42,7 +42,7 @@ class SPCM_TRIGGER(str, Enum):
 class ADCParameters:
     def __init__(self, mode, oversampling_factor, channels, ch_amplitude,
                  dur_seg, trigger_source,
-                 n_seg, n_avg, digitizer_delay):
+                 n_seg, n_avg, digitizer_delay, pretrigger):
         """
         Class that contains only field and represents ADC parameters.
 
@@ -69,6 +69,8 @@ class ADCParameters:
         digitizer_delay : float
             delay of digitizer acquisitiion start after a trigger has been
             received
+        pretrigger : int
+            dividable by 32 and at least 32. See user manual for detailed info.
         """
         self.oversampling_factor = oversampling_factor
         self.channels = channels
@@ -79,6 +81,11 @@ class ADCParameters:
         self.n_avg = n_avg
         self.trigger_source = trigger_source
         self.digitizer_delay = digitizer_delay
+        self.pretrigger = pretrigger
+
+    def toJSON(self):
+        report_dict = self.__dict__
+        return report_dict
 
 
 class SPCM:
@@ -104,12 +111,13 @@ class SPCM:
         self._trigger_mode = SPC_TM_POS  # | SPC_TM_REARM
         self._trig_term = 0
         self._trig_acdc = 0
-        self._trig_level0 = 700  # mV
-        self._trig_level1 = 1000  # mV
+        self._trig_level0 = 500  # mV
+        self._trig_level1 = 700  # mV
+
         # how many samples to drop at the start due to the fact that
         # trace length has to be multiple of 32 (to exclude pretrigger values)
         self._n_samples_to_drop_by_delay: int = 0  #
-        # how many samples to drop in end due to the fact that
+        # how many samples to drop in the end end due to the fact that
         # trace length has to be multiple of 32
         self._n_samples_to_drop_in_end: int = 0
 
@@ -153,7 +161,7 @@ class SPCM:
         if isinstance(parameters, dict):
             pars_dict = parameters
         elif isinstance(parameters, ADCParameters):
-            pars_dict = ADCParameters.__dict__
+            pars_dict = parameters.__dict__
 
         if "oversampling_factor" in pars_dict:
             self.set_oversampling_factor(pars_dict["oversampling_factor"])
@@ -442,7 +450,7 @@ class SPCM:
 
         If pretrigger and timedelay values in samples of the digitizer are
         not dividable by 32, additional values will be acquired by the card
-        at the beginning of the signal in order to make the whole acquired
+        at the beginning of the trace in order to make the whole acquired
         samples number dividable by 32. The number of additional values is:
         (self.delay_in_samples + pretrigger_in_samples + 32) % 32
 
@@ -452,7 +460,7 @@ class SPCM:
             Requested acquisition trigger delay in ns. This value is
             recommended to be in range [t0 , t0 + dt), where:
                 dt - digitizer sampling period
-                t0 - first moment before signal start time
+                t0 - first moment before trace start time
                     that is multiple of dt. This sampling moment will be
                     included into the measured trace.
             and as close as possible to t0 + dt.
@@ -479,7 +487,7 @@ class SPCM:
         # trace due to delay.
         # Calculation principle:
         # first acquired point will be at least
-        # 0 < tau <= dt before the signal is expected to start - t0 + dt
+        # 0 < tau <= dt before the trace is expected to start - t0 + dt
         # t0 is included into the trace
         self._n_samples_to_drop_by_delay = \
             int(requested_delay_in_samples - self.delay_in_samples) - 1
@@ -492,7 +500,7 @@ class SPCM:
         # into acquisition trace and dropped in software from the beginning
         # of the trace after acquisition
 
-        # hardware will delay trigger signal on delay_in_samples duration
+        # hardware will delay trigger trace on delay_in_samples duration
         self.set_trigger_delay(self.delay_in_samples)
 
     def calc_segment_size(self, dur_seg_ns=None, decrease_segment_size_by=0):
@@ -545,12 +553,12 @@ class SPCM:
         # GIVES DIFFERENT RESULTS FOR THE DROP IN END IF dur_seg_ns = 40000.0
         # the latter is fore accurate
 
-        # extending requested signal length to the multiple of 32 and bigger
+        # extending requested trace length to the multiple of 32 and bigger
         # the the requested segment
         self._segment_size = int((requested_segment_size_samples//32 + 1)*32)
 
         # calculate and memorize how many samples to drop from trace at the end
-        # `-1` is included to get the terminating point of signal
+        # `-1` is included to get the terminating point of trace
         # (in case when `decrease_segment_size_by == 0`
         self._n_samples_to_drop_in_end = \
             int(self._segment_size - requested_segment_size_samples) - 1
@@ -574,7 +582,7 @@ class SPCM:
         return self._segment_size
 
     def get_how_many_samples_to_drop_in_front(self):
-        # we are starting acquisition earlier than the signal is expected
+        # we are starting acquisition earlier than the trace is expected
         # because
         # so we need to drop excessive samples at the start
         return self._n_samples_to_drop_by_delay
@@ -757,8 +765,8 @@ class SPCM:
         if type(channels) is int:
             channels = [channels]
 
-        posttrigger_mem = memsize - pretrigger  # memory allocated for a signal after the trigger
-        # measure the signal and save in the card memory
+        posttrigger_mem = memsize - pretrigger  # memory allocated for a trace after the trigger
+        # measure the trace and save in the card memory
         self.setup_SSA(memsize,
                        posttrigger_mem)
         self.setup_channels(channels, ampl)
@@ -908,7 +916,12 @@ class SPCM:
         other, i.e. A0B0A1B1A2B2...ANBN
         """
         self.start_card()
-        self.wait_for_card()  # wait till the end of a measurement
+        try:
+            self.wait_for_card()  # wait till the end of a measurement
+        except KeyboardInterrupt:
+            self.stop_card()
+            print("Card was interrupted")
+            return None
         data = self.obtain_data()  # download data from the card
         # convertion to mV is according to
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf
@@ -1116,7 +1129,7 @@ class SPCM:
 
         freq = self.get_sample_rate()  # Hz
         segment_size_optimal = int(time_until / 1e9 * freq)
-        # completing requested signal length to the multiple of 32
+        # completing requested trace length to the multiple of 32
         segment_size = segment_size_optimal + 32 - segment_size_optimal % 32
         data = self.measure_averaging_mode(channels, ampl, n_seg, segment_size,
                                            pretrigger, num_averages)

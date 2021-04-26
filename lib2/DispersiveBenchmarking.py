@@ -90,7 +90,7 @@ class DispersiveRandomizedInterleavedBenchmarkingResult(VNATimeResolvedDispersiv
 
         for idx, name in enumerate(self._data_formats.keys()):
             ax = axes[name]
-            ax.clear()
+            ax.reset()
 
             for is_interleaved in range(0, 2):
                 for subseq_idx in range(Y_3D_raw.shape[0]):

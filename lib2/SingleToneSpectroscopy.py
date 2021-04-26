@@ -39,10 +39,10 @@ sts_res.save()
 """
 import numpy as np
 from scipy import fftpack
-
-from lib2.MeasurementResult import *
+import matplotlib.pyplot as plt
+from lib2.MeasurementResult import MeasurementResult, ContextBase
 from matplotlib import colorbar
-from lib2.Measurement import *
+from lib2.Measurement import Measurement
 from time import sleep
 
 from lib2.directMeasurements.digitizerTimeResolvedDirectMeasurement import DigitizerTimeResolvedDirectMeasurement
@@ -59,8 +59,8 @@ class SingleToneSpectroscopy(Measurement):
         For internal aliases/classes see Measurement._devs_dict dictionary in lib2/Measurement.py
     """
 
-    def __init__(self, name, sample_name, plot_update_interval=5, vna=[],
-                 src=[]):
+    def __init__(self, name, sample_name, plot_update_interval=5, vna=None,
+                 src=None):
         """
 
         Parameters
@@ -231,14 +231,10 @@ class SingleToneSpectroscopyResult(MeasurementResult):
             return
 
         X, Y, Z = self._prepare_data_for_plot(data)
-        if self._unwrap_phase:
-            phases = abs(angle(Z).T)
-        else:
-            Z_ravelled = Z.ravel()
-            Z = unwrap(angle(Z))
+        phases = abs(np.angle(Z).T)
 
         phases[Z.T == 0] = 0
-        phases = phases if self._phase_units == "rad" else phases * 180 / pi
+        phases = phases if self._phase_units == "rad" else phases * 180 / np.pi
 
         if self._plot_limits_fixed is False:
             self.max_abs = max(abs(Z)[abs(Z) != 0])
@@ -293,10 +289,10 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         return copy
 
     def _remove_delay(self, frequencies, s_data):
-        phases = unwrap(angle(s_data))
-        k, b = polyfit(frequencies, phases[0], 1)
+        phases = np.unwrap(np.angle(s_data))
+        k, b = np.polyfit(frequencies, phases[0], 1)
         phases = phases - k * frequencies - b
-        corr_s_data = abs(s_data) * exp(1j * phases)
+        corr_s_data = abs(s_data) * np.exp(1j * phases)
         corr_s_data[abs(corr_s_data) < 1e-14] = 0
         return corr_s_data
 
@@ -315,7 +311,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         len_freq = s_data.shape[1]
         len_cur = s_data.shape[0]
         if direction is "avg_cur":
-            avg = zeros(len_freq, dtype=complex)
+            avg = np.zeros(len_freq, dtype=complex)
             for j in range(len_freq):
                 counter_av = 0
                 for i in range(len_cur):
@@ -325,7 +321,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
                 avg[j] = avg[j] / counter_av
                 s_data[:, j] = s_data[:, j] / avg[j]
         elif direction is "avg_freq":
-            avg = zeros(len_cur, dtype=complex)
+            avg = np.zeros(len_cur, dtype=complex)
             for j in range(len_cur):
                 counter_av = 0
                 for i in range(len_freq):
@@ -387,7 +383,7 @@ class SingleToneSpectroscopy2(DigitizerTimeResolvedDirectMeasurement):
             "radiation_parameters": self._q_iqawg[0]._calibration.get_radiation_parameters(),
             "pulse_sequence_parameters": None
         })
-        self._frequencies = linspace(*freq_limits, nop)
+        self._frequencies = np.linspace(*freq_limits, nop)
         self._rf_generator_delay = dev_params["q_lo"][0]["frequency_switching_delay"]
         self._Nfft = fftpack.next_fast_len(self._dig._segment_size)
         self._iqawg_sequence = self._q_iqawg.get_pulse_builder().add_sine_pulse(int(self._Nfft / 1e9)).build()

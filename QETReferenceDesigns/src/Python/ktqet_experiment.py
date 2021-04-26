@@ -265,7 +265,7 @@ class KtQetExperiment(object):
         Begins the currently loaded HVI sequence and waits for the 
         signaling 'HVI done register' to be set by the HVI sequence
         :param hvi_done_register_module: The SD_Module object that 
-        contains the register used as a flag to signal that the
+        contains the register used as a flag to trace that the
         HVI sequence has finished.
         :param hvi_done_register_name: The name of the register 
         (defined in HVI project) that signals the completion of

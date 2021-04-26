@@ -47,11 +47,11 @@ class ContextBase():
                 if hasattr(obj, "toJSON"):
                     return obj.toJSON()
                 if isinstance(obj, np.ndarray) or \
-                        isinstance(obj, datetime.datetime):
+                        isinstance(obj, datetime.datetime) or \
+                        isinstance(obj, np.int32):
                     return obj.__str__()
                 else:
                     return json.JSONEncoder.default(self, obj)
-
         def nice_dict(d):
             return json.dumps(d, indent=4, cls=Encoder)
 

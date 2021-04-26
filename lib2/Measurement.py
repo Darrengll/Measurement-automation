@@ -20,6 +20,8 @@ from lib2.GlobalParameters import *
 
 from typing import Dict, Tuple, List
 
+import copy
+
 
 class Measurement:
     """
@@ -49,7 +51,7 @@ class Measurement:
     'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
     'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
     'vna4': [["ZNB"], [znb, "Znb"]],
-    'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
+    'exa': [["EXA"], [agilent_EXA, "Agilent_EXA_N9010A"]],
     'exg': [["EXG"], [E8257D, "EXG"]],
     'psg2': [['PSG'], [E8257D, "EXG"]],
     'mxg': [["MXG"], [E8257D, "MXG"]],
@@ -360,11 +362,25 @@ class Measurement:
         measurement_data["data"] = self._raw_data
         return measurement_data
 
-    def _detect_resonator(self, plot=False, tries_number=3):
+    def _detect_resonator(self, plot=False, vna_params=None, tries_number=3):
         """
-        Finds frequency of the resonator visible on the VNA screen
+
+        Parameters
+        ----------
+        plot
+        vna_params : Dict[str,any]
+        tries_number
+
+        Returns
+        -------
+
         """
         vna = self._vna[0]
+        if vna_params is not None:
+            vna.set_parameters(vna_params)
+            vna_params_stashed = copy.deepcopy(vna.get_parameters())
+            vna.set_output_state("ON")
+
         init_averages = vna.get_averages()
         for i in range(1, tries_number+1):
             vna.set_averages(init_averages*i)
@@ -382,9 +398,11 @@ class Measurement:
                 break
             else:
                 print("\rFit was inaccurate (try #%d), retrying" % i, end="")
-        # if result is None:
-        # print(frequencies, sdata)
-        vna.set_averages(init_averages)
+
+        # restore VNA's original parameters
+        if vna_params is not None:
+            vna.set_parameters(vna_params_stashed)
+            vna.set_output_state("OFF")
         return result
 
     def _detect_qubit(self):

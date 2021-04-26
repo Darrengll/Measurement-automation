@@ -244,9 +244,10 @@ class DigVNAResult(MeasurementResult):
 
     def _prepare_data_for_plot(self, data):
         sdata = data["data"]
-        amps = 20*np.log10(np.abs(sdata))
+        # logarithm of power magnitude (absolute value).
+        logM_power = 20*np.log10(np.abs(sdata))
         degs = self._unwrapped_phase(sdata)
-        return amps, degs, data["Frequency [Hz]"]
+        return logM_power, degs, data["Frequency [Hz]"]
 
     def _unwrapped_phase(self, sdata):
         try:
@@ -256,9 +257,3 @@ class DigVNAResult(MeasurementResult):
         except Exception as e:
             print("Exception occured in digVnaResult._unwrapped_phase()", flush=True)
             return np.angle(sdata)
-
-
-
-
-
-

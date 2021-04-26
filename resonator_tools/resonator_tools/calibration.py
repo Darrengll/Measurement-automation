@@ -26,7 +26,7 @@ class calibration(object):
 		http://stackoverflow.com/questions/29156532/python-baseline-correction-library
 		"There are two parameters: p for asymmetry and lambda for smoothness. Both have to be
 		tuned to the data at hand. We found that generally 0.001<=p<=0.1 is a good choice
-		(for a signal with positive peaks) and 10e2<=lambda<=10e9, but exceptions may occur."
+		(for a trace with positive peaks) and 10e2<=lambda<=10e9, but exceptions may occur."
 		'''
 		L = len(y)
 		D = sparse.csc_matrix(np.diff(np.eye(L), 2))

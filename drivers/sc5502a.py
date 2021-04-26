@@ -26,7 +26,7 @@ class SC5502A():
             self._ext_ref_lock = 1   # Bit  0  enables  (1) or disables(0) the
             # device  to  phase-lock  to  an  external  source
             self._ext_ref_output = 1   # Bit  1  enables (1) or  disables  (0)
-            # the  output  reference  signal,
+            # the  output  reference  trace,
             self._ext_ref_100Mhz = 0   # Bit 2 selects whether the output
             # reference
             # signalis 10 MHz (0) or  100  MHz  (1)
@@ -38,7 +38,7 @@ class SC5502A():
             self._ext_ref_lock = 1   # Bit  0  enables  (1) or disables(0) the
             # device  to  phase-lock  to  an  external  source
             self._ext_ref_output = 0   # Bit  1  enables (1) or  disables  (0)
-            # the  output  reference  signal,
+            # the  output  reference  trace,
             self._ext_ref_100Mhz = 0   # Bit 2 selects whether the output
             # reference
             # signalis 10 MHz (0) or  100  MHz  (1)

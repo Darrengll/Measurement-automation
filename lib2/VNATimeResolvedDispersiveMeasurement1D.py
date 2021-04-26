@@ -196,7 +196,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
             Y = Y[Y != 0]
             ax = axes[name]
             if self._lines[idx] is None or not self._dynamic:
-                ax.clear()
+                # ax.reset()
                 ax.grid()
                 ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
                 self._lines[idx], = ax.plot(X[:len(Y)], Y, "C%d" % idx, ls=":", marker="o",

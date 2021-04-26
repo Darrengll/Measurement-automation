@@ -100,7 +100,7 @@ class DispersiveAPEResult(VNATimeResolvedDispersiveMeasurementResult):
         pseudo_I_pulses_counts, ramsey_angles, data = \
             self._prepare_data_for_plot(data)
         for ax in axes:
-            ax.clear()
+            ax.reset()
             ax.grid()
         axes[0].ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
         axes[1].ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))

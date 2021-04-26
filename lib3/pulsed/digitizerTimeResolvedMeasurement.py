@@ -1,4 +1,6 @@
+import copy
 from enum import Enum, auto
+from itertools import chain
 
 from lib2.DispersivePiPulseAmplitudeCalibration import DispersivePiPulseAmplitudeCalibrationResult
 from lib2.Measurement import Measurement
@@ -10,28 +12,42 @@ import inspect
 import lib2.IQPulseSequence
 from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
 from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
-from drivers.IQAWG import IQAWG
+from drivers.IQAWG import IQAWG, AWGChannel
 from drivers.E8257D import MXG
+from drivers.Yokogawa_GS200 import Yokogawa_GS210
+from drivers.agilent_PNA_L import Agilent_PNA_L
 
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 reload(lib2.IQPulseSequence)
 from lib2.IQPulseSequence import IQPulseBuilder
 
 
-class DigitizerPowerMeasurement(Measurement):
-    """
-    Measurement of average trace power, power density or optical tomography
-    implementing the Multiple Recording mode of a digitizer
-    """
+def _default_args2dict():
+    print(inspect.stack()[0])
 
+class DigitizerTimeResolvedMeasurement(Measurement):
+    """
+    Class is designed as a base class for measurements of both qubit-in-line
+    and resonator involved dispersive readout.
+
+    Child classes need only:
+    1. set `self._sequence_generator` with function from IQPulseBuilder
+    2. implement `self.get_longest_pulse_duration()`
+    3. implement `init_measurement_result` with MeasurementResult child for
+    suitable data visualization.
+    """
     def __init__(self, name, sample_name, devs_aliases_map,
                  plot_update_interval=1, save_traces=False):
 
         # mandatory names for devices:
-        self._q_iqawg: list[IQAWG] = None
-        self._q_lo: list[MXG] = None
-        self._dig: list[SPCM] = None
+        self._q_iqawg: List[IQAWG] = []
+        self._ro_iqawg: List[IQAWG] = []
+        self._q_lo: List[MXG] = []
+        self._ro_lo: List[MXG] = []
+        self._dig: List[SPCM] = []
+        self._src: List[Union[Yokogawa_GS210,AWGChannel]] = []
+        self._vna: List[Agilent_PNA_L] = []
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval=plot_update_interval)
         self._sequence_generator = None
@@ -43,70 +59,167 @@ class DigitizerPowerMeasurement(Measurement):
         self._pulse_sequence_parameters: Dict[Union[str, int, float]] = \
             {"modulating_window": "rectangular", "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
+        self._down_conversion_calibration = None
+        self._ifft_mul = -1
 
-        # for debug purposes
-        self.dataIQ = []
+        # ADC trace fourier component frequency [Hz]
+        self._downconv_freq = None
+        self._ro_separate_line = False
+        self._ro_freq = None
+        # qubit frequency in case `self._ro_separate_line` is False
+        # resonator frequency otherwise
+
+        ''' DEBUG '''
+        # if 'True' all traces will be saved in 'dataI' and 'dataQ' for
+        # further manual investigation
+        self._output_ro_signal = True
         self._save_traces = save_traces
+        self.dataIQ = []  # `dataI + 1j*dataQ` traces
 
-    def set_fixed_parameters(self, pulse_sequence_parameters, q_lo_params=[],
-                             q_iqawg_params=[], dig_params=[]):
+        # measurement result
+        self._init_measurement_result()
+
+    def set_fixed_parameters(
+            self,
+            pulse_sequence_parameters, flux_src_point,
+            down_conversion_calibration=None,
+            q_iqawg_params=None, ro_iqawg_params=None,
+            dig_params=None, detect_ro_freq=False,
+            ro_freq_detection_params=None,
+            q_freq=None, output_ro_signal=True
+    ):
         """
-        :param dev_params:
-            Minimum expected keys and elements expected in each:
-                'vna': 0
-                'q_iqawg': 0
-                'ro_awg': 0
 
         Parameters
         ----------
-        pulse_sequence_parameters
+        pulse_sequence_parameters : Dict[str, Any]
+        down_conversion_calibration : Any
+        q_iqawg_params : list[dict[str, Any]]
+        ro_iqawg_params : List[Dict[str,Any]
+        dig_params : List[dict[str, Any]]
+        detect_ro_freq : bool
+            Whether to fit readout line transmission coefficient with
+            `resonator_tools` to get good estimation of quantum system's
+            level difference.
+        ro_freq_detection_params : List[Dict[str, Any]]
+            Parameters for device that is responsible for readout frequency
+            detection.
+        q_freq : float
+            qubit frequency in Hz.
+
+        Returns
+        -------
+        None
 
         Notes
         ----------
         If digitizer 'mode' and 'trigger_source' are absent they
         are set to 'averaging' and 'EXT0' respectively
         """
+        self._output_ro_signal = output_ro_signal
+        if q_iqawg_params is None:
+            q_iqawg_params = []
+        else:
+            q_iqawg_params = copy.deepcopy(q_iqawg_params)
 
-        # LO source initialization
-        q_lo_params[0]["power"] = q_iqawg_params[0]["calibration"] \
-            .get_radiation_parameters()["lo_power"]
-        self._q_lo[0].set_output_state("ON")
+        if ro_iqawg_params is None:
+            ro_iqawg_params = []
+            self._ro_separate_line = False
+        else:
+            ro_iqawg_params = copy.deepcopy(ro_iqawg_params)
+            self._ro_separate_line = True
+        if dig_params is None:
+            dig_params = []
+        else:
+            dig_params = copy.deepcopy(dig_params)
+            print(dig_params)
+
+        calibration_q = q_iqawg_params[0]["calibration"]
+        if self._ro_separate_line:
+            calibration_ro = ro_iqawg_params[0]["calibration"]
+        else:  # if there is no readout channel
+            calibration_ro = None
+
+        # setting flux source to the point of interest
+        self._src[0].set_current(flux_src_point)
+        # detecting readout frequency
+        if detect_ro_freq:
+            # fit resonator at given VNA power
+            for lo_src in chain(self._q_lo, self._ro_lo):
+                lo_src.set_output_state("OFF")
+            msg = "Detecting a resonator within provided frequency range of the VNA %s \
+                            " % (str(ro_freq_detection_params["freq_limits"]))
+            print(ro_freq_detection_params)
+            res_freq, res_amp, res_phase = self._detect_resonator(
+                plot=True, vna_params=ro_freq_detection_params
+            )
+            self._ro_freq = res_freq
+
+            # calibrate readout frequency
+            if self._ro_freq is not None:
+                # name alias for brievity
+                ro_cal = ro_iqawg_params[0]["calibration"]
+                m = 1 if ro_cal._sideband_to_maintain == "left" else -1
+                ro_cal._lo_frequency = self._ro_freq + m * ro_cal._if_frequency
+            print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
+                res_freq / 1e9, res_amp * 1e3, res_phase / np.pi * 180))
+
+        # refining qubit excitation frequency if passed as argument
+        if q_freq is not None:
+            q_cal = q_iqawg_params[0]["calibration"]  # name alias for brievity
+            m = 1 if q_cal._sideband_to_maintain == "left" else -1
+            q_cal._lo_frequency = q_freq + m*q_cal._if_frequency
+        else:
+            raise NotImplementedError
+
+        for lo_src, iqawg_params in chain(zip(self._q_lo, q_iqawg_params),
+                                         zip(self._ro_lo, ro_iqawg_params)):
+            calib = iqawg_params["calibration"]
+            lo_src.set_frequency(calib._lo_frequency)
+            lo_src.set_power(calib._lo_power)
+            lo_src.set_output_state("ON")
 
         # store sequence parameters for further usage
         self._pulse_sequence_parameters.update(pulse_sequence_parameters)
+        self._down_conversion_calibration = down_conversion_calibration
 
-        # check of the repetition period in order to verify if it is
-        # dividable by both AWG and digitizer clocks.
-        period = self._pulse_sequence_parameters["repetition_period"]  # ns
-        n = 1
-        if "periods_per_segment" in self._pulse_sequence_parameters:
-            n = self._pulse_sequence_parameters["periods_per_segment"]
-        # check if dividable by digitizer clock
-        if n * period % 0.8 != 0 and n * period % 1 != 0:
-            raise ValueError("Duration of a segment must be an integer "
-                             "number of samples for both AWG and digitizer "
-                             "sample rates")
+        self._downconv_freq = calibration_q._if_frequency
+        if self._ro_separate_line is not None:
+            # if there is separate readout channel
+            self._downconv_freq = calibration_ro._if_frequency
 
-        # convert dict with parameters into form that is demanded by
-        # 'super().set_fixed_parameters()'
-        dev_params = {"q_lo": q_lo_params,
-                      "q_iqawg": q_iqawg_params,
+        # TODO: make check of the repetition period.
+        #  in order to verify if it is dividable by both AWG and digitizer clocks.
+
+        # convert dict with parameters into form that is demanded by 'super().set_fixed_parameters()'
+        dev_params = {"q_iqawg": q_iqawg_params,
+                      "ro_iqawg": ro_iqawg_params,
                       "dig": dig_params}
-        # for all child experiments this parameters are default for
-        # digitizer acquisition mode
-        if "mode" not in dig_params[0]:
-            dig_params[0]["mode"] = SPCM_MODE.MULTIMODE
-        if "trig_source" not in dig_params:
-            dig_params[0]["trig_source"] = SPCM_TRIGGER.EXT0
 
         super().set_fixed_parameters(**dev_params)
+        # initialize 'self._measurement_result' that is specific for particular child class
         self._measurement_result.get_context().update({
-            "calibration_results": self._q_iqawg[0]._calibration.get_optimization_results(),
-            "radiation_parameters": self._q_iqawg[0]._calibration.get_radiation_parameters(),
+            "calibration_results": calibration_q.get_optimization_results(),
+            "radiation_parameters": calibration_q.get_radiation_parameters(),
             "pulse_sequence_parameters": pulse_sequence_parameters
         })
 
-    # Andrei: I do not think this function is needed, but I will leave it stay
+    def _init_measurement_result(self):
+        """
+        Pure virtual function that allows child classes to initialize
+        measurement_result attribute in a 'hook' fasion
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError
+
+    def set_swept_parameters(self, **swept_pars):
+        super().set_swept_parameters(**swept_pars)
+        self._pulse_sequence_parameters["longest_duration"] = \
+            self._get_longest_pulse_sequence_duration(self._pulse_sequence_parameters, self._swept_pars)
+
     def set_basis(self, basis):
         d_real, d_imag = self._calculate_basis_complex_amplitudes(basis)
         relation = d_real / d_imag
@@ -124,12 +237,6 @@ class DigitizerPowerMeasurement(Measurement):
             basis = (ground_state, excited_state)
 
         self._basis = basis
-
-    def set_swept_parameters(self, **swept_pars):
-        super().set_swept_parameters(**swept_pars)
-        # self._pulse_sequence_parameters["longest_duration"] = \
-        #     self._get_longest_pulse_sequence_duration(
-        #         self._pulse_sequence_parameters, self._swept_pars)
 
     def _get_longest_pulse_sequence_duration(self, pulse_sequence_parameters, swept_pars):
         """
@@ -197,9 +304,14 @@ class DigitizerPowerMeasurement(Measurement):
     def set_ult_calib(self, value=False):
         self._ult_calib = value
 
+    def set_ifft_mul(self, ifft_mul):
+        self._ifft_mul = ifft_mul
+
     def _single_measurement(self):
         dig = self._dig[0]
-        dig_data = dig.measure()  # data in mV
+        # digitizer measurement setup is already configured in
+        # 'self.set_fixed_parameters'
+        dig_data = dig.measure()
 
         # I channel data exctraction
         data_i = dig_data[0::2]
@@ -213,16 +325,29 @@ class DigitizerPowerMeasurement(Measurement):
         data_q = data_q[:, self._n_samples_to_drop_by_delay: -self._n_samples_to_drop_in_end]
         data_q = data_q.flatten()
 
-        freq = np.fft.fftfreq(len(data_i), d=1/self._dig[0].get_sample_rate())
-        freq = np.fft.fftshift(freq)
-        signal = np.fft.fftshift(np.fft.fft(data_i + 1j * data_q))
-        # next row can be optimized with np.searchsorted and 2 comparisons with nearest elements
-        idx = np.argmin(np.abs(freq - (self._q_iqawg[0]._calibration._if_frequency)))
-        IQ = signal[idx] / len(data_i)
-
+        data = data_i + 1j * data_q
         # save full data in case of more detailed investigation
         if self._save_traces:
-            self.dataIQ.append(data_i + 1j*data_q)
+            self.dataIQ.append(data)
+
+        if self._down_conversion_calibration is not None:
+            data = self._down_conversion_calibration.apply(data)
+
+        # exctacting Fourier component that exactly matches
+        # 'self._downconv_freq' (because if use FFT, frequency mesh may not
+        # exactly coincide with desired 'self._downconv_freq'
+        dt = 1/self._dig[0].get_sample_rate()  # sec
+        t = np.linspace(0, data.shape[-1]*dt, data.shape[-1], endpoint=False)
+
+        IQ = np.dot(
+            data,
+            np.exp(
+                self._ifft_mul * 2 * np.pi * 1j * self._downconv_freq * t
+            )
+        )
+
+        # normalizing DFT
+        IQ /= len(data)
 
         return IQ
 
@@ -245,9 +370,6 @@ class DigitizerPowerMeasurement(Measurement):
             p_i = (np.imag(mean_data) - np.imag(basis[0])) / (np.imag(basis[1]) - np.imag(basis[0]))
             return p_r + 1j * p_i
 
-    def _raise_to_the_square(self):
-        pass
-
     def _output_zero_sequence(self):
         """
         Closes input mixer and force AWG to continue generate trigger
@@ -263,17 +385,16 @@ class DigitizerPowerMeasurement(Measurement):
         Change is introduced on 16.03.2020 by Shamil
         """
         self._q_iqawg[0].output_zero(
-            trigger_every_period=True,
-            repetition_period_ns=self._pulse_sequence_parameters["repetition_period"]
+            trigger_sync_every=self._pulse_sequence_parameters[
+                "repetition_period"]
         )
 
     def _output_pulse_sequence(self, zero=False):
         # update a trigger delay of the digitizer
         dig = self._dig[0]
         # longest_duration
-        timedelay = self._pulse_sequence_parameters["start_delay"] + \
-                    self._pulse_sequence_parameters["longest_duration"] + \
-                    self._pulse_sequence_parameters["digitizer_delay"]
+        timedelay = self._pulse_sequence_parameters["digitizer_delay"]  #
+        # TODO: take `digitizer_delay` from digitizer class
         dig.calc_and_set_trigger_delay(timedelay, include_pretrigger=True)  # update how many samples drop in front
         self._n_samples_to_drop_by_delay = dig.get_how_many_samples_to_drop_in_front()
         dig.calc_segment_size()  # updates how many to drop in the end
@@ -289,6 +410,7 @@ class DigitizerPowerMeasurement(Measurement):
         # print("drop in end: {:.3f} ns".format(dig._n_samples_to_drop_in_end * ns_in_sample))
 
         q_pbs = [q_iqawg.get_pulse_builder() for q_iqawg in self._q_iqawg]
+        ro_pbs = [ro_iqawg.get_pulse_builder() for ro_iqawg in self._ro_iqawg]
 
         # TODO: 'and (self._q_z_awg[0] is not None)'  hotfix by Shamil (below)
         # I intend to declare all possible device attributes of the measurement class in it's child class definitions.
@@ -300,18 +422,22 @@ class DigitizerPowerMeasurement(Measurement):
             q_z_pbs = [None]
 
         pbs = {'q_pbs': q_pbs,
+               'ro_pbs': ro_pbs,
                'q_z_pbs': q_z_pbs}
 
         if not zero:
             seqs = self._sequence_generator(self._pulse_sequence_parameters, **pbs)
         else:
-            seqs = self._sequence_generator(self._pulse_sequence_parameters, **pbs)
-
-        global global_seq
-        global_seq = seqs["q_seqs"][0]
+            seqs = self._sequence_generator(self._pulse_sequence_parameters,
+                                            **pbs)
 
         for (seq, dev) in zip(seqs['q_seqs'], self._q_iqawg):
             dev.output_pulse_sequence(seq)
+
+        if 'ro_seqs' in seqs.keys():
+            for (seq, dev) in zip(seqs['ro_seqs'], self._ro_iqawg):
+                dev.output_pulse_sequence(seq)
+
         if 'q_z_seqs' in seqs.keys():
             for (seq, dev) in zip(seqs['q_z_seqs'], self._q_z_awg):
                 dev.output_pulse_sequence(seq, asynchronous=False)

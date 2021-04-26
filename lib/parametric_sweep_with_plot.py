@@ -10,10 +10,10 @@ import traceback as tb
 
 def update_2D_plot(X, Y, data, ax_amps, ax_phas, cax_amps, cax_phas):
 	XX, YY = np.meshgrid(X, Y)
-	ax_amps.clear()
-	ax_phas.clear()
-	cax_amps.clear()
-	cax_phas.clear()
+	ax_amps.reset()
+	ax_phas.reset()
+	cax_amps.reset()
+	cax_phas.reset()
 	amps_map = ax_amps.pcolormesh(XX, YY, np.real(data[0].T), vmax=np.real(np.max(data[0][data[0]!=1j])), vmin=np.real(np.min(data[0][data[0]!=1j])), cmap="RdBu_r")
 	plt.colorbar(amps_map, cax = cax_amps)
 	recorded_phas_data = np.unwrap(np.unwrap(np.real(data[1][data[1]!=1j])).T)

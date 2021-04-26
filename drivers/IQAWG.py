@@ -232,7 +232,7 @@ class IQAWG():
         Parameters
         ----------
         modulation_amp : float
-            amplitude of the modulation signal
+            amplitude of the modulation trace
             G * AWG(t) * carrier_signal(t)
             G = 'modulation_amp'
             AWG(t) - normalized such that max(abs(AWG(t))) = 1
@@ -250,7 +250,7 @@ class IQAWG():
     def setup_AM_and_carrier_from_calibration(self, calibration=None, amp_coeffs=(1, 1)):
         """
         This function tells awg that it's output will be modulated and setups
-        carrier sine signal parameters based on calibration parameters.
+        carrier sine trace parameters based on calibration parameters.
         This function is used primarly by time domain measurement classes that utilize sine
         function generator feature of the AWG. This function is called by them during
         'set_fixed_parameters'.
@@ -266,8 +266,8 @@ class IQAWG():
         calibration : IQCalibrationData
             Overwrites 'self._calibration' if provided
         amp_coeffs : tuple[float]
-            Multipliers for carrier signal amplitude
-            Used to tune the power of the output signal
+            Multipliers for carrier trace amplitude
+            Used to tune the power of the output trace
             that is roughly proportional to the this coefficients
 
         Returns
@@ -299,7 +299,7 @@ class IQAWG():
         # tell AWG that amplitude modulation is chosen
         awg.setup_modulation_amp(chanI, cal._if_amplitudes[0] * amp_coeffs[0])
         awg.setup_modulation_amp(chanQ, cal._if_amplitudes[1] * amp_coeffs[1])
-        # setup carrier signal according to calibration
+        # setup carrier trace according to calibration
         awg.setup_fg_sine(cal._if_frequency, 0,
                           cal._if_phase[0], cal._if_offsets[0], chanI)
         awg.setup_fg_sine(cal._if_frequency, 0,
@@ -316,7 +316,7 @@ class IQAWG():
 
         Example:
         --------
-        for required signal s(t) = A * cos(2*pi*f*t) * cos(2*pi*dfreq*t)
+        for required trace s(t) = A * cos(2*pi*f*t) * cos(2*pi*dfreq*t)
         Modulation should be
         A + G * AWG(t) = A * cos(2*pi*dfreq*t)
         G * AWG(t) = A * (cos(2*pi*dfreq*t) - 1)
@@ -332,7 +332,7 @@ class IQAWG():
         awg.synchronize_channels(chanI, chanQ)
 
         awg.stop_AWG(chanI)
-        awg.clear()
+        awg.reset()
         awg.setup_fg_sine(cal._if_frequency, 0,
                           cal._if_phase[0], cal._if_offsets[0], chanI)
         awg.setup_fg_sine(cal._if_frequency, 0,
@@ -392,7 +392,7 @@ class IQAWG():
         resolution = pulse_sequence.get_waveform_resolution()
         length = len(pulse_sequence.get_I_waveform())
         if self._triggered:
-            # this is made if 2 AWG is triggering another one and has the same signal period
+            # this is made if 2 AWG is triggering another one and has the same trace period
             duration = pulse_sequence.get_duration() - 1000 * resolution
             end_idx = length - 1000
         else:

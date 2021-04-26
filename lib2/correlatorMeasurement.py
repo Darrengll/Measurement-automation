@@ -141,7 +141,7 @@ class CorrelatorMeasurement(StimulatedEmission):
         # not working somehow, but rearming time
         # equals'80 + pretrigger' samples
         # maybe due to the fact that some extra values are sampled at the end
-        # of the signal in order to make 'segment_size' in samples to be
+        # of the trace in order to make 'segment_size' in samples to be
         # dividable by 32 as required by digitizer
 
         self._n_samples_to_drop_in_end =\
@@ -175,17 +175,17 @@ class CorrelatorMeasurement(StimulatedEmission):
             return
 
         for (seq, q_iqawg) in zip(seqs['q_seqs'], self._q_iqawg):
-            # check if output signal length is dividable by awg's output
+            # check if output trace length is dividable by awg's output
             # trigger clock period
             # TODO: The following lines are moved to the KeysightM3202A
             #  driver. Should be deleted later from here
             # if seq.get_duration() % \
-            #         q_iqawg._channels[0]._host_awg.trigger_clock_period != 0:
+            #         q_iqawg._channels[0].host_awg.trigger_clock_period != 0:
             #     raise ValueError(
             #         "AWG output duration has to be multiple of the AWG's "
             #         "trigger clock period\n"
             #         f"requested waveform duration: {seq.get_duration()} ns\n"
-            #         f"trigger clock period: {q_iqawg._channels[0]._host_awg.trigger_clock_period}"
+            #         f"trigger clock period: {q_iqawg._channels[0].host_awg.trigger_clock_period}"
             #     )
             q_iqawg.output_pulse_sequence(seq)
         if 'q_z_seqs' in seqs.keys():
@@ -219,7 +219,7 @@ class CorrelatorMeasurement(StimulatedEmission):
     def _measure_one_trace(self):
         """
         Function starts digitizer measurement.
-        Digitizer assumed already configured and waiting for start signal.
+        Digitizer assumed already configured and waiting for start trace.
 
         Returns
         -------
@@ -230,7 +230,7 @@ class CorrelatorMeasurement(StimulatedEmission):
         """
         dig = self._dig[0]
         dig_data = dig.measure()  # data in mV
-        # construct complex valued scalar signal
+        # construct complex valued scalar trace
         data = dig_data[0::2] + 1j * dig_data[1::2]
         '''
         In order to allow digitizer to don't miss very next 
@@ -290,7 +290,7 @@ class CorrelatorMeasurement(StimulatedEmission):
 
     def _recording_iteration(self):
         for i in tqdm.tqdm_notebook(range(self._iterations_number)):
-            # measuring signal
+            # measuring trace
             self._output_pulse_sequence()
             time, data = self._measure_one_trace()
             # measuring only noise
@@ -329,7 +329,7 @@ class CorrelatorMeasurement(StimulatedEmission):
                 self.avg_corr = np.zeros((trace_len, trace_len),
                                          dtype=np.clongdouble)
 
-            # processing data with signal applied
+            # processing data with trace applied
             avg_corrs = apply_along_axis(data, trace_len)
             # avg_corrs = np.apply_along_axis(
             #     lambda x: np.reshape(
