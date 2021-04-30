@@ -40,9 +40,11 @@ class SPCM_TRIGGER(str, Enum):
 
 
 class ADCParameters:
-    def __init__(self, mode, oversampling_factor, channels, ch_amplitude,
-                 dur_seg, trigger_source,
-                 n_seg, n_avg, digitizer_delay, pretrigger):
+    def __init__(self, mode=None, oversampling_factor=None, channels=None,
+                 ch_amplitude=None,
+                 dur_seg=None, trigger_source=None,
+                 n_seg=None, n_avg=None, digitizer_delay=None,
+                 pretrigger=None):
         """
         Class that contains only field and represents ADC parameters.
 
@@ -1165,9 +1167,9 @@ class SPCM:
                 Size of a pretrigger
                 from 32 to 64k-32 with a step 32
             freq_from: float, MHz
-                where should the frequency window of the plot begin
+                where should the if_freq window of the plot begin
             freq_until: float, MHz
-                where should the frequency window of the plot end
+                where should the if_freq window of the plot end
             num_averages: int, default 10 000
                 number of averages from 4 to 16 000 000
         """

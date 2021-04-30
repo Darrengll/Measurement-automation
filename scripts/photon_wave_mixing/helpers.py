@@ -41,7 +41,7 @@ def fit_probe_qubit_sts(filename, plot=True):
         plt.plot(currents, qubit_fit_func(currents, *popt))
         plt.margins(x=0)
         plt.xlabel("Current, A")
-        plt.ylabel("Qubit frequency, Hz")
+        plt.ylabel("Qubit if_freq, Hz")
         plt.show()
     return popt
 
@@ -64,7 +64,7 @@ def fit_sps_sts(filename, plot=True):
         plt.plot(currents, qubit_fit_func(currents, *popt))
         plt.margins(x=0)
         plt.xlabel("Current, A")
-        plt.ylabel("Qubit frequency, Hz")
+        plt.ylabel("Qubit if_freq, Hz")
         plt.show()
     return popt
 

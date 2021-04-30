@@ -95,8 +95,8 @@ class TimeResolvedDispersiveShiftSpectroscopyResult(VNATimeResolvedDispersiveMea
                self._remove_delay(data["vna_frequency"], data["data"])
 
     def _annotate_axes(self, axes):
-        axes[0].set_ylabel("VNA frequency [GHz]")
-        axes[-2].set_ylabel("VNA frequency [GHz]")
+        axes[0].set_ylabel("VNA if_freq [GHz]")
+        axes[-2].set_ylabel("VNA if_freq [GHz]")
 
     def _remove_delay(self, frequencies, s_data):
         phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))

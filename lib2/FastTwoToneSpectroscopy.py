@@ -39,7 +39,7 @@ class FastFluxTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
         vna_parameters["freq_limits"] = self._resonator_area
 
         self._mw_src[0].set_output_state("OFF")
-        # print("\rDetecting a resonator within provided frequency range of the VNA %s\
+        # print("\rDetecting a resonator within provided if_freq range of the VNA %s\
         #            "%(str(vna_parameters["freq_limits"])), flush=True, end="")
 
         res_result = self._detect_resonator(vna_parameters, plot=False)
@@ -56,7 +56,7 @@ class FastFluxTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
             self._last_resonator_result = res_result
             res_freq, res_amp, res_phase = self._last_resonator_result
 
-        # print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
+        # print("\rDetected if_freq is %.5f GHz, at %.2f mU and %.2f \
         #            degrees"%(res_freq/1e9, res_amp*1e3, res_phase/pi*180), end="")
         self._mw_src[0].set_output_state("ON")
         vna_parameters["freq_limits"] = (res_freq, res_freq)
@@ -118,7 +118,7 @@ class FastAcStarkTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
 
         self._mw_src[0].set_output_state("OFF")
         if vna_parameters["freq_limits"][0] != vna_parameters["freq_limits"][-1]:
-            # print("\rDetecting a resonator within provided frequency range of the VNA %s\
+            # print("\rDetecting a resonator within provided if_freq range of the VNA %s\
             #        "%(str(vna_parameters["freq_limits"])), flush=True, end="")
 
             res_result = self._detect_resonator(vna_parameters, plot=False)
@@ -135,7 +135,7 @@ class FastAcStarkTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
                 self._last_resonator_result = res_result
 
             res_freq, res_amp, res_phase = self._last_resonator_result
-            # print("\rDetected frequency is %.5f GHz, at %.2f mU and %.2f \
+            # print("\rDetected if_freq is %.5f GHz, at %.2f mU and %.2f \
             #        degrees"%(res_freq/1e9, res_amp*1e3, res_phase/pi*180), end="")
         else:
             res_freq = vna_parameters["freq_limits"][0]

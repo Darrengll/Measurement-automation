@@ -118,8 +118,8 @@ class SimulataneousReflectionTransmission(
 
         """ Supplying additional arrays to 'self._measurement_result' class """
         meas_data = self._measurement_result.get_data()
-        # frequency is already set in call of 'super()' class method
-        meas_data["frequency"] = self._frequencies
+        # if_freq is already set in call of 'super()' class method
+        meas_data["if_freq"] = self._frequencies
         meas_data["delay_correction"] = self._delay_correction
         meas_data["start_idx"] = self._start_idx
         meas_data["end_idx"] = self._end_idx
@@ -295,7 +295,7 @@ class ReflectionTransmissionResult(MeasurementResult):
         """
         Sets custom frequencies for fourier transformation.
         Not efficient but gives freedom in choosing frequencies
-        hence frequency domain interval and resolution.
+        hence if_freq domain interval and resolution.
 
         Parameters
         ----------

@@ -287,7 +287,7 @@ def setup_rabi_from_delay(devices_dict, params):
                                 "excitation_duration": 20
                                 }
     ro_cal = devices_dict['iqawg'].get_calibration()
-    q_lo_params = {"frequency": ro_cal.get_lo_frequency()}
+    q_lo_params = {"if_freq": ro_cal.get_lo_frequency()}
     iqawg_in_params = {"calibration": ro_cal}
 
     dig_params = {"channels": [0, 1],  # a list of channels to measure
@@ -339,7 +339,7 @@ def setup_ramsey_measurement(devices_dict, params):
     }
 
     lo_shift = -15e6  # Hz
-    q_lo_params = {"frequency": lo_freq + lo_shift}  # shifts[k]}
+    q_lo_params = {"if_freq": lo_freq + lo_shift}  # shifts[k]}
     iqawg_in_params = {"calibration": ro_cal}  # ro_cals[k]}
 
     # digitizer driver must implement 'set_parameters' function to be compatible with Measurement class

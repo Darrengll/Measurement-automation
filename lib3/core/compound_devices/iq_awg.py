@@ -1,7 +1,7 @@
 """ IN DEVELOPMENT. NOT USED ANYWHERE."""
-from .pulse_sequence import PulseBuilder, PulseSequence
-from .iq_pulse_sequence import IQPulseBuilder, IQPulseSequence
-from .calibration import HetIQCalibration, CalibrationSingleUp
+from lib3.pulses.pulse_sequence import PulseBuilder
+from lib3.pulses.iq_pulse_sequence import IQPulseBuilder, IQPulseSequence
+from lib3.mixers.het_calibrator import HetIQCalibration, CalibrationSingleUp
 
 from drivers.keysightM3202A import KeysightM3202A
 from drivers.keysightAWG import KeysightAWG
@@ -9,6 +9,7 @@ from drivers.keysightAWG import KeysightAWG
 import numpy as np
 
 from typing import Union
+
 
 class AWGChannel:
     def __init__(self, host_awg, channel_number):
@@ -27,22 +28,30 @@ class AWGChannel:
         self.host_awg = host_awg
         self.awg_channel_number = channel_number
 
+    def output_arbitrary_waveform(self, waveform, repetition_frequency):
+        self.host_awg.output_arbitrary_waveform(
+            waveform, repetition_frequency, self.awg_channel_number
+        )
+
     def output_signal(self, signal, rep_freq):
         if isinstance(signal, IQPulseSequence):
+            pass  # TODO implement to output both IQPulseSequence and iterables
 
-
-    def output_continuous_wave(self, frequency, amplitude, phase, offset,
-                               waveform_resolution, asynchronous=False,
+    def output_continuous_wave(self, carrier_frequency, amplitude,
+                               phase, offset, waveform_resolution,
                                trigger_sync_every=None):
-        self.host_awg.output_continuous_wave(frequency, amplitude, phase,
-                                             offset, waveform_resolution,
-                                             self.awg_channel_number,
-                                             trigger_sync_every=trigger_sync_every)
+        self.host_awg.output_continuous_wave(
+            carrier_frequency, amplitude, phase,
+            offset, waveform_resolution,
+            self.awg_channel_number,
+            trigger_sync_every=trigger_sync_every
+        )
 
 
 class CalibratedAWGChannel(AWGChannel):
     """
     Extension of AWGChannel class with upconversion calibration.
+    Mostly unused. Pending to delete.
     """
     def __init__(self, host_awg, channel_number, calibration=None):
         """
@@ -98,14 +107,17 @@ class IQAWG:
         self._awg_channels = [channel_i, channel_q]
         self._channel_i = channel_i
         self._channel_q = channel_q
-        self.MAX_OUTPUT_VOLTAGE = min([channel.host_awg.MAX_OUTPUT_VOLTAGE
-                                       for channel in self._awg_channels])
-
-        self.sample_rate = channel_i.host_awg.get_sample_rate()
-        if self.sample_rate != channel_q.host_awg.get_sample_rate():
-            self.sample_rate = None
-            raise ValueError("Sample rates of host AWG's for I and Q "
-                             "channels are different")
+        # `host_awg` has to be the same
+        if channel_i.host_awg == channel_q.host_awg:
+            self.host_awg = channel_i.host_awg
+        else:
+            raise NotImplementedError(
+                "Channels with different `host_awg` values are "
+                "not supported"
+            )
+        self.MAX_OUTPUT_VOLTAGE = self.host_awg.MAX_OUTPUT_VOLTAGE
+        self.VOLTAGE_RESOLUTION_BITS = self.host_awg.VOLTAGE_RESOLUTION_BITS
+        self.MIN_SAMPLE_PERIOD = self.host_awg.MIN_SAMPLE_PERIOD
 
         self._calibration = calibration
         self._triggered = triggered
@@ -119,6 +131,24 @@ class IQAWG:
 
     def get_calibration(self):
         return self._calibration
+
+    def get_sample_rate(self):
+        """
+        Returns
+        -------
+        sample_rate : int
+            Returns current AWG's sample rate in Hz.
+        """
+        self.host_awg.get_sample_rate()
+
+    def get_sample_period(self):
+        """
+        Returns
+        -------
+        sample_period : np.float
+            Sample period in nanoseconds
+        """
+        return self.host_awg.get_sample_period()
 
     def get_pulse_builder(self):
         """
@@ -141,7 +171,7 @@ class IQAWG:
         Returns : None
         -------
         """
-        rep_frequency = 1/(len(s)*self._calibration.awg_sampling_period)
+        rep_frequency = 1/(len(s)*self.get_sample_period())
         self._channel_i.output_arbitrary_waveform(np.real(s), rep_frequency)
         self._channel_q.output_arbitrary_waveform(np.imag(s), rep_frequency)
 
@@ -187,14 +217,15 @@ class IQAWG:
         -----------
         pulse_sequence: IQPulseSequence
         """
-        sample_rate = pulse_sequence.get_sample_rate()  # sample rate in GHz
+        sample_period = 1/self.get_sample_period()  # sample ate in GHz
         length = pulse_sequence.get_length()
         if self._triggered:
             # this is made if 2 AWG is triggering another one and has
             # the same trace period.
-            # Signal is cutted at the end for 200 nanoseconds
-            duration = pulse_sequence.get_duration() - 200
-            end_idx = length - np.ceil(200*sample_rate)
+            # Signal is cutted at the end for 100 nanoseconds
+            cut_ns = 100
+            duration = pulse_sequence.get_duration() - cut_ns
+            end_idx = length - np.ceil(cut_ns*sample_rate)
         else:
             duration = pulse_sequence.get_duration()
             end_idx = length
@@ -203,6 +234,5 @@ class IQAWG:
         self._channel_i.output_arbitrary_waveform(
             pulse_sequence.get_I_waveform()[:end_idx], frequency
         )
-        self._channel_q.output_arbitrary_waveform(pulse_sequence
-                                                    .get_Q_waveform()[
-                                                    :end_idx], frequency)
+        self._channel_q.output_arbitrary_waveform(
+            pulse_sequence.get_Q_waveform()[:end_idx], frequency)

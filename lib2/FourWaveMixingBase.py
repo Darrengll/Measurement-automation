@@ -13,8 +13,8 @@ class FourWaveMixingBase(DigitizerWithPowerSweepMeasurementBase):
         create Measurement object, set up all devices and take them from the class;
         set up all the parameters
         make measurements:
-         -- sweep power/frequency of one/another/both of generators
-            and/or central frequency of EXA and measure single trace / list sweep for certain frequencies
+         -- sweep power/if_freq of one/another/both of generators
+            and/or central if_freq of EXA and measure single trace / list sweep for certain frequencies
          --
     """
 
@@ -147,10 +147,10 @@ class FourWaveMixingResult(MeasurementResult):
         plt.colorbar(pow_map, cax=cax)
         cax.tick_params(axis='y', right='off', left='on',
                         labelleft='on', labelright='off', labelsize='10')
-        last_trace_data = Z[Z != -inf][-(len(data["frequency"])):]
+        last_trace_data = Z[Z != -inf][-(len(data["if_freq"])):]
         if self._last_tr is not None:
             self._last_tr.remove()
-        self._last_tr = ax_trace.plot(data["frequency"], last_trace_data, 'b').pop(0)
+        self._last_tr = ax_trace.plot(data["if_freq"], last_trace_data, 'b').pop(0)
 
         N_peaks = len(P_pos[0, :])
         ax_peaks.cla()
@@ -176,13 +176,13 @@ class FourWaveMixingResult(MeasurementResult):
             central_freq = con_eq['q_awg'][0]['calibration'].get_radiation_parameters()['if_frequency'] / 1e6
             freqs = np.array([self._delta * (1 + 2 * i) for i in range(max_order)])  # , 220, 260, 300, 340, 380, 420])
             mfreqs = -freqs
-            self._idx = np.searchsorted(data["frequency"], central_freq + freqs)
-            self._midx = np.searchsorted(data["frequency"], central_freq + mfreqs)
+            self._idx = np.searchsorted(data["if_freq"], central_freq + freqs)
+            self._midx = np.searchsorted(data["if_freq"], central_freq + mfreqs)
         power_data = np.real(20 * np.log10(data["data"] * 1e3 / np.sqrt(50e-3)))
         pos_peaks_data = power_data[:, self._idx]
         neg_peaks_data = power_data[:, self._midx]
         if self._XX is None and self._YY is None:
-            self._XX, self._YY = data[self._parameter_name], data["frequency"]
+            self._XX, self._YY = data[self._parameter_name], data["if_freq"]
         return self._XX, self._YY, power_data, np.array(pos_peaks_data), np.array(neg_peaks_data)
 
 class MollowTripletResult(MeasurementResult):
@@ -243,10 +243,10 @@ class MollowTripletResult(MeasurementResult):
         plt.colorbar(pow_map, cax=cax)
         cax.tick_params(axis='y', right='off', left='on',
                         labelleft='on', labelright='off', labelsize='10')
-        last_trace_data = Z[Z != -inf][-(len(data["frequency"])):]
+        last_trace_data = Z[Z != -inf][-(len(data["if_freq"])):]
         if self._last_tr is not None:
             self._last_tr.remove()
-        self._last_tr = ax_trace.plot(data["frequency"], last_trace_data, 'b').pop(0)
+        self._last_tr = ax_trace.plot(data["if_freq"], last_trace_data, 'b').pop(0)
 
         ax_trace.set_ylim([np.average(last_trace_data), np.max(last_trace_data)])
 
@@ -257,5 +257,5 @@ class MollowTripletResult(MeasurementResult):
     def _prepare_data_for_plot(self, data):
         power_data = np.real(20 * np.log10(data["data"] * 1e3 / np.sqrt(50e-3)))
         if self._XX is None and self._YY is None:
-            self._XX, self._YY = data[self._parameter_name], data["frequency"]
+            self._XX, self._YY = data[self._parameter_name], data["if_freq"]
         return self._XX, self._YY, power_data

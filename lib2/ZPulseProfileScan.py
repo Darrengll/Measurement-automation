@@ -46,5 +46,5 @@ class ZPulseProfileScanResult(VNATimeResolvedDispersiveMeasurement2DResult):
     def _annotate_axes(self, axes):
         axes[-1].set_xlabel("$(\pi)$-pulse delay [$\mu$s]")
         axes[-2].set_xlabel("$(\pi)$-pulse delay [$\mu$s]")
-        axes[0].set_ylabel("Excitation frequency [GHz]")
-        axes[-2].set_ylabel("Excitation frequency [GHz]")
+        axes[0].set_ylabel("Excitation if_freq [GHz]")
+        axes[-2].set_ylabel("Excitation if_freq [GHz]")

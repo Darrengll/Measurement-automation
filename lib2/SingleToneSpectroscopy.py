@@ -307,7 +307,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         -----------
         direction: str
             "avg_cur" for current slice subtraction
-            "avg_freq" for frequency slice subtraction
+            "avg_freq" for if_freq slice subtraction
 
         """
         s_data = self.get_data()["data"]

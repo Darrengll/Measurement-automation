@@ -33,8 +33,8 @@ class IQVectorGenerator:
         if "power" in parameters_dict:
             self.set_power(parameters_dict["power"])
 
-        if "frequency" in parameters_dict:
-            self.set_frequency(parameters_dict["frequency"])
+        if "if_freq" in parameters_dict:
+            self.set_frequency(parameters_dict["if_freq"])
 
         if "dac_overridden" in parameters_dict:
             self._dac_overridden = parameters_dict["dac_overridden"]

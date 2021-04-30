@@ -183,7 +183,7 @@ class DispersiveJointTomography(VNATimeResolvedDispersiveMeasurement):
 
         from collections import OrderedDict
         swept_pars = OrderedDict([
-            ["ro_frequency",(lambda x: self._vna[0].set_freq_limits(x, x), meas_op_pairs[:,1].astype(np.float64))], # frequency list
+            ["ro_frequency",(lambda x: self._vna[0].set_freq_limits(x, x), meas_op_pairs[:,1].astype(np.float64))], # if_freq list
             ["tomo_local_rotations", (self._set_tomo_params, local_rotations_list)]
         ])
         super().set_swept_parameters(**swept_pars)

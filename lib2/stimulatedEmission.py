@@ -46,7 +46,7 @@ class StimulatedEmission(PulseMixing):
         self.data_backup = []
 
         # Variables used for getting rid of the pulse shape but subtracting
-        # a trace with driving frequency shifted by
+        # a trace with driving if_freq shifted by
         # self._max_shift_frequency from resonance
         self._main_current = 0
         self._shifted_current = 0
@@ -130,8 +130,8 @@ class StimulatedEmission(PulseMixing):
 
         """ Supplying additional arrays to 'self._measurement_result' class """
         meas_data = self._measurement_result.get_data()
-        # frequency is already set in call of 'super()' class method
-        meas_data["frequency"] = self._frequencies
+        # if_freq is already set in call of 'super()' class method
+        meas_data["if_freq"] = self._frequencies
         meas_data["delay_correction"] = self._delay_correction
         meas_data["start_idx"] = self._start_idx
         meas_data["end_idx"] = self._end_idx
@@ -181,9 +181,9 @@ class StimulatedEmission(PulseMixing):
 
     def sweep_probe_frequency(self, frequencies, a, b, c):
         self.current_frequency_params = (a, b, c)
-        self.set_swept_parameters(**{"Probe frequency, Hz": (
+        self.set_swept_parameters(**{"Probe if_freq, Hz": (
             self._set_probe_frequency, frequencies)})
-        self._measurement_result.set_parameter_name("Probe frequency, Hz")
+        self._measurement_result.set_parameter_name("Probe if_freq, Hz")
 
     def _set_probe_frequency(self, frequency):
         a, b, c = self.current_frequency_params
@@ -344,7 +344,7 @@ class StimulatedEmissionResult(MeasurementResult):
         """
         Sets custom frequencies for fourier transformation.
         Not efficient but gives freedom in choosing frequencies
-        hence frequency domain interval and resolution.
+        hence if_freq domain interval and resolution.
 
         Parameters
         ----------

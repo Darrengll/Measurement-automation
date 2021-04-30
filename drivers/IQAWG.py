@@ -35,8 +35,9 @@ class AWGChannel():
 
     def output_arbitrary_waveform(self, waveform, frequency, asynchronous=False):
 
-        self._host_awg.output_arbitrary_waveform(waveform, frequency,
-                                                 self._channel_number, asynchronous=asynchronous)
+        self._host_awg.output_arbitrary_waveform(
+            waveform, frequency, self._channel_number
+        )
 
     def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous=False,
                                trigger_sync_every=None):
@@ -67,7 +68,6 @@ class CalibratedAWG():
 
     def get_calibration(self):
         return self._calibration
-
 
     def get_pulse_builder(self):
         """
@@ -127,12 +127,12 @@ class IQAWG():
         offsets, waveform_resolution, optimized=True):
         """
         Prepare and output a sine wave of the form:
-        y = A*sin(2*pi*frequency + phase) + offset
+        y = A*sin(2*pi*if_freq + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output waves
+        if_freq: float, Hz
+            if_freq of the output waves
         amplitudes: float, V
             amplitude of the output waves
         phase: float
@@ -359,12 +359,12 @@ class IQAWG():
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous=False, trigger_sync_every=None):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output wave
+        if_freq: float, Hz
+            if_freq of the output wave
         amplitude: float, V
             amplitude of the output wave
         phase: float
@@ -435,12 +435,12 @@ class IQAWG_Multiplexed(IQAWG):
     def output_continuous_IQ_waves(self, frequency, amplitudes, relative_phase,
         offsets, waveform_resolution, optimized = True):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output waves
+        if_freq: float, Hz
+            if_freq of the output waves
         amplitudes: float, V
             amplitude of the output waves
         phase: float
@@ -463,12 +463,12 @@ class IQAWG_Multiplexed(IQAWG):
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output wave
+        if_freq: float, Hz
+            if_freq of the output wave
         amplitude: float, V
             amplitude of the output wave
         phase: float

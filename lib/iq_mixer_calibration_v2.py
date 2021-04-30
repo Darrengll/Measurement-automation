@@ -134,7 +134,7 @@ class IQCalibrator():
         self._N_sup = sidebands_to_suppress
         # Frequencies are indexed from least to largest value
         # starting with 0.
-        # And frequency of interest index is as follows:
+        # And if_freq of interest index is as follows:
         self._target_freq_idx = self._N_sup // 2
         self._lo_freq_idx = None
         self._image_freq_idx = None
@@ -167,7 +167,7 @@ class IQCalibrator():
             Frequency of the local oscillator
         if_frequency: float
             Frequency of the awg-generated wavefomrs, i.e. intermediate
-            frequency (of I(t) and Q(t) signals)
+            if_freq (of I(t) and Q(t) signals)
         lo_power: float
             The power of the local oscillator
         ssb_power: float
@@ -364,7 +364,7 @@ class IQCalibrator():
             results["dc_offsets"] = res_dc_offs.x
 
             if if_frequency == 0:
-                # SA center frequency already equals to LO
+                # SA center if_freq already equals to LO
                 for i in range(0, iterations):
                     res_dc_offs_open = minimize(
                         loss_function_dc_offsets_open,

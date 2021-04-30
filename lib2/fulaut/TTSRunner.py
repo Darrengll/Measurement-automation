@@ -52,9 +52,9 @@ class TTSRunner:
                               period, sweet_spot, max_q_freq, d)
 
         self._logger.debug(
-            "Expected qubit frequency range (from AnticrossingOracle): %.3f to %.3f" % (min_q_freq, max_q_freq))
+            "Expected qubit if_freq range (from AnticrossingOracle): %.3f to %.3f" % (min_q_freq, max_q_freq))
         mw_limits = (max(4e9, min_at_the_scan_edge), max_q_freq + .25e9)
-        self._logger.debug("Two-tone frequency range: %.3f to %.3f" % mw_limits)
+        self._logger.debug("Two-tone if_freq range: %.3f to %.3f" % mw_limits)
 
         self._mw_src_frequencies = linspace(*mw_limits, 401)
 

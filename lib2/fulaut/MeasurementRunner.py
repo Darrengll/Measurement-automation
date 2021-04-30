@@ -118,7 +118,7 @@ class MeasurementRunner():
                                        type=GlobalParameters().resonator_type)
                 self._ro_freqs[qubit_name], amp, phase = rd.detect()
 
-            self._logger.debug("Readout frequency is set to %.5e" % self._ro_freqs[qubit_name] +
+            self._logger.debug("Readout if_freq is set to %.5e" % self._ro_freqs[qubit_name] +
                                f" @ {amp:.2e} {phase:.2e}")
 
             # period_fraction = float(input("Enter current offset in period fraction: "))
@@ -194,7 +194,7 @@ class MeasurementRunner():
                                                               GlobalParameters().excitation_power)}
 
         exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
-                               'frequency': exc_frequency}
+                               'if_freq': exc_frequency}
 
         DD.set_fixed_parameters(pulse_sequence_parameters,
                                 vna=[vna_parameters],
@@ -246,7 +246,7 @@ class MeasurementRunner():
                                                               GlobalParameters().excitation_power)}
 
         exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
-                               'frequency': exc_frequency}
+                               'if_freq': exc_frequency}
 
         DR.set_fixed_parameters(pulse_sequence_parameters,
                                 vna=[vna_parameters],
@@ -300,7 +300,7 @@ class MeasurementRunner():
                                                               GlobalParameters().excitation_power)}
 
         exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
-                               'frequency': exc_frequency}
+                               'if_freq': exc_frequency}
 
         DHE.set_fixed_parameters(pulse_sequence_parameters,
                                  vna=[vna_parameters],
@@ -351,7 +351,7 @@ class MeasurementRunner():
                                                               GlobalParameters().excitation_power)}
 
         exc_iqvg_parameters = {'power': GlobalParameters().excitation_power,
-                               'frequency': exc_frequency}
+                               'if_freq': exc_frequency}
 
         DRO.set_fixed_parameters(rabi_sequence_parameters,
                                  vna=[vna_parameters],

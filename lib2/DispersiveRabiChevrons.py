@@ -55,5 +55,5 @@ class DispersiveRabiChevronsResult(VNATimeResolvedDispersiveMeasurement2DResult)
     def _annotate_axes(self, axes):
         axes[0].set_ylabel("Excitation duration [$\mu$s]")
         axes[-2].set_ylabel("Excitation duration [$\mu$s]")
-        axes[-1].set_xlabel("Excitation frequency [GHz]")
-        axes[-2].set_xlabel("Excitation frequency [GHz]")
+        axes[-1].set_xlabel("Excitation if_freq [GHz]")
+        axes[-2].set_xlabel("Excitation if_freq [GHz]")

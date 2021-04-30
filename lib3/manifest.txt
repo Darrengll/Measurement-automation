@@ -1,0 +1,54 @@
+This file contains statements that make a foundation of a new version of
+library lib3.
+New library version written from scratch + copypastes from production
+version of `lib2`.
+
+lib3 is mainly orieneted to be an API for quantum computing
+calibrations/measurements/experiments/operations with
+superconducting qubits (mostly transmons) in resonator+qubit (dispersive
+readout) topology.
+
+------------------------------------------------------------
+Main statements:
+1. All code has to comply with most recent PEP standards.
+2. Every function is documented and comply with `numpy` library docstring
+formaat.
+3. Every measurement class has minimal working example attached as a code in
+module containing this class. Simple measurement schematic neccessary to
+perform measurement has to be attached as well.
+4. NO BACKWARD COMPATIBILITY with previous library versions.
+5. Single module contains at most 2 classes. The second class can be contained
+if and only if module is associated with some measuremnet and the second class
+inherits `MeasurementResult` for experiment result data visualization.
+6. API has to allow optionally reload all modules required to
+refresh the new measurement class instance to ensure all lib3
+changes took place immediately.
+
+--------------------------------------------------------------
+### Physical units convention ###
+time - nanoseconds
+frequency - Hz
+voltage - Volts
+power - dBm = 20*log10(P/1mW), where P - power in mW, mW = 1e-3 Watt
+resistance - Ohms
+
+All numbering (e.g. AWG channels enumeration) begins at 0.
+--------------------------------------------------------------
+### Packages structure ###
+The following package structure is proposed:
+lib3/
+    core/ - consists of Measurement and MeasurementResult. Context classes.
+    Data save-load routines and so on.
+    resonators/ - finding and fitting resonators
+    mixers/ - package that regulates low level mixer-based schemes calibrations
+    qchar/ - all necessary measurements that are required to characterize
+    different aspects of qubit schemes.
+        cw/ - STS/TTS/AC-stark and other CW measurements. TTS Spectrums fit.
+            Couplings estimation based on fits. Qubit transitions frequencies.
+        td/ - time-domain measurementsRabi/Ramsey and other pulsed measuremnets
+            that results in lifetime estimation of a qubits. As well as
+            pi-pulses calibration.
+            Coupling estimation.
+    qinf/ - quantum informatics experiments.
+        tomo/ - tomography processes. May consist of several submodules.
+

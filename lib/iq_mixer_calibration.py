@@ -208,7 +208,7 @@ class IQCalibrator():
         lo_frequency: float
             Frequency of the local oscillator
         if_frequency: float
-            Frequency of the awg-generated wavefomrs, i.e. intermediate frequency (of I(t) and Q(t) signals)
+            Frequency of the awg-generated wavefomrs, i.e. intermediate if_freq (of I(t) and Q(t) signals)
         lo_power: float
             The power of the local oscillator
         ssb_power: float

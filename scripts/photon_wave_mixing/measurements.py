@@ -143,7 +143,7 @@ def setup_stimulated_emission_measurement(devices_dict, params):
                   }
 
     dev_params = {'q_lo_params':  [
-                            {"frequency": upconv_cal.get_lo_frequency()}
+                            {"if_freq": upconv_cal.get_lo_frequency()}
                         ],
                   'q_iqawg_params': [
                             {"calibration": upconv_cal}

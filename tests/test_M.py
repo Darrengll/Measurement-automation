@@ -68,7 +68,7 @@ def test_loading_pars_to_devices():
     q_z_awg_params = {"calibration": MagicMock()}
     q_freq = 8.7e9
     currents = linspace(0,0.5, 20)
-    q_lo_params = {'power': -10, 'frequency': q_freq + 100e6}
+    q_lo_params = {'power': -10, 'if_freq': q_freq + 100e6}
     dev_params = {'vna': [vna_parameters],
                   'ro_awg': [ro_awg_params],
                   'q_awg': [q_awg_params],

@@ -1,8 +1,9 @@
 """ IN DEVELOPMENT. NOT USED ANYWHERE."""
-import numpy as np
-from typing import Tuple
+import copy
 
-from .iq_awg import IQAWG
+import numpy as np
+from typing import Hashable
+
 from drivers.Spectrum_m4x import SPCM, ADCParameters
 from drivers.E8257D import MXG
 
@@ -12,7 +13,8 @@ class HetIQCalibration:
     Class for storing data of heterodyne scheme based on IQ mixers calibration.
     """
     def __init__(
-            self, dc_offsets_close=(None, None), dc_offsets_open=(None, None),
+            self, id, dc_offsets_close=(None, None),
+            dc_offsets_open=(None, None),
             r_u=None, r_d=None, phi_up=None, phi_down=None, delay=None,
             phase_delay=None, iqawg_i_amplitude=None, lo_power=None,
             lo_freq=None, if_freq=None,
@@ -22,6 +24,8 @@ class HetIQCalibration:
 
         Parameters
         ----------
+        id : Hashable
+            identification that can be converted to string.
         dc_offsets_close : np.complex
             Pair of AWG I and Q channels offsets in volts for maximal
             isolation between LO and RF ports.
@@ -45,7 +49,7 @@ class HetIQCalibration:
             time in nanoseconds that requires radiation to propagate from
             AWG to ADC.
         phase_delay : float
-            phase scew from trace frequency defines phase delay through the
+            phase scew from trace if_freq defines phase delay through the
             DUT.
         iqawg_i_amplitude : float
             Amplitude of sine trace outputted from I channel of IQAWG.
@@ -54,7 +58,7 @@ class HetIQCalibration:
         lo_freq : float
             Frequency of LO source.
         if_freq : float
-            Intermediate frequency. Carrier frequency of signals generated
+            Intermediate if_freq. Carrier if_freq of signals generated
             by AWG.
         awg_sample_period : np.float
             AWG output sampling period in nanoseconds. Reverse to AWG's
@@ -62,6 +66,7 @@ class HetIQCalibration:
         adc_params : ADCParameters
             Digitizer parameters utilized in calibration
         """
+        self.id = id
         self.dc_offsets_close = dc_offsets_close
         self.dc_offsets_open = dc_offsets_open
         self.r_u = r_u
@@ -89,8 +94,10 @@ class HetIQCalibration:
             and imaginary part consisting of Q quadrature.
         time : np.ndarray
             time points where signal was sampled.
-        Returns : np.ndarray
+        Returns
         -------
+        s : np.ndarray
+            Complex valued trace after downconvertion calibration is applied
         """
         pass
 
@@ -105,73 +112,3 @@ class CalibrationSingleUp(HetIQCalibration):
         `calib.dc_offsets_close[0]`
     """
     pass
-
-
-class HSCalibrator:
-    # Heterodyne scheme calibrator class
-    def __init__(self, iqawg, adc, lo_source):
-        """
-
-        Parameters
-        ----------
-        iqawg : IQAWG
-        adc : SPCM
-        lo_source : MXG
-        """
-        self.iqawg = iqawg
-        self.adc = adc
-        self.lo_src = lo_source
-        self.adc_params = None
-
-    def calibrate(self, iqawg_i_amplitude, lo_power, lo_freq, if_freq,
-                  adc_params, initial_guess):
-        """
-
-        Parameters
-        ----------
-        iqawg_i_amplitude : float
-            Amplitude of sine trace outputted from I channel of IQAWG.
-        lo_power : float
-            Power of LO source in dBm.
-        lo_freq : float
-            Frequency of LO source.
-        if_freq : float
-            Intermediate frequency. Carrier frequency of signals generated
-            by AWG.
-        adc_params : ADCParameters
-            Digitizer parameters utilized in calibration
-        initial_guess : HetIQCalibration
-            Calibration result class instance that contains starting points
-            for optimization routines. `r_up`, `r_down`, `phi_up`, `phi_down`
-             and `delay`.
-
-        Returns : HetIQCalibration
-            Calibration of heterodyne scheme with cancelled image sideband
-            and correct values for up and downconversion.
-        -------
-
-        """
-        self.adc_params = adc_params
-        if (initial_guess is not None) and isinstance(initial_guess, HetIQCalibration):
-            calib = initial_guess
-        else:
-            calib = HetIQCalibration(
-                dc_offsets_close=(0., 0.), dc_offsets_open=(0., 0.),
-                r_u=1., r_d=1., phi_up=np.pi/2, phi_down=np.pi/4,
-                delay=100,
-                iqawg_i_amplitude=iqawg_i_amplitude, lo_power=lo_power,
-                lo_freq=lo_freq, if_freq=if_freq
-            )
-
-        # setup ADC for measurements
-        self.adc.reset_card()
-        self.adc.set_parameters(self.adc_params)
-
-        # setup AWG for measurements
-        self.iqawg.reset_host_awgs()
-
-        # TODO: OUTPUT several reference signals and perform each
-        #  calibration stage.
-        self.iqawg
-
-        return calib

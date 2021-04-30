@@ -45,7 +45,7 @@ class MollowTriplet(Measurement):
 
         # Fourier and measurement parameters
         # see purpose in 'self.set_fixed_parameters()'
-        self._freq_limits = None  # tuple with frequency limits
+        self._freq_limits = None  # tuple with if_freq limits
         self._nfft = 0  # number of FFT points
         self._frequencies = None
         # self._frequencies[self._start_idx-1]  < self._freq_limits[0] <= self._frequencies[self._start_idx]
@@ -102,8 +102,8 @@ class MollowTriplet(Measurement):
         self._measurement_result._data["frequencies"] = self._frequencies
         self._measurement_result._data["data"] = self._internal_data.copy()
 
-        # Find index of the carrier frequency and store into result
-        # This frequency is excluded from y-scaling of the visualization
+        # Find index of the carrier if_freq and store into result
+        # This if_freq is excluded from y-scaling of the visualization
         self._measurement_result._if_freq_idx = np.argmin(np.abs(self._frequencies+self._q_iqawg[0]._calibration._if_frequency))
 
         # Array to store temporary data of internal averages (these are not saved to disk and lost forever)

@@ -52,7 +52,7 @@ class ACStarkRunner:
         self._asts_result.save()
 
         self._logger.debug(
-            "Transmon bare frequency: %.4f GHz, readout power (on SA): %d dBm (%d on VNA)" %
+            "Transmon bare if_freq: %.4f GHz, readout power (on SA): %d dBm (%d on VNA)" %
             (f_max / 1e9, absolute_power, vna_power))
         return f_max, absolute_power
 

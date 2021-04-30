@@ -47,10 +47,10 @@ class MXG(Instrument):
 
     def get_parameters(self):
         """
-        Returns a dictionary containing frequency and power currently used
+        Returns a dictionary containing if_freq and power currently used
         by the device
         """
-        return {"power":self.get_power(), "frequency":self.get_frequency()}
+        return {"power":self.get_power(), "if_freq":self.get_frequency()}
 
     def set_parameters(self, parameters_dict):
         """
@@ -60,8 +60,8 @@ class MXG(Instrument):
         keys = parameters_dict.keys()
         if "power" in keys:
             self.set_power(parameters_dict["power"])
-        if "frequency" in keys:
-            self.set_frequency(parameters_dict["frequency"])
+        if "if_freq" in keys:
+            self.set_frequency(parameters_dict["if_freq"])
 
         if "sweep_trg_src" in keys:
             self.set_freq_sweep()
@@ -146,7 +146,7 @@ class MXG(Instrument):
 
     def set_freq_sweep(self):
         # LIST, CW OR FIXED
-        # (CW and FIXED is the same and refers to the fixed frequency)
+        # (CW and FIXED is the same and refers to the fixed if_freq)
         self.write(":FREQuency:MODE LIST")
 
     def set_single_point(self):

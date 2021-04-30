@@ -128,7 +128,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         for q_lo in self._q_lo:
             q_lo.set_output_state("OFF")
 
-        print("Detecting a resonator within provided frequency range of the VNA %s\
+        print("Detecting a resonator within provided if_freq range of the VNA %s\
                     " % (str(vna_parameters["freq_limits"])))
 
         self._vna[0].set_parameters(vna_parameters)
@@ -159,7 +159,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
 
         res_freq, res_amp, res_phase = super()._detect_resonator(plot_resonator_fit)
-        print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % \
+        print("Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % \
               (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
 
         # turning microwave back ON

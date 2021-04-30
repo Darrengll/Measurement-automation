@@ -135,7 +135,7 @@ def read(devchan, samples=1, freq=10000.0, minv=-10.0, maxv=10.0,
     Input:
         devchan (string): device/channel specifier, such as Dev1/ai0
         samples (int): the number of samples to read
-        freq (float): the sampling frequency
+        freq (float): the sampling if_freq
         minv (float): the minimum voltage
         maxv (float): the maximum voltage
         timeout (float): the time in seconds to wait for completion

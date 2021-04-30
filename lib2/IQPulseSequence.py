@@ -292,9 +292,9 @@ class IQPulseBuilder():
                        frequency=None, if_offsets=None, if_amplitudes=None,
                        window_parameter=0.5):
         """
-        Adds a pulse with amplitude defined by the iqmx_calibration at frequency
+        Adds a pulse with amplitude defined by the iqmx_calibration at if_freq
         f_lo-f_if and some phase to the sequence. All sine pulses will be parts
-        of the same continuous wave at frequency of f_if
+        of the same continuous wave at if_freq of f_if
 
         Parameters:
         -----------
@@ -926,10 +926,10 @@ class IQPulseBuilder():
 
         ''' 
         Calculating positions of the
-        positive and negative frequency pulse groups respectively.
-        No overlapping between pulses within the same frequency group is 
+        positive and negative if_freq pulse groups respectively.
+        No overlapping between pulses within the same if_freq group is 
         allowed/supported yet.
-        ==> all pulse delays in the same frequency group MUST BE >= 0 
+        ==> all pulse delays in the same if_freq group MUST BE >= 0 
         Also pulses shifts is not cumulative (previous pulses shifts do not 
         affect further pulses positions)
         '''
@@ -938,7 +938,7 @@ class IQPulseBuilder():
         Calculating positions for positive and negative 
         pulses respectively
         '''
-        ''' positive frequency pulses block construction '''
+        ''' positive if_freq pulses block construction '''
         positive_n = pulse_types.count("P")
         p_positions = np.zeros(positive_n)  # start positions of the "P" pulses
         p_positions[0] += start_delay
@@ -971,7 +971,7 @@ class IQPulseBuilder():
                                                  after_pulse_delays[i]
                 i += 1
 
-        ''' negative frequency pulses block construction '''
+        ''' negative if_freq pulses block construction '''
         # amount of negative pulses
         negative_n = pulse_types.count("N")
         n_positions = np.zeros(negative_n)  # start positions of the "N" pulses
@@ -1025,7 +1025,7 @@ class IQPulseBuilder():
         # check that pulses from the same group do not overlap
         if p_delays.any() < 0 or n_delays.any() < 0:
             raise ValueError(
-                "pulses from the same frequency group found to be overlapping")
+                "pulses from the same if_freq group found to be overlapping")
 
         envelopes_in_pulse_group = pulse_sequence_parameters[
             "envelopes_in_pulse_group"]
@@ -1036,7 +1036,7 @@ class IQPulseBuilder():
         if abs(
                 envelope_duration % repetition_period) > 1e-5:  # all values in ns
             raise ValueError(
-                "pulse repetition frequency has to be a multiple of pulse frequency difference")
+                "pulse repetition if_freq has to be a multiple of pulse if_freq difference")
 
         ''' constructing pulses '''
         # appending zero values for convenience for code in cycle
@@ -1047,7 +1047,7 @@ class IQPulseBuilder():
         # print(n_positions, n_delays)
 
         for i in range(n_pulse_groups):
-            # indexes to iterate over each pulse frequency group
+            # indexes to iterate over each pulse if_freq group
             p_idx = 0
             n_idx = 0
             pb_p = pb_p.add_zero_pulse(p_positions[0])
@@ -1057,7 +1057,7 @@ class IQPulseBuilder():
                     pulse_freq = freq + d_freq
                     pb_p = pb_p.add_sine_pulse(excitation_duration,
                                                window=window,
-                                               frequency=pulse_freq,
+                                               if_freq=pulse_freq,
                                                phase=phase_shift,
                                                amplitude_mult=amplitude) \
                         .add_zero_pulse(p_delays[p_idx])
@@ -1066,7 +1066,7 @@ class IQPulseBuilder():
                     pulse_freq = freq - d_freq
                     pb_n = pb_n.add_sine_pulse(excitation_duration,
                                                window=window,
-                                               frequency=pulse_freq,
+                                               if_freq=pulse_freq,
                                                phase=phase_shift,
                                                amplitude_mult=amplitude) \
                         .add_zero_pulse(n_delays[n_idx])
@@ -1135,7 +1135,7 @@ class IQPulseBuilder():
                 exc_pb = exc_pb.add_sine_pulse(excitation_durations[j],
                                                window=window,
                                                phase=(phase_shifts[j]),
-                                               frequency=freqs[pulse_types[j]],
+                                               if_freq=freqs[pulse_types[j]],
                                                amplitude_mult=amplitudes[j],
                                                window_parameter=
                                                window_parameter)
@@ -1213,7 +1213,7 @@ class IQPulseBuilder():
 
         # restriction: envelope duration has to be multiple of the repetition period
         # if envelope_duration % repetition_period > 0.:  # all values in ns
-        #     raise ValueError("pulse repetition frequency has to be a multiple of pulse frequency difference")
+        #     raise ValueError("pulse repetition if_freq has to be a multiple of pulse if_freq difference")
 
         lo_freq = exc_pb._iqmx_calibration.get_radiation_parameters()[
             "lo_frequency"]
@@ -1223,13 +1223,13 @@ class IQPulseBuilder():
             exc_pb = exc_pb.add_zero_pulse(start_delay) \
                 .add_sine_pulse(excitation_durations[0],
                                 window=window,
-                                frequency=freqs[pulse_types[0]],
+                                if_freq=freqs[pulse_types[0]],
                                 phase=(phase_shifts[0]),
                                 amplitude_mult=amplitudes[0]) \
                 .add_zero_pulse(after_pulse_delay) \
                 .add_sine_pulse(excitation_durations[1],
                                 window=window,
-                                frequency=freqs[pulse_types[1]],
+                                if_freq=freqs[pulse_types[1]],
                                 phase=(phase_shifts[1]),
                                 amplitude_mult=amplitudes[1]) \
                 .add_zero_until((i + 1) * repetition_period)

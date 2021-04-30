@@ -61,7 +61,7 @@ class ResonatorOracle():
                 each time
         Returns:
             scan_areas : list
-                A list of tuples each representing an area in frequency
+                A list of tuples each representing an area in if_freq
                 presumably around the resonator dips
         """
         amps = 20 * log10(abs(s_data))

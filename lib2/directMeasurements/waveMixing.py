@@ -74,7 +74,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
         # Fourier and measurement parameters
         # see purpose in 'self.set_fixed_parameters()'
-        self._freq_limits = None  # tuple with frequency limits
+        self._freq_limits = None  # tuple with if_freq limits
         self._nfft = None  # number of FFT points
         self._frequencies = None  # array of frequencies to calculate DFTT at
         # indices in self._frequencies closest to the START and END of the
@@ -148,7 +148,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
 
         self._frequencies = xf[self._start_idx:self._end_idx + 1]
         meas_data = self._measurement_result.get_data()
-        meas_data["frequency"] = self._frequencies
+        meas_data["if_freq"] = self._frequencies
         self._measurement_result.set_data(meas_data)
 
         # to provide 'set_sideband_order()' functionality
@@ -580,7 +580,7 @@ class PulseMixing(DigitizerTimeResolvedDirectMeasurement):
     def set_sideband_order(self, order):
         """
         Set order to visualize during measurement process.
-        Takes into account positive or negative frequency range
+        Takes into account positive or negative if_freq range
         in case you interchanged I and Q inputs.
 
         Parameters
@@ -666,15 +666,15 @@ class PulseMixingResult(MeasurementResult):
 
     def set_sideband_order(self, order, freq_sign):
         """
-        Sets target fourier frequency that will be visualized.
+        Sets target fourier if_freq that will be visualized.
 
         Parameters
         ----------
         order : int
             odd integer
         freq_sign : int
-            '1' - positive frequency range assumed
-            '-1' - negative frequency range assumed
+            '1' - positive if_freq range assumed
+            '-1' - negative if_freq range assumed
 
         Returns
         -------
@@ -842,10 +842,10 @@ class PulseMixingResult(MeasurementResult):
         cax.tick_params(axis='y', right='off', left='on',
                         labelleft='on', labelright='off', labelsize='10')
         last_trace_data = Z[Z != -np.inf][-(
-            len(data["frequency"])):]  # [Z != -np.inf] - flattens the array
+            len(data["if_freq"])):]  # [Z != -np.inf] - flattens the array
         if self._last_tr is not None:
             self._last_tr.remove()
-        self._last_tr = ax_trace.plot(data["frequency"], last_trace_data,
+        self._last_tr = ax_trace.plot(data["if_freq"], last_trace_data,
                                       'b').pop(0)
 
         ax_trace.set_ylim([np.min(last_trace_data), np.max(last_trace_data)])
@@ -878,7 +878,7 @@ class PulseMixingResult(MeasurementResult):
 
         if self._last_tr is not None:
             self._last_tr.remove()
-        self._last_tr = ax_trace.plot(data["frequency"], last_trace_y,
+        self._last_tr = ax_trace.plot(data["if_freq"], last_trace_y,
                                       'b').pop(0)
 
         ax_trace.set_ylim([np.min(last_trace_y), np.max(last_trace_y)])
@@ -923,7 +923,7 @@ class PulseMixingResult(MeasurementResult):
 
         if self._last_tr is not None:
             self._last_tr.remove()
-        self._last_tr = ax_trace.plot(data["frequency"], last_trace_y,
+        self._last_tr = ax_trace.plot(data["if_freq"], last_trace_y,
                                       'b').pop(0)
 
         ax_trace.set_ylim([np.min(last_trace_y), np.max(last_trace_y)])
@@ -974,7 +974,7 @@ class PulseMixingResult(MeasurementResult):
 
         if self._last_tr is not None:
             self._last_tr.remove()
-        self._last_tr = ax_trace.plot(data["frequency"], last_trace_y,
+        self._last_tr = ax_trace.plot(data["if_freq"], last_trace_y,
                                       'b').pop(0)
 
         ax_trace.set_ylim([np.min(last_trace_y), np.max(last_trace_y)])
@@ -994,20 +994,20 @@ class PulseMixingResult(MeasurementResult):
 
         if self._XX is None and self._YY is None:
             self._XX, self._YY = data[self._parameter_names[0]], data[
-                "frequency"]
+                "if_freq"]
         return self._XX, self._YY, power_data
 
     def _prepare_amps_n_phases_for_plot2D(self, data):
-        freqs = data["frequency"]
+        freqs = data["if_freq"]
         idx = np.abs(freqs - (self._target_freq_2D)).argmin()
 
         complex_data = data["data"][:, :, idx].transpose()
         amplitude_data = 20 * np.log10(
             np.abs(complex_data) * 1e-3 / np.sqrt(50e-3))
         phase_data = np.angle(complex_data) / np.pi * 180
-        # last nonzero data of length equal to length of the 'frequency' array
+        # last nonzero data of length equal to length of the 'if_freq' array
         last_trace_y = data["data"][data["data"] != 0][
-                       -len(data["frequency"]):]
+                       -len(data["if_freq"]):]
         # 1e-3 - convert mV to V
         # sqrt(50e-3) impendance 50 Ohm + convert W to mW
         last_trace_y = 20 * np.log10(
@@ -1019,7 +1019,7 @@ class PulseMixingResult(MeasurementResult):
         return self._XX, self._YY, amplitude_data, phase_data, last_trace_y
 
     def _prepare_re_n_im_for_plot2D(self, data):
-        freqs = data["frequency"]
+        freqs = data["if_freq"]
         idx = np.abs(freqs - (self._target_freq_2D)).argmin()
 
         complex_data = data["data"][:, :, idx]
@@ -1028,9 +1028,9 @@ class PulseMixingResult(MeasurementResult):
         phi = np.pi / 2 - phi if phi > 0 else -np.pi / 2 - phi
         re_data = np.real(complex_data * np.exp(1j * 0)).transpose()
         im_data = np.imag(complex_data * np.exp(1j * 0)).transpose()
-        # last nonzero data of length equal to length of the 'frequency' array
+        # last nonzero data of length equal to length of the 'if_freq' array
         last_trace_y = data["data"][data["data"] != 0][
-                       -len(data["frequency"]):]
+                       -len(data["if_freq"]):]
         # 1e-3 - convert mV to V
         # sqrt(50) impendance 50 Ohm
         # sqrt(1-e3) - convert sqrt(W) to sqrt(mW)
@@ -1044,7 +1044,7 @@ class PulseMixingResult(MeasurementResult):
         return self._XX, self._YY, re_data, im_data, last_trace_y
 
     def _prepare_data_for_plot2D(self, data):
-        freqs = data["frequency"]
+        freqs = data["if_freq"]
 
         idx = np.abs(freqs - (self._target_freq_2D)).argmin()
 
@@ -1053,7 +1053,7 @@ class PulseMixingResult(MeasurementResult):
         amplitude_data = 20 * np.log10(
             np.abs(data["data"][:, :, idx]) * 1e-3 / np.sqrt(50e-3))
         last_trace_y = data["data"][data["data"] != 0][
-                       -len(data["frequency"]):]  # last nonzero data amount
+                       -len(data["if_freq"]):]  # last nonzero data amount
         # 1e-3 - convert mV to V, sqrt(50) impendance
         last_trace_y = 20 * np.log10(
             np.abs(last_trace_y) * 1e-3 / np.sqrt(50e-3))
@@ -1091,8 +1091,8 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
         create Measurement object, set up all devices and take them from the class;
         set up all the parameters
         make measurements:
-         -- sweep power/frequency of one/another/both of generators
-            and/or central frequency of EXA and measure single trace / list sweep for certain frequencies
+         -- sweep power/if_freq of one/another/both of generators
+            and/or central if_freq of EXA and measure single trace / list sweep for certain frequencies
          --
     """
 
@@ -1196,7 +1196,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
                     "pretrigger": 32,
                    }
         lo_pars = { "power": lo_power,
-                    "frequency": lo_freq,
+                    "if_freq": lo_freq,
                   }
 
         wmBase.set_fixed_parameters(delta = 20e3, awg_parameters=[{"calibration": ro_cal}],
@@ -1302,7 +1302,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
     def _prepare_measurement_result_data(self, parameter_names, parameters_values):
         measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
-        measurement_data["frequency"] = self._frequencies
+        measurement_data["if_freq"] = self._frequencies
         return measurement_data
 
     def _recording_iteration(self):
@@ -1324,7 +1324,7 @@ class WMPulseBuilder(IQPulseBuilder):
         """
         Adds two simultaneous pulses with amplitudes defined by the iqmx_calibration at frequencies
         (f_lo-f_if) ± delta_freq (or simpler w0 ± dw) and some phase to the sequence. All sine pulses will be parts
-        of the same continuous wave at frequency of f_if
+        of the same continuous wave at if_freq of f_if
 
         Parameters:
         -----------
@@ -1332,7 +1332,7 @@ class WMPulseBuilder(IQPulseBuilder):
             Duration of the pulse in nanoseconds. For pulses other than rectangular
             will be interpreted as t_g (see F. Motzoi et al. PRL (2009))
         delta_freq: int, Hz
-            The shift of two sidebands from the central frequency. Ought to be > 0 Hz
+            The shift of two sidebands from the central if_freq. Ought to be > 0 Hz
         phase: float, rad
             Adds a relative phase to the outputted trace.
         amplitude: float

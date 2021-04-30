@@ -109,7 +109,7 @@ class SpectrumOracle:
 
         args = (self._y_scan_area_size, self._points)
 
-        # refine frequency
+        # refine if_freq
         self._counter = 0
         self._coarse_brute_candidates = []
         self._coarse_brute_nop_ranking = []
@@ -295,7 +295,7 @@ class SpectrumOracle:
         try:
             self._frequencies = data["Frequency [Hz]"][:] / 1e9
         except:
-            self._frequencies = data["frequency"][:] / 1e9
+            self._frequencies = data["if_freq"][:] / 1e9
 
         self._freq_resolution = self._frequencies[1] - self._frequencies[0]
         self._Z = (data["data"].T - mean(data["data"], -1)).T

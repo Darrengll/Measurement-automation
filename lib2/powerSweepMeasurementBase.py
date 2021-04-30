@@ -13,8 +13,8 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
         create Measurement object, set up all devices and take them from the class;
         set up all the parameters
         make measurements:
-         -- sweep power/frequency of one/another/both of generators
-            and/or central frequency of EXA and measure single trace / list sweep for certain frequencies
+         -- sweep power/if_freq of one/another/both of generators
+            and/or central if_freq of EXA and measure single trace / list sweep for certain frequencies
          --
     """
 
@@ -111,7 +111,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
                     "pretrigger": 32,
                    }
         lo_pars = { "power": lo_power,
-                    "frequency": lo_freq,
+                    "if_freq": lo_freq,
                   }
 
         wmBase.set_fixed_parameters(delta = 20e3, awg_parameters=[{"calibration": ro_cal}],
@@ -205,7 +205,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
     def _prepare_measurement_result_data(self, parameter_names, parameters_values):
         measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
-        measurement_data["frequency"] = self._frequencies
+        measurement_data["if_freq"] = self._frequencies
         return measurement_data
 
     def _recording_iteration(self):
@@ -227,7 +227,7 @@ class WMPulseBuilder(IQPulseBuilder):
         """
         Adds two simultaneous pulses with amplitudes defined by the iqmx_calibration at frequencies
         (f_lo-f_if) ± delta_freq (or simpler w0 ± dw) and some phase to the sequence. All sine pulses will be parts
-        of the same continuous wave at frequency of f_if
+        of the same continuous wave at if_freq of f_if
 
         Parameters:
         -----------
@@ -235,7 +235,7 @@ class WMPulseBuilder(IQPulseBuilder):
             Duration of the pulse in nanoseconds. For pulses other than rectangular
             will be interpreted as t_g (see F. Motzoi et al. PRL (2009))
         delta_freq: int, Hz
-            The shift of two sidebands from the central frequency. Ought to be > 0 Hz
+            The shift of two sidebands from the central if_freq. Ought to be > 0 Hz
         phase: float, rad
             Adds a relative phase to the outputted trace.
         amplitude: float

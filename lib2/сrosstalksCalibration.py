@@ -41,11 +41,11 @@ class CrosstalksCalibrationBase(Measurement):
 
         if detect_resonator:
             self._mw_src[0].set_output_state("OFF")
-            msg = "Detecting a resonator within provided frequency range of the VNA %s \
+            msg = "Detecting a resonator within provided if_freq range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
             print(msg, flush=True)
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
-            print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
+            print("Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % (
                 res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
             vna_parameters["freq_limits"] = (res_freq, res_freq)
             self._measurement_result.get_context() \

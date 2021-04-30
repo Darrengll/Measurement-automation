@@ -4,7 +4,7 @@ import copy as cpy
 import matplotlib.pyplot as plt
 
 from typing import Union, Tuple, List
-from .calibration import CalibrationSingleUp
+from lib3.mixers.het_calibrator import CalibrationSingleUp
 
 
 class PulseSequence:

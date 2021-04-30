@@ -19,7 +19,7 @@ import numpy as np
 class AnticrossingOracle():
     """
     This class automatically processes anticrossing spectral data for
-    different types of qubits and frequency arrangements between the qubits and
+    different types of qubits and if_freq arrangements between the qubits and
     resonators
     """
 
@@ -162,7 +162,7 @@ class AnticrossingOracle():
                 param_values = data[param_key]
 
         try:
-            freqs = data["frequency"]
+            freqs = data["if_freq"]
         except:
             freqs = data["Frequency [Hz]"]
 

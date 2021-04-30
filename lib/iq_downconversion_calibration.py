@@ -195,7 +195,7 @@ class IQDownconversionCalibrator:
         cosine.
         This method calibrates simultaneously offsets, phase and amplitude
         discrepancies by minimizing the peaks of the squared trace at the
-        intermittent frequency and the double intermittent frequency. Uses
+        intermittent if_freq and the double intermittent if_freq. Uses
         IQDownconversionCalibrationResult.apply to shift offsets, phase and
         amplitudes.
         Parameters
