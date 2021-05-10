@@ -64,7 +64,7 @@ class MXG(Instrument):
             self.set_frequency(parameters_dict["if_freq"])
 
         if "sweep_trg_src" in keys:
-            self.set_freq_sweep()
+            self.set_mode_freq_sweep()
 
         if "frequencies" in keys:
             freqs = parameters_dict["frequencies"]
@@ -144,7 +144,7 @@ class MXG(Instrument):
     def do_get_ext_trig_channel(self):
         raise NotImplemented
 
-    def set_freq_sweep(self):
+    def set_mode_freq_sweep(self):
         # LIST, CW OR FIXED
         # (CW and FIXED is the same and refers to the fixed if_freq)
         self.write(":FREQuency:MODE LIST")
@@ -160,7 +160,7 @@ class MXG(Instrument):
         self.write(":LIST:TYPE STEP")
 
     def set_freq_limits(self, freq_limits):
-        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz")) # TODO: rename
+        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz"))
         self.write(":FREQuency:STOP %f%s" % (freq_limits[-1], "Hz"))
 
     def do_set_nop(self, nop):

@@ -17,7 +17,7 @@ class HetIQCalibrator:
         ----------
         iqawg : IQAWG
         adc : SpcmAdcM4x
-        lo_source : MXG
+        lo_source : N5173B
         """
         self.iqawg = iqawg
         self.adc = adc  # adc channels must be set

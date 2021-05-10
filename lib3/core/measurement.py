@@ -1,34 +1,26 @@
-import pyvisa
-from matplotlib._pylab_helpers import Gcf
-from matplotlib import pyplot as plt
+# Standard library imports
 from collections import OrderedDict
-
-from drivers import *
-from datetime import datetime as dt
-from threading import Thread
-
-from lib2.MeasurementResult import MeasurementResult
-from lib2.ResonatorDetector import *
-from lib2.GlobalParameters import *
 from itertools import product
 from functools import reduce
 from operator import mul
-from matplotlib import pyplot as plt
-import sys
-import numpy as np
-from numpy import zeros, complex_
-from lib2.GlobalParameters import *
-
-from drivers import *
 from datetime import datetime as dt
 from threading import Thread
 from typing import Dict, Tuple, List
+import sys
+import copy
 
+# Third party imports
+import pyvisa
+from matplotlib._pylab_helpers import Gcf
+from matplotlib import pyplot as plt
+import numpy as np
+from loggingserver import LoggingServer
+
+# Local application imports
+from drivers import *
 from lib2.MeasurementResult import MeasurementResult
 from lib2.ResonatorDetector import ResonatorDetector
 from lib2.ExperimentParameters import GlobalParameters, ResonatorType
-import copy
-from loggingserver import LoggingServer
 
 
 class Measurement:

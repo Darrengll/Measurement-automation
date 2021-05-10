@@ -14,23 +14,25 @@ Main statements:
 2. Every function is documented and comply with `numpy` library docstring
 formaat.
 3. Every measurement class has minimal working example attached as a code in
-module containing this class. Simple measurement schematic neccessary to
-perform measurement has to be attached as well.
+module containing this class. External link to file with measurement schematic
+necessary to execute minimal working example has to be attached as well.
 4. NO BACKWARD COMPATIBILITY with previous library versions.
 5. Single module contains at most 2 classes. The second class can be contained
 if and only if module is associated with some measuremnet and the second class
 inherits `MeasurementResult` for experiment result data visualization.
 6. API has to allow optionally reload all modules required to
 refresh the new measurement class instance to ensure all lib3
-changes took place immediately.
+changes took place immediately. To suuport such functionality packages must not
+ have circular dependencies (i.e. module A imports from B and vice-versa).
 
 --------------------------------------------------------------
 ### Physical units convention ###
 time - nanoseconds
-frequency - Hz
-voltage - Volts
-power - dBm = 20*log10(P/1mW), where P - power in mW, mW = 1e-3 Watt
-resistance - Ohms
+frequency - [Hz]
+voltage - Volts [V]
+power - [dBm] = 20*log10(P/1mW), where P - power in mW, mW = 1e-3 Watt
+angle - radiances [rad]
+resistance - Ohms [Ohm]
 
 All numbering (e.g. AWG channels enumeration) begins at 0.
 --------------------------------------------------------------
@@ -51,4 +53,23 @@ lib3/
             Coupling estimation.
     qinf/ - quantum informatics experiments.
         tomo/ - tomography processes. May consist of several submodules.
+------------------------------------------------------------------
+### Styling reminders ###
+1. Follow all corrections suggested by pycharm IDE.
+
+I. package import
+    Imports should always be written at the top of the file,
+    after any module comments and docstrings.
+
+    Imports should be divided according to what is being imported.
+    There are generally three groups:
+
+    1.standard library imports (Python’s built-in modules)
+    2.related third party imports (modules that are installed and do not belong
+     to the current application)
+    3. local application imports (modules that belong to the current
+    application)
+
+    Each group of imports should be separated by a blank space.
+    PEP 8 explicitly recommends absolute imports.
 

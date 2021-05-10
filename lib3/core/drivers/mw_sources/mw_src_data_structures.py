@@ -23,9 +23,9 @@ class MW_TRIG_SRC(str, Enum):
     CONT = "CONT"
 
 
-class MW_SWEEP_STEP_TRG_SRC(str, Enum):
+class MW_INSWEEP_TRG_SRC(str, Enum):
     """
-    Trigger source to initiate next step while working in SWEEPP mode.
+    Trigger source to initiate next step while working in SWEEP mode.
     EXT - use external trigger.
     """
     EXT = "EXT"
@@ -34,8 +34,8 @@ class MW_SWEEP_STEP_TRG_SRC(str, Enum):
 class MW_SWEEP_ARMED_TRIG_SRC(str, Enum):
     """
     Source of trigger that will arm sweep. After sweep is armed, it awaits
-    further trigger events from the source to be specified in
-    `MW_SWEEP_STEP_TRG_SRC` to output next step from sweep list.
+    further trigger events from the source specified in
+    `MW_INSWEEP_TRG_SRC` to output next step from sweep list.
     the frequency/power sweep will make a step/full sweep.
     One step or full sweep will be performed depending on the
     MW_SWEEP_STEP_TRG_SRC value.
@@ -48,7 +48,7 @@ class MW_SWEEP_ARMED_TRIG_SRC(str, Enum):
 class MwSrcParameters:
     def __init__(self, mode=MW_SRC_MODE.SINGLE, power=None, freq=None,
                  trig_src=MW_TRIG_SRC.TRIG1,
-                 sweep_step_trg_src=MW_SWEEP_STEP_TRG_SRC.EXT,
+                 sweep_step_trg_src=MW_INSWEEP_TRG_SRC.EXT,
                  sweep_arm_src=MW_SWEEP_ARMED_TRIG_SRC.BUS,
                  frequencies_list=None,
                  powers_list=None):

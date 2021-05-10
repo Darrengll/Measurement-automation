@@ -127,6 +127,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
     def get_flux_control_type(self):
         return self._flux_control_type
 
+
 class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
 
     def __init__(self, name, sample_name):
@@ -152,7 +153,8 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
                                  freqs, row, p0=(ptp(row), median(row),
                                                  freqs[argmax(row)], 10e6))[0]
                 peaks.append(popt[2])
-            except:
+            except Exception as e: # CAREFUL, CATCHES ALL EXTENSIONS
+                print(e)
                 peaks.append(freqs[argmax(row)])
         return array(peaks)
 

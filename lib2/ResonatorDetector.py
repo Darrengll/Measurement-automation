@@ -5,15 +5,12 @@ from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
 from lib2.ExperimentParameters import *
 from scipy.optimize import curve_fit
-from loggingserver import LoggingServer
 
-class ResonatorDetector():
-
+class ResonatorDetector:
     def __init__(self, frequencies=None, s_data=None, plot=True, fast=True, type = None):
         self._plot = plot
         self._fast = fast
         self._type = type
-        self._logger = LoggingServer.getInstance("")
         self._discarded_result = None
         self.set_data(frequencies, s_data)
 
@@ -31,7 +28,6 @@ class ResonatorDetector():
         self._plot = plot
 
     def detect(self):
-
         frequencies, sdata = self._freqs, self._s_data
         if not self._fast:
             result = self._fit()

@@ -1,3 +1,12 @@
+# Standard library imports
+# ------------------
+# Third party imports
+# -------------------
+# Local application imports
+from .mw_src_data_structures import MwSrcParameters, \
+    MW_TRIG_SRC, MW_INSWEEP_TRG_SRC, MW_SWEEP_ARMED_TRIG_SRC
+
+
 class MwSrcInterface:
     """
     Base class that every microwave source should implement
@@ -14,6 +23,15 @@ class MwSrcInterface:
 
         Returns
         -------
+        """
+        raise NotImplementedError
+
+    def get_parameters(self):
+        """
+
+        Returns
+        -------
+        res : MwSrcParameters
         """
         raise NotImplementedError
 
@@ -43,17 +61,34 @@ class MwSrcInterface:
         """
         raise NotImplementedError
 
-    def arm_sweep(self, frequencies=None, powers=None,
-                  sweep_step_trg_src=None, sweep_trg_src=None):
+    def set_output_state(self, state):
+        """
+        Turns RF output "ON" or "OFF"
+        Parameters
+        ----------
+        state : str
+            "ON" - output turns ON.
+            "OFF" - output turns OFF.
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError
+
+    def set_frequency_sweep(self, frequencies=None, power=None,
+                            insweep_step_trg_src=None, sweep_trg_src=None,
+                            arm_trigger_src=None):
         """
         Sets device ready to perform sweep upon arrival consecutive triggers to
         sweep step trigger source specified.
-        Outputs array of frequencies and powers
+        Sets microwave source into mode where it outputs array of
+        frequencies at given power.
+
         Equivalent to set
 
         def callback(i):
             self.set_frequency(freq[i])\n
-            self.set_power(power[i])
 
         Such that `calllback()` call is triggered by signal coming from channel
         specified in
@@ -63,14 +98,16 @@ class MwSrcInterface:
         ----------
         frequencies : List[float]
             frequencies list to sweep
-        power : List[float]
-            power list to sweep. Must have the same length as `frequencies
-            argument`
-        sweep_step_trg_src : MW_SWEEP_STEP_TRG_SRC
+        power : float
+            Sweep power value
+        insweep_step_trg_src : MW_INSWEEP_TRG_SRC
             trigger source for microwave source to step to the next sweep
             point.
-        sweep_trg_src
-
+        sweep_trg_src : SWEEP_TRG_SRC
+            trigger source that turns microwave source ready for frequency
+            sweep
+        arm_trigger_src : MW_SWEEP_ARMED_TRIG_SRC
+            trigger source that
         Returns
         -------
 

@@ -1,21 +1,29 @@
 import visa
-import types
-import logging
-from time import sleep
-import numpy as np
+from . import MwSrcInterface
+from .mw_src_data_structures import MwSrcParameters
+from .mw_src_data_structures import MW_SRC_MODE, MW_INSWEEP_TRG_SRC, \
+    MW_TRIG_SRC, MW_SWEEP_ARMED_TRIG_SRC
 
-from .mw_src_data_structures import
 
-class MXG:
+def set_mode_freq_sweep(self):
+    # LIST, CW OR FIXED
+    # (CW and FIXED is the same and refers to the fixed if_freq)
+    self.write(":FREQuency:MODE LIST")
+
+    # STEP - interval and number of pts | LIST - list ought to be loaded
+    self.write(":LIST:TYPE STEP")
+    # TODO: complete call sequence to set frequency sweep list (later)
+    # TODO: focus on TTS measurements with SC5502A and DaqAdcVna
+
+
+class N5173B(MwSrcInterface):
     def __init__(self, address):
+        super().__init__()
         self._address = address
         rm = visa.ResourceManager()
         self._visainstrument = rm.open_resource(self._address)
 
-        self.nop = None
-        self.ext_trig_channel = None
-        self.InSweep_trg_src = None
-        self.sweep_trg_src = None
+        self.parameters: MwSrcParameters = None
 
     def read(self):
         return self._visainstrument.read()
@@ -26,25 +34,19 @@ class MXG:
     def query(self, msg):
         return self._visainstrument.query(msg)
 
-    def get_parameters(self):
-        """
-        Returns a dictionary containing if_freq and power currently used
-        by the device
-        """
-        return {"power": self.get_power(), "if_freq": self.get_frequency()}
-
-    def set_parameters(self, ):
+    def set_parameters(self, params):
         """
 
         Parameters
         ----------
-        parameters_dict
+        params : MwSrcParameters
+            structure containing all parameters
 
         Returns
         -------
-
+        None
         """
-        if mode ==
+        if params.mode ==
         if power is not None:
             self.set_power(power)
         if freq is not None:
@@ -65,12 +67,12 @@ class MXG:
         if "ext_trig_channel" in keys:
             self.set_ext_trig_channel(parameters_dict["ext_trig_channel"])\
 
-
-    def use_internal_clock(self, is_clock_internal):
-        if is_clock_internal:
-            self.write(":SOURce:ROSCillator:SOURce:AUTO OFF")
-        else:
-            self.write(":SOURce:ROSCillator:SOURce:AUTO ON")
+    def get_parameters(self):
+        """
+        Returns a dictionary containing if_freq and power currently used
+        by the device
+        """
+        return {"power": self.get_power(), "if_freq": self.get_frequency()}
 
     def set_output_state(self, output_state):
         """
@@ -80,6 +82,12 @@ class MXG:
 
     def get_output_state(self):
         return self.query(":OUTput:STATe?")
+
+    def use_internal_clock(self, is_clock_internal):
+        if is_clock_internal:
+            self.write(":SOURce:ROSCillator:SOURce:AUTO OFF")
+        else:
+            self.write(":SOURce:ROSCillator:SOURce:AUTO ON")
 
     def set_freq_mode_fixed(self):
         self.write(":SOURce:FREQuency:MODE FIXed")
@@ -173,12 +181,3 @@ class MXG:
 
     def set_trig_type_single(self):
         self.write(":TRIG:TYPE SINGLE")
-
-
-class EXG(MXG):
-
-    def set_power(self, power_dBm):
-        if (power_dBm >= -20) & (power_dBm <= 19):
-            self.write(":SOURce:POWer {0}DBM".format(power_dBm))
-        else:
-            print("Error: power must be between -20 and 19 dBm")
