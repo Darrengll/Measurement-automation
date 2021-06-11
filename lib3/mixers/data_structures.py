@@ -1,11 +1,12 @@
 """ IN DEVELOPMENT. NOT USED ANYWHERE."""
-import copy
-
-import numpy as np
+# Standard library imports
 from typing import Hashable
 
-from drivers.Spectrum_m4x import SPCM, ADCParameters
-from drivers.E8257D import MXG
+# Third party imports
+import numpy as np
+
+# Local application imports
+from lib3.core.drivers.spectrum_m4x import ADCParameters
 
 
 class HetIQCalibration:
@@ -13,7 +14,7 @@ class HetIQCalibration:
     Class for storing data of heterodyne scheme based on IQ mixers calibration.
     """
     def __init__(
-            self, id, dc_offsets_close=(None, None),
+            self, uid, dc_offsets_close=(None, None),
             dc_offsets_open=(None, None),
             r_u=None, r_d=None, phi_up=None, phi_down=None, delay=None,
             phase_delay=None, iqawg_i_amplitude=None, lo_power=None,
@@ -24,8 +25,8 @@ class HetIQCalibration:
 
         Parameters
         ----------
-        id : Hashable
-            identification that can be converted to string.
+        uid : Hashable
+            Unique identifier that can be converted to string.
         dc_offsets_close : np.complex
             Pair of AWG I and Q channels offsets in volts for maximal
             isolation between LO and RF ports.

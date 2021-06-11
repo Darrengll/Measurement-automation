@@ -118,7 +118,7 @@ class Agilent_E5071C(Agilent_PNA_L):
                         # lines of code there is no trace selected after self.select_default_trace()
                         # and self.get_all seem do interrupt the program with timeout exception thrown by low-level visa
                         # GPIB drivers. The reason is that PNA-L doesn't have any number of points in sweep (get_all start
-                        # by quering number of points in current sweep), because there is no traces defined, hence there
+                        # by quering number of points in bias sweep), because there is no traces defined, hence there
                         # is no number of points available to read
         # self.select_default_trace()
 

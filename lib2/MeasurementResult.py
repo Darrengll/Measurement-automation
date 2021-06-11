@@ -36,6 +36,7 @@ class ContextBase():
     def get_equipment(self):
         return self._equipment
 
+    # @property
     def to_string(self):
         self._equipment.update({"comment:": self._comment})
 
@@ -121,7 +122,6 @@ class MeasurementResult:
     @staticmethod
     def load(sample_name, name, date='', subfolder="", return_all=False):
         """
-
         Examples
         ---------
         >>> from lib2.MeasurementResult import MeasurementResult
@@ -145,11 +145,6 @@ class MeasurementResult:
             int - return specific measurement from sorted list of measurements
             found
 
-        Returns
-        -------
-
-        """
-        """
         Finds all files with matching result name within the file structure
         of ./data/ folder and optionally prompts user to resolve any ambiguities.
 
@@ -191,7 +186,7 @@ class MeasurementResult:
                  for path in paths]
         z = zip(dates, paths)
 
-        if isinstance(return_all, int):
+        if not isinstance(return_all, bool):
             return [paths[int(return_all)]]
 
         sorted_dates, sorted_paths = zip(*sorted(z))
@@ -209,6 +204,9 @@ class MeasurementResult:
         print("More than one file found. Enter an index from listed above:")
         index = input()
         return [paths[int(index)]]
+
+    def get_name(self):
+        return self._name
 
     def get_save_path(self):
 
@@ -279,11 +277,11 @@ class MeasurementResult:
                 pickle.dump(self._data, f)
             with open(os.path.join(self.get_save_path(),
                                    self._name + '_context.txt'), 'w+') as f:
+
                 f.write(self.get_context().to_string())
-            # TypeError: can't pickle _thread.lock objects
-            # with open(os.path.join(self.get_save_path(),
-            #                        self._name + '.pkl'), 'w+b') as f:
-            #     pickle.dump(self.__dict__, f)
+            with open(os.path.join(self.get_save_path(),
+                                   self._name + '.pkl'), 'w+b') as f:
+                pickle.dump(self, f)
 
     def visualize(self, maximized=True):
         """
@@ -502,7 +500,8 @@ class MeasurementResult:
     @staticmethod
     def close_figure_by_window_name(window_name):
         try:
-            idx = int(where(array([manager.canvas.figure.canvas.get_window_title() \
+            idx = int(np.where(np.array([
+                manager.canvas.figure.canvas.get_window_title() \
                                    for manager in matplotlib._pylab_helpers.Gcf \
                                   .get_all_fig_managers()]) == window_name)[0][0])
             plt.close(plt.get_fignums()[idx])

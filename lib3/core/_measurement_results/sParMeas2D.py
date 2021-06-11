@@ -180,7 +180,7 @@ class SParMeas2D(MeasurementResult):
         Parameters:
         -----------
         direction: str
-            "avg_cur" for current slice subtraction
+            "avg_cur" for bias slice subtraction
             "avg_freq" for if_freq slice subtraction
 
         """

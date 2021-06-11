@@ -1,3 +1,5 @@
+from tqdm.notebook import tqdm
+
 import drivers.instr as instr
 from drivers.IQAWG import IQAWG
 from drivers.IQVectorGenerator import IQVectorGenerator
@@ -6,6 +8,8 @@ from drivers.Spectrum_m4x import *
 from scipy.fftpack import fft, fftfreq
 from time import sleep
 from lib.data_management import *
+
+import ipywidgets as widgets
 
 
 class DacAdcVNA():
@@ -35,16 +39,21 @@ class DacAdcVNA():
         self._power = None
         self._freq_limits = None
         self._bandwidth = None
-
+        self._adc_timeout = 10000  # ms
         self._recalibrate_mixer = False
+        self._status_widget = widgets.HTML("Idle")
 
+        self._reference_level = -10
         self._samples_I = []
         self._samples_Q = []
         self._averages = 200
-        self._amplitude_window = 500
+        self._amplitude_window = 1000
         self._adc_trigger_delay = 0
         self._sample_length = None
         self._iqadc_parameters_invalidated = False
+
+    def get_status_widget(self):
+        return self._status_widget
 
     def set_if_frequency(self, if_frequency):
         self._iqvg.set_frequency(if_frequency)
@@ -60,7 +69,11 @@ class DacAdcVNA():
         self._iqvg.set_power(power)
 
     def set_freq_limits(self, *freq_limits):
+        self._iqvg.set_frequency(np.mean(freq_limits))
         self._freq_limits = freq_limits
+
+    def set_output_state(self, state):
+        pass  # this device does not support output states
 
     def set_trigger_type(self, trigger_type):
         pass
@@ -71,13 +84,16 @@ class DacAdcVNA():
 
     def set_bandwidth(self, if_bw):
         requested_sample_length = 1 / if_bw * self._iqadc.get_sample_rate()
-        real_sample_length = 2 ** int(log2(requested_sample_length))
+        # real_sample_length = 2 ** int(log2(requested_sample_length))
+        real_sample_length = floor(requested_sample_length / 32) * 32
         real_bw = (1.25e9 / real_sample_length)
         self._bandwidth = real_bw
         self._sample_length = real_sample_length
         self._iqadc_parameters_invalidated = True
-        # spectrum has rearm time of 80 ns between triggers in averaging mode
-        self._iqvg.set_marker_repetition_period((self._sample_length+100) / self._iqadc.get_sample_rate() * 1e9)
+        # spectrum has rearm time of 80 ns (100 samples at 1.25 Gs/s) between
+        # triggers in averaging mode. this is important for continuous
+        # wave regime
+        self._iqvg.set_marker_period((self._sample_length+100) / self._iqadc.get_sample_rate() * 1e9)
 
     def sweep_hold(self):
         pass
@@ -101,16 +117,28 @@ class DacAdcVNA():
                 "n_avg": self._averages,  # number of averages
                 "n_seg": 1,  # number of segments
                 "oversampling_factor": 1,  # sample_rate = max_sample_rate / oversampling_factor
+                                           # TODO: when 2, phase jumps of around 0.2pi
                 "pretrigger": 32,  # samples
                 "mode": SPCM_MODE.AVERAGING,
                 "trig_source": SPCM_TRIGGER.EXT0,
                 "digitizer_delay": self._adc_trigger_delay}
+
+    def get_parameters(self):
+        return {"freq_limits": self._freq_limits,
+                "bandwidth:": self._bandwidth,
+                "sample_length": self._sample_length,
+                "power": self._power,
+                "averages": self._averages,
+                "nop": self._nop,
+                "adc_trigger_delay": self._adc_trigger_delay}
 
     def set_parameters(self, parameters_dict):
         """
         Method allowing to set all or some of the VNA parameters at once
         (bandwidth, nop, power, averages, freq_limits and sweep type)
         """
+        if "freq_limits" in parameters_dict:
+            self.set_freq_limits(*parameters_dict["freq_limits"])
         if "bandwidth" in parameters_dict:
             self.set_bandwidth(parameters_dict["bandwidth"])
         if "averages" in parameters_dict:
@@ -119,8 +147,6 @@ class DacAdcVNA():
             self.set_power(parameters_dict["power"])
         if "nop" in parameters_dict:
             self.set_nop(parameters_dict["nop"])
-        if "freq_limits" in parameters_dict:
-            self.set_freq_limits(*parameters_dict["freq_limits"])
         if "adc_trigger_delay" in parameters_dict:
             self.set_adc_trigger_delay(parameters_dict["adc_trigger_delay"])
         else:
@@ -142,18 +168,28 @@ class DacAdcVNA():
     def get_frequencies(self):
         return linspace(*self._freq_limits, self._nop)
 
+    def get_power(self):
+        return self._power
+
+    def demodulated_traces(self):
+        Ts = arange(0, len(self._samples_I[0])) / self._iqadc.get_sample_rate()
+        complex_IQ = (array(self._samples_I) + 1j * array(self._samples_Q))
+        demodulated_IQ = complex_IQ * exp(-1j * self._iqvg.get_if_frequency() * Ts * 2 * pi)
+        return real(demodulated_IQ), imag(demodulated_IQ)
+
     def get_sdata(self):
         Ts = arange(0, len(self._samples_I[0])) / self._iqadc.get_sample_rate()
         complex_IQ = (array(self._samples_I) + 1j * array(self._samples_Q))
         demodulated_IQ = complex_IQ * exp(-1j * self._iqvg.get_if_frequency() * Ts * 2 * pi)
         # Downconversion attenuation is cancelled by 20 dB IF amplifiers
-        return mean(conj(demodulated_IQ), axis=1)/sqrt(10**(self._power/10))
+        return mean(conj(demodulated_IQ), axis=1)/sqrt(10**(
+                (self._power-self._reference_level)/10))
 
     def get_calibration(self, frequency, power):
         return self._iqvg.get_calibration(frequency, power)
 
-    def sweep_single(self):
-        frequencies = self.get_frequencies()
+    def sweep_single(self, progress_bar = False):
+        frequencies = self.get_frequencies()[::-1]
         self._iqvg.set_frequency(frequencies[0])  # ensure
 
         if self._iqadc_parameters_invalidated:
@@ -161,14 +197,23 @@ class DacAdcVNA():
 
         self._samples_I = []
         self._samples_Q = []
-        for freq in frequencies:
+        if progress_bar:
+            frequencies = tqdm(frequencies)
+        for idx, freq in enumerate(frequencies):
+            self._status_widget.value = f"Current frequency {(freq/1e9):.4f} " \
+                                        f"GHz. Sweep done: " \
+                                        f"{(idx/self._nop*100):.1f} %"
             self._iqvg.set_frequency(freq)
+            # time.sleep(.05)
 
-            data = self._iqadc.measure()
-            data = data / 128 / self._averages * self._amplitude_window/1000
+            data = self._iqadc.measure(timeout=self._adc_timeout)
 
             self._samples_I += [data[0::2]]
             self._samples_Q += [data[1::2]]
+        self._samples_I = self._samples_I[::-1]
+        self._samples_Q = self._samples_Q[::-1]
+        self._status_widget.value = "Idle"
+
 
     def sweep_continuous(self):
         pass

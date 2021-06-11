@@ -109,8 +109,8 @@ class Agilent_EXA_N9010A(Instrument):
         self.add_function('set_electrical_delay')
         self.add_function("setup_list_sweep")
         self.add_function("set_parameters")
-        #self.add_function('avg_clear')
-        #self.add_function('avg_status')
+        self.add_function("get_freq_ref_input")
+        self.add_function("set_freq_ref_input")
 
         #self._oldspan = self.get_span()
         #self._oldnop = self.get_nop()
@@ -120,6 +120,7 @@ class Agilent_EXA_N9010A(Instrument):
         self.get_all()
         #self.setup_swept_sa()
 
+        self.set_freq_ref_input("INT")
 
     def get_all(self):
         self.get_nop()
@@ -209,7 +210,7 @@ class Agilent_EXA_N9010A(Instrument):
 
     def get_tracedata(self):
         """
-        Get the data of the current trace
+        Get the data of the bias trace
 
         Output: (Frequency_List, Signal_List)
 
@@ -231,6 +232,16 @@ class Agilent_EXA_N9010A(Instrument):
     def get_freqpoints(self, query = False):
       self._freqpoints = numpy.linspace(self._start,self._stop,self._nop)
       return self._freqpoints
+
+
+    def set_freq_ref_input(self, type):
+        if type in ["INT", "SENS", "EXT", "PULS"]:
+            self._visainstrument.write(":ROSC:SOUR:TYPE {0}".format(type))
+        else:
+            raise ValueError("Type %s invalid" % type)
+
+    def get_freq_ref_input(self):
+        return self._visainstrument.query(":ROSC:SOUR:TYPE?")
 
     def set_electrical_delay(self, delay):
         self._visainstrument.write("CALC{0}:CORRection:EDELay:TIME {1}".format(self._ci, delay))

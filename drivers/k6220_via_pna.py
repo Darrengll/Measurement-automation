@@ -72,7 +72,7 @@ class K6220(object):
         if current <= self.max_current and current >= self.min_current:
             self.write("SOUR:CURR:AMPL {0}".format(current))
         else:
-            print "Error: current out of range. use set_limits(min,max)."
+            print "Error: bias out of range. use set_limits(min,max)."
 
     def get_current(self):
         bla = self.ask("SOUR:CURR:AMPL?")

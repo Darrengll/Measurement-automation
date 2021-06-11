@@ -245,6 +245,25 @@ class IQPulseBuilder():
     def get_calibration(self):
         return self._iqmx_calibration
 
+    def add_pulse(self, duration, amplitude_mult=1):
+        '''
+        Adds a DC pulse or a sine pulse depending on the IF frequency of the
+        calibration
+        Parameters:
+        -----------
+        duration: float, ns
+            the duration of the added pulse
+        amplitude_mult: float
+            the value that the IQ calibration values (dc_offsets_open or
+            if_amplitudes) are multiplied by
+        '''
+        if self._iqmx_calibration.get_radiation_parameters()[
+            "if_frequency"] == 0:
+            self.add_dc_pulse(duration)
+        else:
+            self.add_sine_pulse(duration, amplitude_mult=amplitude_mult)
+        return self
+
     def add_dc_pulse(self, duration, dc_offsets_open=None):
         """
         Adds a pulse by putting a dc voltage at the I and Q inputs of the mixer
@@ -283,8 +302,11 @@ class IQPulseBuilder():
             if dc_offsets is None else dc_offsets
 
         N_time_steps = int(round(duration / self._waveform_resolution))
-        self._pulse_seq_I.append_pulse(zeros(N_time_steps) + vdc1)
-        self._pulse_seq_Q.append_pulse(zeros(N_time_steps) + vdc2)
+        try:
+            self._pulse_seq_I.append_pulse(zeros(N_time_steps) + vdc1)
+            self._pulse_seq_Q.append_pulse(zeros(N_time_steps) + vdc2)
+        except ValueError as e:
+            raise ValueError(f"Error {e} for duration of {duration} ns!")
         return self
 
     def add_sine_pulse(self, duration, phase=0, amplitude_mult=1,
@@ -551,22 +573,35 @@ class IQPulseBuilder():
             pulse_sequence_parameters["modulating_window"]
         amplitude = \
             pulse_sequence_parameters["excitation_amplitude"]
+        if "end_gap" in pulse_sequence_parameters.keys():
+            end_gap = pulse_sequence_parameters["end_gap"]
+            # ns between the readout and the start of the next seq
+            # to measure the ring-down of the resonator
+        else:
+            end_gap = 0
+        if "readout_excitation_gap" in pulse_sequence_parameters.keys():
+            readout_excitation_gap = pulse_sequence_parameters[
+                "readout_excitation_gap"]
+        else:
+            readout_excitation_gap = 100
+        try:
+            exc_pb.add_zero_pulse(awg_trigger_reaction_delay
+                                  + (repetition_period-readout_duration-excitation_duration)
+                                  - readout_excitation_gap - end_gap)\
+                  .add_sine_pulse(excitation_duration, 0,
+                                  amplitude_mult=amplitude,
+                                  window=window) \
+                  .add_zero_until(repetition_period)
+        except ValueError as e:
+            raise ValueError(f"Failed to build excitation sequence with parameters {pulse_sequence_parameters}: {e}")
 
-        readout_excitation_gap = 10
-        exc_pb.add_zero_pulse(awg_trigger_reaction_delay
-                              + (repetition_period-readout_duration-excitation_duration)
-                              - readout_excitation_gap)\
-              .add_sine_pulse(excitation_duration, 0,
-                              amplitude_mult=amplitude,
-                              window=window) \
-              .add_zero_until(repetition_period)
-
-        ro_pb.add_zero_pulse(repetition_period - readout_duration) \
+        ro_pb.add_zero_pulse(repetition_period - readout_duration-end_gap) \
              .add_pulse(readout_duration) \
              .add_zero_until(repetition_period)
 
         return {'q_seqs': [exc_pb.build()],
                 'ro_seqs': [ro_pb.build()]}
+
 
     @staticmethod
     def build_direct_rabi_sequences(pulse_sequence_parameters, **pbs):
@@ -942,7 +977,7 @@ class IQPulseBuilder():
         positive_n = pulse_types.count("P")
         p_positions = np.zeros(positive_n)  # start positions of the "P" pulses
         p_positions[0] += start_delay
-        i = 0  # current pulse index
+        i = 0  # bias pulse index
         for p_idx in range(positive_n):
             # flag indicates that it is time to break from inner cycle
             # and start calculating next "P" pulse position
@@ -963,7 +998,7 @@ class IQPulseBuilder():
                     # if there is at least 1 more "P" pulse
                     # add previously accumulated result for next positive
                     # pulse start position:
-                    # current pulse excitation duration and `delay_pulse_delay`
+                    # bias pulse excitation duration and `delay_pulse_delay`
                     # as well
                     if (p_idx + 1) < len(p_positions):
                         p_positions[p_idx + 1] = p_positions[p_idx] + \
@@ -997,7 +1032,7 @@ class IQPulseBuilder():
                     # if there is at least 1 more "N" pulse
                     if (n_idx + 1) < len(n_positions):
                         # add previously accumulated result for next negative pulse start position
-                        # add current pulse excitation duration as well
+                        # add bias pulse excitation duration as well
                         n_positions[n_idx + 1] = n_positions[n_idx] + \
                                                  excitation_durations[i] + \
                                                  after_pulse_delays[i]

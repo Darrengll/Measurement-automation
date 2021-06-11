@@ -21,7 +21,7 @@ class DispersiveRamseyFringes(VNATimeResolvedDispersiveMeasurement2D):
                           (self._output_pulse_sequence,
                            ramsey_delays),
                       "excitation_frequency":
-                          (lambda x: self._q_lo.set_frequency(x + q_if_frequency),
+                          (lambda x: self._exc_iqvg.set_frequency(x + q_if_frequency),
                            excitation_freqs)}
         super().set_swept_parameters(**swept_pars)
 

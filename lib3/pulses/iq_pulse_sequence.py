@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy import signal
 
-from lib3.mixers.het_calibrator import HetIQCalibration
+from lib3.mixers.data_structures import HetIQCalibration
 from lib3.pulses.pulse_sequence import PulseSequence
 
 from itertools import cycle, islice
@@ -707,7 +707,7 @@ class IQPulseBuilder:
         positive_n = pulse_types.count("P")
         p_positions = np.zeros(positive_n)  # start positions of the "P" pulses
         p_positions[0] += start_delay
-        i = 0  # current pulse index
+        i = 0  # bias pulse index
         for p_idx in range(positive_n):
             # flag indicates that it is time to break from inner cycle
             # and start calculating next "P" pulse position
@@ -728,7 +728,7 @@ class IQPulseBuilder:
                     # if there is at least 1 more "P" pulse
                     # add previously accumulated result for next positive
                     # pulse start position:
-                    # current pulse excitation duration and `delay_pulse_delay`
+                    # bias pulse excitation duration and `delay_pulse_delay`
                     # as well
                     if (p_idx + 1) < len(p_positions):
                         p_positions[p_idx + 1] = p_positions[p_idx] + \
@@ -762,7 +762,7 @@ class IQPulseBuilder:
                     # if there is at least 1 more "N" pulse
                     if (n_idx + 1) < len(n_positions):
                         # add previously accumulated result for next negative pulse start position
-                        # add current pulse excitation duration as well
+                        # add bias pulse excitation duration as well
                         n_positions[n_idx + 1] = n_positions[n_idx] + \
                                                  excitation_durations[i] + \
                                                  after_pulse_delays[i]

@@ -60,8 +60,8 @@ class MXG(Instrument):
         keys = parameters_dict.keys()
         if "power" in keys:
             self.set_power(parameters_dict["power"])
-        if "if_freq" in keys:
-            self.set_frequency(parameters_dict["if_freq"])
+        if "freq" in keys:
+            self.set_frequency(parameters_dict["freq"])
 
         if "sweep_trg_src" in keys:
             self.set_mode_freq_sweep()

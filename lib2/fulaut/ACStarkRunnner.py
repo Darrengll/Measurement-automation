@@ -14,12 +14,11 @@ from lib2.fulaut.ACStarkOracle import ACStarkOracle
 class ACStarkRunner:
 
     def __init__(self, sample_name, qubit_name, res_limits, spectrum_oracle_fit,
-                 vna=None, exc_iqvg=None, cur_src=None, sa=None):
+                 vna=None, exc_iqvg=None, bias_src=None):
 
         self._vna = vna
-        self._cur_src = cur_src
+        self._bias_src = bias_src
         self._exc_iqvg = exc_iqvg
-        self._sa = sa
         self._sample_name = sample_name
         self._qubit_name = qubit_name
         self._res_limits = res_limits
@@ -39,7 +38,7 @@ class ACStarkRunner:
                                    return_all=True)
 
         if known_results is not None and not ACSTTSRunnerParameters().rerun:
-            self._asts_result = known_results[-1]
+            self._asts_result = known_results[-2]
 
         else:
             self._perform_asts(current)
@@ -47,14 +46,13 @@ class ACStarkRunner:
 
         ACS = ACStarkOracle(self._asts_result, chi=.3e-3, plot=True)
         f_max, vna_power = ACS.launch()
-        absolute_power = round(self._find_power(vna_power))
 
         self._asts_result.save()
 
         self._logger.debug(
-            "Transmon bare if_freq: %.4f GHz, readout power (on SA): %d dBm (%d on VNA)" %
-            (f_max / 1e9, absolute_power, vna_power))
-        return f_max, absolute_power
+            "Transmon bare if_freq: %.4f GHz, readout power: %d dBm" %
+            (f_max / 1e9, vna_power))
+        return f_max, vna_power
 
     def _find_power(self, vna_power):
 
@@ -86,22 +84,22 @@ class ACStarkRunner:
                                           self._sample_name,
                                           vna=self._vna,
                                           mw_src=self._exc_iqvg,
-                                          current_src=self._cur_src)
+                                          bias_src=self._bias_src)
         vna_parameters = {"freq_limits": self._res_limits,
                           "nop": 1}
         vna_parameters.update(ACSTTSRunnerParameters().vna_parameters)
 
         q_freq = qubit_spectra.transmon_spectrum(current, *self._spectrum_oracle_fit[:-1])
 
-        mw_src_frequencies = linspace(q_freq - 150e6, q_freq + 50e6, 301)
+        mw_src_frequencies = linspace(q_freq - 50e6, q_freq + 50e6, 201)
 
         powers = linspace(self._vna_power - 15, self._vna_power + 5, 21)
 
-        mw_src_parameters = {"power": GlobalParameters().excitation_power-10}
+        mw_src_parameters = {"power": GlobalParameters().excitation_power - 10}
+        self._logger.debug(f"Starting ASTS for qubit frequency {q_freq/1e9:.3f} and bias {current}")
 
-        ASTS.set_fixed_parameters(vna=[vna_parameters], mw_src=[mw_src_parameters], current=current)
+        ASTS.set_fixed_parameters(vna=[vna_parameters], mw_src=[mw_src_parameters], bias=current)
         ASTS.set_swept_parameters(mw_src_frequencies, powers)
 
         ASTS._measurement_result._unwrap_phase = False
-
         self._asts_result = ASTS.launch()

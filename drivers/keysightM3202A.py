@@ -58,7 +58,6 @@ class KeysightM3202A:
             "M3202A", chassis, slot, compatibility=SD_Compatibility.LEGACY)
         self._handle_error(self.module_id)
 
-        # Shamil a.k.a. 'BATYA' code here
         self.waveforms = [None] * 4
         # store `waveform_number` parameter, see manual for details
         self.waveform_ids = [-1] * 4
@@ -70,22 +69,21 @@ class KeysightM3202A:
         self.deviation_gains = [0.0] * 4
         self.trigger_modes = [SD_TriggerModes.AUTOTRIG] * 4
         # from front panel, can be also from PXI_n triggering bus
-        self.trigger_ext_sources = [SD_TriggerExternalSources.TRIGGER_EXTERN] * 4
+        self.trigger_ext_sources = [
+                                       SD_TriggerExternalSources.TRIGGER_EXTERN] * 4
         # rising edge by default
         self.trigger_behaviours = [SD_TriggerBehaviors.TRIGGER_RISE] * 4
         self.trigger_output = True
-        # default and only option at MIPT is synchronizing with PXI 10 MHz
-        # clock
+        # see self.trigger_output_config()
         self.trigger_sync_mode = SD_SyncModes.SYNC_CLK10
-        # as written in manual at p.31 in case of CLK10 trigger sync
-        # trigger can be outputted only at the 10 MHz PXI clock cycles
-        self.trigger_clock_period = 100  # ns
-        self.synchronized_channels = []
-        self.sync_mode = SD_SyncModes.SYNC_CLK10  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
 
+        self.sync_mode = 1  # 0 is for CLKsys (1 GHz)
+                            # 1 is for the 10  MHz PXI clock
+
+        self.synchronized_channels = None
         self._source_channels_group = []  # channels that are the source of the waveforms for dependent group
         self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms
-                                             # from _source_channels_group
+        # from _source_channels_group
         self._update_dependent_on_start = False
 
         self._prescaler = 0  # from 0 to 4095 p.23 user manual
@@ -136,7 +134,7 @@ class KeysightM3202A:
         self.synchronized_channels = channels
 
     def unsynchronize_channels(self):
-        self.synchronized_channels = []
+        self.synchronized_channels = None
 
     def set_trigger(self, trigger_string: str = "CONT", channel: int = -1):
         """
@@ -168,10 +166,10 @@ class KeysightM3202A:
                 self.trigger_modes[channel - 1] = SD_TriggerModes.AUTOTRIG
 
     def trigger_output_config(self, trig_mode="ON", channel=-1,
-                              trig_length=1000):
+                              trig_length=100, sync = "PXICLK10"):
         """
-            Manipulates the output trigger.
-            If channel is not supplied, trigger output is set for the first channel
+        Manipulates the output trigger.
+        If channel is not supplied, trigger output is set for the first channel
         from synchronized channel group.
             To set synchronized channels, use self.synchronize_channels(...) method. If
         self.synchronized_channels were not set, then the default value is [] and no
@@ -188,7 +186,22 @@ class KeysightM3202A:
         trig_length : int
             trigger duration in ns
             trigger duration resolution is 10 ns
+        sync: str
+            Which clock is used to sample the trigger, "PXICLK10" for the
+            PXI clock or "CLK100" for the internal clock, manual at p.31, p.126
+            For the PXICLK10 waveform durations must be multiples of 100 ns
+            ohterwise 100 ns jitter will occur. For CLK100, somehow,
+            there is no jitter for arbitrary durations (tested 1.5 MHz rep
+            rate with a period of 666.67 ns)
         """
+
+        if sync == "PXICLK10":
+            self.trigger_sync_mode = SD_SyncModes.SYNC_CLK10
+        elif sync == "CLK100":
+            self.trigger_sync_mode = SD_SyncModes.SYNC_NONE
+        else:
+            raise ValueError(f'Sync mode {sync} invalid. Can be "PXICLK10" '
+                             f'or "CLK100"')
 
         if trig_mode == "ON":
             self.trigger_output = True
@@ -196,7 +209,7 @@ class KeysightM3202A:
         elif trig_mode == "OFF":
             self.trigger_output = False
         else:
-            raise NotImplementedError(
+            raise ValueError(
                 "trig_mode argument can be only 'ON' or 'OFF' ")
 
         # if channel is equal to -1 or is stored in
@@ -219,7 +232,7 @@ class KeysightM3202A:
                     chan - 1, SD_MarkerModes.EVERY_CYCLE,
                     trgPXImask, trgIOmask, 1,
                     # trigger sync with internal CLKsys by default
-                    syncMode=self.sync_mode,
+                    syncMode=self.trigger_sync_mode,
                     # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                     length=int(trig_length / 10),
                     delay=0
@@ -238,8 +251,10 @@ class KeysightM3202A:
                 self.module.AWGqueueMarkerConfig(chan - 1,
                                                  SD_MarkerModes.DISABLED,
                                                  trgPXImask, trgIOmask, 1,
-                                                 syncMode=self.sync_mode,
-                                                 # trigger synch with internal CLKsys
+                                                 syncMode=SD_SyncModes.SYNC_NONE,
+                                                 # trigger sync with internal 100
+                                                 # MHz clock for the 'off'
+                                                 # state
                                                  length=100,
                                                  # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                                                  delay=0)
@@ -281,17 +296,16 @@ class KeysightM3202A:
         """
         # check if pulse sequence length meets the requirement imposed by a
         # trigger sampling
-        if self.trigger_sync_mode is SD_SyncModes.SYNC_CLK10:
-            waveform_duration = int(len(waveform) / self.get_sample_rate()
-                                    * 1e9)  # ns
+        waveform_duration = np.round(1 / frequency * 1e9)
+        if self.trigger_sync_mode == SD_SyncModes.SYNC_CLK10:
             if waveform_duration % 100 != 0:
-                raise ValueError(f"Duration of the waveform must be a "
-                                    f"multiple of 100 ns, because the "
-                                    f"current trigger is synchronized with "
-                                    f"PXI clock and therefore sampled with "
-                                    f"10 MHz. Not following this requirement "
-                                    f"leads to uncertainty of the trigger "
-                                    f"pulse position relative to the waveform")
+                raise ValueError("Duration of the waveform must be a "
+                  "multiple of 100 ns, because the "
+                  "bias trigger is synchronized with "
+                  "PXI clock and therefore sampled with "
+                  "10 MHz. Not following this requirement "
+                  "leads to uncertainty of the trigger "
+                  "pulse position relative to the waveform")
 
         # stopping AWG so the changes will take place according to the documentation
         # (not neccessary but a good practice)
@@ -313,8 +327,8 @@ class KeysightM3202A:
                 if idx != channel - 1:
                     if existing_freq is not None:
                         if (existing_freq - frequency) != 0:
-                            to_clear.append(idx+1)
-            self.clear(to_clear)
+                            to_clear.append(idx + 1)
+            self.reset(to_clear)
 
         if not self._allow_unmatched_waveforms:
             clear_unmatched_waveforms()
@@ -323,6 +337,7 @@ class KeysightM3202A:
         self.load_waveform_to_channel(waveform, frequency, channel)
         # starting operation
         self.start_AWG(channel)
+        # self.reset_phase()
 
     def output_continuous_wave_old(self, frequency, amplitude, phase, offset,
                                    waveform_resolution,
@@ -363,9 +378,10 @@ class KeysightM3202A:
 
         """
         self.stop_AWG(channel)  # stop output from this channel
-        self.stop_modulation(
-            channel)  # disable all modulation types for this channel
-        # setup embedded function generator to produce sine wave with parameters
+        # disable all modulation types for this channel
+        self.stop_modulation(channel)
+        # setup embedded function generator to produce
+        # sine wave with parameters
         self.setup_fg_sine(frequency, amplitude, phase, offset, channel)
 
         # output trigger has to be generated
@@ -375,12 +391,16 @@ class KeysightM3202A:
                 np.around(trigger_sync_every * self.get_sample_rate() / 1e9)))
             self._load_array_into_AWG(arr, channel)
             self.setup_modulation_amp(channel, 0)
-            self.trigger_output_config("ON", channel,
-                                       trig_length=self.trigger_length)
+            self.trigger_output_config(
+                trig_mode="ON", channel=channel,
+                trig_length=self.trigger_length
+            )
 
-        # resetting phase for synchronization of multiple carrier signals from internal Function Generator
+        # resetting phase for synchronization of multiple carrier
+        # signals from internal Function Generator
         self.module.channelPhaseResetMultiple(
-            sum([1 << (chan - 1) for chan in self.synchronized_channels]))
+            sum([1 << (chan - 1) for chan in self.synchronized_channels])
+        )
         self.start_AWG(channel)
 
     def setup_fg_sine(self, frequency, amplitude, phase, offset, channel):
@@ -402,7 +422,7 @@ class KeysightM3202A:
         Returns
         -------
         sample_rate : int
-            Returns current AWG's sample rate in Hz.
+            Returns bias AWG's sample rate in Hz.
         """
         if self._prescaler == 0:
             fs = int(1e9)
@@ -424,7 +444,7 @@ class KeysightM3202A:
         elif self._prescaler == 1:
             dt = 5  # ns
         elif self._prescaler > 1:
-            dt = 10*self._prescaler  # ns
+            dt = 10 * self._prescaler  # ns
 
         return dt
 
@@ -474,7 +494,8 @@ class KeysightM3202A:
         self.module.channelOffset(channel - 1, 0)
         # setting output to sample from channel queue
         self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_AWG
-        self.module.channelWaveShape(channel - 1, self.waveshape_types[channel - 1])
+        self.module.channelWaveShape(channel - 1,
+                                     self.waveshape_types[channel - 1])
         self.module.channelPhase(channel - 1, 0)
         self.module.channelOffset(channel - 1, 0)
         # not calling channelFrequency and channelAmplitude as
@@ -539,7 +560,7 @@ class KeysightM3202A:
         # converting domain values in the function domain
         new_x_converted = np.remainder(new_x, duration_initial)
         waveform_array = f_wave(
-            new_x_converted)  # obtaining new waveform walues
+            new_x_converted)  # obtaining new waveform values
 
         normalization = np.max(np.abs(waveform_array))
 
@@ -547,7 +568,12 @@ class KeysightM3202A:
             self.output_voltages[channel - 1] = normalization
 
         # normalize waveform to (-1,1) interval
-        waveform_array /= normalization
+        if normalization != 0:
+            waveform_array /= normalization
+        else:
+            # all points are equal to zero
+            pass
+
         self.repetition_frequencies[channel - 1] = frequency
         self._load_array_into_AWG(waveform_array, channel)
 
@@ -627,16 +653,16 @@ class KeysightM3202A:
         -------
 
         """
-        if (self._update_dependent_on_start):
+        if self._update_dependent_on_start:
             self._load_dependent_channels()
 
-        if ((not self.synchronized_channels) or (
-                channel not in self.synchronized_channels)):
+        if (not self.synchronized_channels) or \
+                (channel not in self.synchronized_channels):
             # if it is single channel
-            self.module.AWGqueueSyncMode(channel - 1, syncMode=self.sync_mode)
+            self.module.AWGqueueSyncMode(channel - 1, syncMode=self.trigger_sync_mode)
             ret = self.module.AWGstart(channel - 1)
             self._handle_error(ret)
-        elif (channel in self.synchronized_channels):
+        elif channel in self.synchronized_channels:
             # if channel belongs to one of the synchronized groups
             channels_mask = 0
             for chan in self.synchronized_channels:
@@ -646,8 +672,9 @@ class KeysightM3202A:
             self._handle_error(ret)
         else:
             raise NotImplementedError(
-                "Check channel number conditions on argument provided: channel={}".format(
-                    channel))
+                "Check channel number conditions on argument"
+                " provided: channel={}".format(channel)
+            )
 
         return ret
 
@@ -707,9 +734,9 @@ class KeysightM3202A:
                     self._dependent_channels_group)):
             if (self.waveforms[source_chan - 1] is not None):
                 self.repetition_frequencies[dependent_chan - 1] = \
-                self.repetition_frequencies[source_chan - 1]
+                    self.repetition_frequencies[source_chan - 1]
                 self.output_voltages[dependent_chan - 1] = \
-                self.output_voltages[source_chan - 1]
+                    self.output_voltages[source_chan - 1]
                 self._load_array_into_AWG(self.waveforms[source_chan - 1],
                                           dependent_chan)
                 # print(self.waveforms[source_chan-1]*self.output_voltages[source_chan-1],self.output_voltages[dependent_chan-1]*self.waveforms[source_chan-1])

@@ -77,8 +77,8 @@ class CrosstalksCalibrationBase(Measurement):
             self._vna[0].set_power(vna_parameters["res_find_power"])
         else:
             self._vna[0].set_power(vna_parameters["power"])
-        if "res_find_nop" in vna_parameters.keys():
-            self._vna[0].set_nop(vna_parameters["res_find_nop"])
+        if "_res_find_nop" in vna_parameters.keys():
+            self._vna[0].set_nop(vna_parameters["_res_find_nop"])
         else:
             self._vna[0].set_nop(vna_parameters["nop"])
         self._vna[0].set_bandwidth(vna_parameters["bandwidth"] * self._bandwidth_factor)

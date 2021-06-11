@@ -2,7 +2,7 @@
   "global": {
     "resonator_type": "notch",
     "which_sweet_spot": {
-      "I": "top",
+      "I": "bottom",
       "II": "top",
       "III": "top",
       "IV": "top",
@@ -12,35 +12,35 @@
       "VIII": "top"
     },
     "readout_power": -55,
-    "excitation_power": -30
+    "excitation_power": -20
   },
   "fulaut": {
     "resonator_oracle": {
       "rerun": false,
       "vna_parameters": {
-        "nop": 5000,
+        "nop": 10001,
         "freq_limits": [
-          6.4e9,
-          7.5e9
+          6.25e9,
+          6.8e9
         ],
         "bandwidth": 1e6,
-        "averages": 1000,
-        "power": -40
+        "averages": 10000,
+        "power": -65
       },
-      "peak_number": 8
+      "peak_number": 5,
+      "default_scan_area": 3e6,
+      "window": 100
     },
     "sts_runner": {
-      "rerun": false,
+      "rerun": true,
       "vna_parameters": {
-        "nop": 101,
-        "bandwidth": 1e5,
+        "nop": 201,
+        "bandwidth": 1e6,
         "averages": 1000
       },
       "flux_nop": 101,
       "anticrossing_oracle_hints": {
-        "fqmax_below": true,
-        "g": 35e6,
-        "d": 0.3
+        "fqmax_below": true
       }
     },
     "tts_runner": {
@@ -50,49 +50,53 @@
         "averages": 2000,
         "resonator_detection_nop": 201,
         "resonator_detection_bandwidth": 1e5
-      }
+      },
+      "frequency_span": [4.4e9, 5.7e9],
+      "periods": 1.1,
+      "flux_nop": 201,
+      "frequency_nop": 201
     },
     "acstts_runner": {
       "rerun": false,
       "vna_parameters": {
         "bandwidth": 5e4,
-        "averages": 20000,
-        "resonator_detection_nop": 201,
-        "resonator_detection_bandwidth": 5e4
+        "averages": 5000,
+        "resonator_detection_nop": 501,
+        "resonator_detection_bandwidth": 1e5
       }
     },
     "rabi": {
       "rerun": false,
-      "nop": 101,
+      "nop": 301,
       "max_excitation_duration": 1001,
-      "readout_duration": 4000,
-      "repetition_period": 50000,
-      "averages": 5000
+      "readout_duration": 2000,
+      "repetition_period": 15000,
+      "averages": 100000
     },
     "ramsey": {
       "rerun": false,
-      "nop": 101,
-      "readout_duration": 4000,
-      "repetition_period": 100000,
-      "averages": 5000,
-      "max_ramsey_delay": 50000,
-      "detuning": 0.1e6
+      "nop": 201,
+      "readout_duration": 2000,
+      "repetition_period": 15000,
+      "averages": 100000,
+      "max_ramsey_delay": 3000,
+      "detuning": 5e6
     },
     "decay": {
       "rerun": false,
-      "nop": 51,
-      "averages": 5000,
-      "readout_duration": 4000,
-      "repetition_period": 200000,
-      "max_readout_delay": 150000
+      "nop": 101,
+      "averages": 100000,
+      "readout_duration": 2000,
+      "repetition_period": 15000,
+      "max_readout_delay": 10000
     },
     "hahn_echo": {
       "rerun": false,
-      "nop": 51,
-      "averages": 20000,
-      "readout_duration": 4000,
-      "repetition_period": 100000,
-      "max_echo_delay": 80000
+      "nop": 101,
+      "averages": 100000,
+      "readout_duration": 2000,
+      "repetition_period": 15000,
+      "max_echo_delay": 10000
     }
   }
 }

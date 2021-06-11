@@ -224,9 +224,7 @@ class KeysightM3202A:
                     length=int(trig_length / 10),
                     delay=0
                 )
-                #  enabling trigger for the first channel from group is
-                # enough to produce output marker
-                break
+
             else:  # disable trigger for all channels form group
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_OUT)
                 self.module.triggerIOwrite(0,
@@ -282,8 +280,9 @@ class KeysightM3202A:
         # check if pulse sequence length meets the requirement imposed by a
         # trigger sampling
         if self.trigger_sync_mode is SD_SyncModes.SYNC_CLK10:
-            waveform_duration = int(len(waveform) / self.get_sample_rate()
-                                    * 1e9)  # ns
+            waveform_duration = np.round(1/frequency * 1e9)
+                #  int(len(waveform) / self.get_sample_rate()
+                #                    * 1e9)  # ns
             if waveform_duration % 100 != 0:
                 raise ValueError(f"Duration of the waveform must be a "
                                     f"multiple of 100 ns, because the "
@@ -547,7 +546,11 @@ class KeysightM3202A:
             self.output_voltages[channel - 1] = normalization
 
         # normalize waveform to (-1,1) interval
-        waveform_array /= normalization
+        if normalization != 0:
+            waveform_array /= normalization
+        else:
+            # all waveform points are equal to zero. Do nothing.
+            pass
         self.repetition_frequencies[channel - 1] = frequency
         self._load_array_into_AWG(waveform_array, channel)
 

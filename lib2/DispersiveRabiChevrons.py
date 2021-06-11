@@ -32,7 +32,7 @@ class DispersiveRabiChevrons(VNATimeResolvedDispersiveMeasurement2D):
                           (self._output_pulse_sequence,
                            excitation_durations),
                       "excitation_frequency":
-                          (lambda x: self._q_lo[0].set_frequency(x - self._measurement_result._if_shift),
+                          (lambda x: self._exc_iqvg[0].set_frequency(x - self._measurement_result._if_shift),
                            excitation_freqs)}
         super().set_swept_parameters(**swept_pars)
 

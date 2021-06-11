@@ -23,7 +23,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
         Parameters
         ----------
         name : str
-            name of current measurement
+            name of bias measurement
         sample_name : str
             name of measured sample
         measurement_result_class : MeasurementResult
@@ -33,7 +33,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
         Notes
         ---------
-        vna and current source is optional
+        vna and bias source is optional
 
         list_devs_names: {exa_name: default_name, src_plus_name: default_name,
                          src_minus_name: default_name, vna_name: default_name, current_name: default_name}

@@ -1,4 +1,4 @@
-from .n5173b import N5173B
+from .n5173b_exg import N5173B
 
 
 class N1583B(N5173B):

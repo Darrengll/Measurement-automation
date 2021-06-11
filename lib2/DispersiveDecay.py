@@ -33,7 +33,7 @@ class DispersiveDecayResult(VNATimeResolvedDispersiveMeasurement1DResult):
         return p0, bounds
 
     def _generate_annotation_string(self, opt_params, err):
-        return "$T_1=%.2f \pm %.2f\mu$s"%(opt_params[2], err[2])
+        return "$T_1=%.2f \pm %.2f\ \mu$s"%(opt_params[2], err[2])
 
     def get_decay(self):
         return (self._fit_params[2], self._fit_errors[2])

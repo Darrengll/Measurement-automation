@@ -1,10 +1,14 @@
 """ IN DEVELOPMENT. NOT USED ANYWHERE."""
+
+# Standard library imports
+from typing import Union, Tuple, List
+
+# Third party imports
 import numpy as np
-import copy as cpy
 import matplotlib.pyplot as plt
 
-from typing import Union, Tuple, List
-from lib3.mixers.het_calibrator import CalibrationSingleUp
+# Local application imports
+from lib3.mixers.data_structures import CalibrationSingleUp
 
 
 class PulseSequence:

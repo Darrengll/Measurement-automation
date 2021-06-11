@@ -44,16 +44,18 @@ lib3/
     resonators/ - finding and fitting resonators
     mixers/ - package that regulates low level mixer-based schemes calibrations
     qchar/ - all necessary measurements that are required to characterize
-    different aspects of qubit schemes.
-        cw/ - STS/TTS/AC-stark and other CW measurements. TTS Spectrums fit.
+        different physical aspects of a single qubit
+        (no single-qubit operations).
+        cw/ - STS/TTS/AC-stark and other CW measurements. TTS spectra fit.
             Couplings estimation based on fits. Qubit transitions frequencies.
         td/ - time-domain measurementsRabi/Ramsey and other pulsed measuremnets
             that results in lifetime estimation of a qubits. As well as
-            pi-pulses calibration.
-            Coupling estimation.
+            pi-pulses calibration. CPMG sequences and more.
+            Coupling estimation based on dynamics measurements.
     qinf/ - quantum informatics experiments.
+        gates/ - consist of gates implementation
         tomo/ - tomography processes. May consist of several submodules.
-------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ### Styling reminders ###
 1. Follow all corrections suggested by pycharm IDE.
 
@@ -72,4 +74,9 @@ I. package import
 
     Each group of imports should be separated by a blank space.
     PEP 8 explicitly recommends absolute imports.
-
+-------------------------------------------------------------------------------
+### Tasks list ###
+02.05.2021
+1. Measure TTS with vna (Agilent_PNA_L) and SC5502A
+2. Measure TTS with vna (DacAdcVna) and SC5502A
+3. Measure Rabi from pulse duration for Q0.

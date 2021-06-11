@@ -21,7 +21,6 @@
 
 from drivers.instrument import Instrument
 import visa
-import types
 import logging
 from time import sleep
 import numpy as np
@@ -100,11 +99,6 @@ class Agilent_PNA_L(Instrument):
             minval=0, maxval=20e9,
             units='Hz', tags=['sweep'])
 
-        self.add_parameter('CWfreq', type=float,
-            flags=Instrument.FLAG_GETSET,
-            minval=300e3, maxval=20e9,
-            units='Hz', tags=['sweep'])
-
         self.add_parameter('span', type=float,
             flags=Instrument.FLAG_GETSET,
             minval=0, maxval=20e9,
@@ -112,7 +106,7 @@ class Agilent_PNA_L(Instrument):
 
         self.add_parameter('power', type=float,
             flags=Instrument.FLAG_GETSET,
-            minval=-90, maxval=12,
+            minval=-90, maxval=15,
             units='dBm', tags=['sweep'])
 
         self.add_parameter('zerospan', type=bool,
@@ -150,7 +144,7 @@ class Agilent_PNA_L(Instrument):
                         # lines of code there is no trace selected after self.select_default_trace()
                         # and self.get_all seem do interrupt the program with timeout exception thrown by low-level visa
                         # GPIB drivers. The reason is that PNA-L doesn't have any number of points in sweep (get_all start
-                        # by quering number of points in current sweep), because there is no traces defined, hence there
+                        # by quering number of points in bias sweep), because there is no traces defined, hence there
                         # is no number of points parameter available to read
         # self.select_default_trace()
 
@@ -173,6 +167,7 @@ class Agilent_PNA_L(Instrument):
         self.add_function('sweep_hold')
         self.add_function('sweep_continuous')
         self.add_function('autoscale_all')
+        self.add_function('set_cw_time')
 
         #self.add_function('avg_clear')
         #self.add_function('avg_status')
@@ -408,16 +403,16 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : setting start freq to %s Hz' % start)
         self._visainstrument.write('SENS%i:FREQ:STAR %f' % (self._ci,start))
         self._start = start
-        self.get_centerfreq();
-        self.get_stopfreq();
-        self.get_span();
+        self.get_centerfreq()
+        self.get_stopfreq()
+        self.get_span()
 
         self.logger.debug(__name__ + ' : setting stop freq to %s Hz' % stop)
         self._visainstrument.write('SENS%i:FREQ:STOP %f' % (self._ci,stop))
         self._stop = stop
-        self.get_startfreq();
-        self.get_centerfreq();
-        self.get_span();
+        self.get_startfreq()
+        self.get_centerfreq()
+        self.get_span()
 
 
     def get_parameters(self):
@@ -425,12 +420,12 @@ class Agilent_PNA_L(Instrument):
         Returns a dictionary containing bandwidth, nop, power, averages and
         freq_limits currently used by the VNA
         """
-        return {"bandwidth":self.get_bandwidth(),
+        return {"bandwidth": self.get_bandwidth(),
                   "nop":self.get_nop(),
-                  "sweep_type":self.get_sweep_type(),
-                  "power":self.get_power(),
-                  "averages":self.get_averages(),
-                  "freq_limits":self.get_freq_limits()}
+                  "sweep_type": self.get_sweep_type(),
+                  "power": self.get_power(),
+                  "averages": self.get_averages(),
+                  "freq_limits": self.get_freq_limits()}
 
     def set_parameters(self, parameters_dict):
         """
@@ -451,7 +446,7 @@ class Agilent_PNA_L(Instrument):
         if "freq_limits" in parameters_dict.keys():
             try:
                 if (parameters_dict["sweep_type"] == "CW"):
-                    self.do_set_CWfreq(np.mean(parameters_dict["freq_limits"]))
+                    self.set_cw_time(np.mean(parameters_dict["freq_limits"]))
                 else:
                     self.set_freq_limits(*parameters_dict["freq_limits"])
             except:
@@ -475,21 +470,6 @@ class Agilent_PNA_L(Instrument):
             self.set_bef(parameters_dict["bef"])
         if "trig_dur" in parameters_dict.keys():
             self.set_trig_dur(parameters_dict["trig_dur"])
-
-    def do_set_CWfreq(self,freq):
-        """
-        Set CW if_freq valid if sweepind in CW mode.
-        """
-
-        self.logger.debug(__name__ + ' : set CW if_freq')
-        self._visainstrument.write("SENS%i:FOM:RANG:FREQ:CW %.6f" %(self._ci,freq))
-
-    def do_get_CWfreq(self):
-        """
-        Asking for CW freq
-        """
-        self.logger.debug(__name__ + ' : getting CW freq')
-        return float(self._visainstrument.query('SENS%i:FOM:RANG:FREQ:CW?' % (self._ci)))
 
     def get_sweep_time(self):
         """
@@ -1013,3 +993,40 @@ class Agilent_PNA_L(Instrument):
 
     def do_get_trig_dur(self):
         raise NotImplemented
+
+    def set_cw_time(self, frequency, sweep_time=0):
+        """
+        Set up continuous wave mode, that is VNA measurement vs time (not
+        frequency)
+        Parameters
+        ----------
+        frequency: Hz
+            frequency of the continuous wave
+        sweep_time: ms
+            length of time segment in ms. Pass 0 to setup VNA to the fastest
+            possible sweep time. Pass -1 to set the maximal value of 84000
+            seconds (i.e. 1 day)
+        Returns
+        -------
+
+        """
+        self.write(f"SENSe{self._ci}:SWEep:TYPE CW")
+        self.write(f"SENSe{self._ci}:FREQuency:CW {frequency:.0f}")
+        if sweep_time == 0:
+            self.write(f"SENSe{self._ci}:SWEep:TIME MIN")
+        elif sweep_time < 0:
+            self.write(f"SENSe{self._ci}:SWEep:TIME MAX")
+        else:
+            self.write(f"SENSe{self._ci}:SWEep:TIME {sweep_time:.0f}ms")
+
+    def set_frequency(self, frequency):
+        """
+        Method to use the vna as a local oscillator (microwave source).
+        First set the CW mode with the set_cw_frewquency
+        Parameters
+        ----------
+        frequency: float, Hz
+        """
+        self.do_set_centerfreq(frequency)
+        self.query("*OPC?")
+

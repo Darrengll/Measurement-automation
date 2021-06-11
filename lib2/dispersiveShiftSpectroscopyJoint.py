@@ -37,7 +37,7 @@ class DispersiveShiftSpectroscopyJoint(VNATimeResolvedDispersiveMeasurement):
 
     def _recording_iteration(self):
         vna = self._vna[0]
-        q_lo = self._q_lo[0]
+        q_lo = self._exc_iqvg[0]
 
         for i in range(self._soft_avg):
             vna.avg_clear();

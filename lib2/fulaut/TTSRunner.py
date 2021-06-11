@@ -14,7 +14,7 @@ class TTSRunner:
                  exc_iqvg=None, cur_src=None):
 
         self._vna = vna
-        self._cur_src = cur_src
+        self._bias_src = cur_src
         self._exc_iqvg = exc_iqvg
         self._sample_name = sample_name
         self._qubit_name = qubit_name
@@ -39,10 +39,10 @@ class TTSRunner:
         else:
             center = sweet_spot
 
-        span = 1/2 * period
-        self._currents = linspace(center - span / 2,
-                                  center + span / 2,
-                                  201)
+        span = period * TTSRunnerParameters().periods
+        self._bias_values = linspace(center - span / 2,
+                                     center + span / 2,
+                                     TTSRunnerParameters().flux_nop)
 
         min_q_freq = \
             transmon_spectrum(sweet_spot + period / 2,
@@ -52,11 +52,15 @@ class TTSRunner:
                               period, sweet_spot, max_q_freq, d)
 
         self._logger.debug(
-            "Expected qubit if_freq range (from AnticrossingOracle): %.3f to %.3f" % (min_q_freq, max_q_freq))
-        mw_limits = (max(4e9, min_at_the_scan_edge), max_q_freq + .25e9)
-        self._logger.debug("Two-tone if_freq range: %.3f to %.3f" % mw_limits)
+            "Expected qubit frequency range (from AnticrossingOracle): %.3f "
+            "to %.3f" % (min_q_freq, max_q_freq))
 
-        self._mw_src_frequencies = linspace(*mw_limits, 401)
+        mw_limits = (max(4e9, min_at_the_scan_edge), max_q_freq + .25e9)
+        mw_limits = tuple(TTSRunnerParameters().frequency_span)
+        self._logger.debug("Two-tone frequency range: %.3f to %.3f" %
+                           mw_limits)
+
+        self._mw_src_frequencies = linspace(*mw_limits, TTSRunnerParameters().frequency_nop)
 
         self._tts_result = None
         self._launch_datetime = datetime.today()
@@ -84,7 +88,6 @@ class TTSRunner:
                                 self._tts_result,
                                 self._fit_p0[2:], plot=True)
             params = period, sweet_spot, max_q_freq, d, alpha = so.launch()
-
         except:
             self._logger.warn("Two-tone fit failed")
             self._tts_result._name += "_fit-fail"
@@ -106,15 +109,15 @@ class TTSRunner:
                                             self._sample_name,
                                             vna=self._vna,
                                             mw_src=self._exc_iqvg,
-                                            current_src=self._cur_src)
+                                            bias_src=self._bias_src)
 
         self._TTS.set_fixed_parameters(vna=[self._vna_parameters],
                                        mw_src=[self._mw_src_parameters],
-                                       sweet_spot_current=float(mean(self._currents)),
+                                       sweet_spot_bias=float(mean(self._bias_values)),
                                        adaptive=True)
 
         self._TTS.set_swept_parameters(self._mw_src_frequencies,
-                                       current_values=self._currents)
+                                       bias_values=self._bias_values)
         self._TTS._measurement_result._unwrap_phase = False
 
         self._tts_result = self._TTS.launch()

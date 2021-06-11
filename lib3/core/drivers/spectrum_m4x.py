@@ -1,4 +1,4 @@
-'''
+"""
 We are using
 Spectrum m4x2212-x4
 https://spectrum-instrumentation.com/en/m4x2212-x4
@@ -8,15 +8,21 @@ https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_m
 
 datasheet:
 https://spectrum-instrumentation.com/sites/default/files/download/m4x22_datasheet_english.pdf
-'''
+"""
+
+# Standard library imports
 import itertools
 import time
+from enum import Enum
+from typing import List
 
+# Third party imports
 import numpy as np
 from scipy import fftpack
 import matplotlib.pyplot as plt
+
+# Local application imports
 from drivers.pyspcm import *
-from enum import Enum
 
 
 class CardError(Exception):
@@ -106,10 +112,10 @@ class SpcmAdcM4x:
         self.__antialiasing: bool = 0
         self.__acdc = self.AC
 
-        self._requested_segment_size: float = None  # in samples
-        self._segment_size: int = None  # in samples
+        self._requested_segment_size: float = -1  # in samples
+        self._segment_size: int = -1  # in samples
         self._bufsize: int = 0  # size of the card buffer allocated in bytes
-        self._pcdata = None
+        self._pcdata: np.ndarray = None
         self._trigger_mode = SPC_TM_POS  # | SPC_TM_REARM
         self._trig_term = 0
         self._trig_acdc = 0
@@ -123,7 +129,7 @@ class SpcmAdcM4x:
         # trace length has to be multiple of 32
         self._n_samples_to_drop_in_end: int = 0
 
-        self.channels: list[int] = []
+        self.channels: List[int,...] = []
         self.ch_amplitude: int = 0
         # segment duration requested by user in ns
         self.dur_seg_ns: float = 0
@@ -164,6 +170,9 @@ class SpcmAdcM4x:
             pars_dict = parameters
         elif isinstance(parameters, ADCParameters):
             pars_dict = parameters.__dict__
+        else:
+            raise TypeError(f"not supported parameters format"
+                            f" {type(parameters)}")
 
         if "oversampling_factor" in pars_dict:
             self.set_oversampling_factor(pars_dict["oversampling_factor"])
@@ -665,9 +674,9 @@ class SpcmAdcM4x:
                               M2CMD_CARD_START | M2CMD_CARD_ENABLETRIGGER)
         self.__handle_error()
 
-    def wait_for_card(self):
+    def wait_for_card(self, timeout=0):
         """Wait until the card completes the current run"""
-        self.set_timeout(0)
+        self.set_timeout(timeout)
         try:
             self.__handle_timeout(
                 self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
@@ -908,7 +917,7 @@ class SpcmAdcM4x:
             self.trigger_source = trigger_source
             init_trigger()
 
-    def measure(self):
+    def measure(self, timeout=0):
         """
         Launches measurement and returns data, normalized to milivolts.
         It finishes faster than safe_measure method, but cannot be interrupted
@@ -919,11 +928,14 @@ class SpcmAdcM4x:
         """
         self.start_card()
         try:
-            self.wait_for_card()  # wait till the end of a measurement
+            time.sleep(1)
+            self.wait_for_card(timeout=timeout)  # wait till the end of a
+            # measurement
         except KeyboardInterrupt:
             self.stop_card()
             print("Card was interrupted")
             return None
+        time.sleep(1)
         data = self.obtain_data()  # download data from the card
         # convertion to mV is according to
         # https://spectrum-instrumentation.com/sites/default/files/download/m4i_m4x_22xx_manual_english.pdf

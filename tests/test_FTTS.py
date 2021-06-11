@@ -54,7 +54,7 @@ vna.set_nop = dg.set_nop
 vna.set_parameters = MagicMock(side_effect = dg.set_parameters)
 
 equipment = {"vna": [vna], "mw_src": [mw_src],
-             'current_src': [cur_src], 'voltage_src': [vol_src]}
+             'bias_src': [cur_src], 'voltage_src': [vol_src]}
 
 vna_parameters = {"bandwidth": 25,
                   "freq_limits": [4e9, 6e9],

@@ -13,8 +13,8 @@ class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeas
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
-        self._maps = [None]*4
-        self._cbs = [None]*4
+        self._maps = [None]*2
+        self._cbs = [None]*2
 
     def _prepare_figure(self):
         fig, axes, caxes = super()._prepare_figure()
@@ -73,6 +73,6 @@ class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeas
 
     def __getstate__(self):
         d = super().__getstate__()
-        d['_maps'] = [None]*4
-        d['_cbs'] = [None]*4
+        d['_maps'] = [None]*2
+        d['_cbs'] = [None]*2
         return d

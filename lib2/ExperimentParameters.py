@@ -66,6 +66,8 @@ class ResonatorOracleParameters(FulautParameters):
         self.set_subgroup_name("resonator_oracle")
         self.peak_number = None
         self.vna_parameters = None
+        self.default_scan_area = None
+        self.window = None
         super().__init__()
 
 
@@ -82,6 +84,10 @@ class TTSRunnerParameters(FulautParameters):
     def __init__(self):
         self.set_subgroup_name("tts_runner")
         self.vna_parameters = None
+        self.frequency_span = None
+        self.periods = None
+        self.flux_nop = None
+        self.frequency_nop = None
         super().__init__()
 
 

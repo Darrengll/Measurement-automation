@@ -39,13 +39,13 @@ class NCS513(Instrument):
 
     """
 
-    current_ranges_supported = [.000001, .000001, .0001, .001, 0.01, 0.05]           #possible current ranges supported by current source
+    current_ranges_supported = [.000001, .000001, .0001, .001, 0.01, 0.05]           #possible bias ranges supported by bias source
     voltage_ranges_supported = [.01, .1, 1, 10, 30]
 
 
 
     def __init__(self, com_name, volt_compliance = None, current_compliance = .001):
-        """Create a default Yokogawa_GS210 object as a current source"""
+        """Create a default Yokogawa_GS210 object as a bias source"""
         Instrument.__init__(self, 'NCS513', tags=['physical'])
         self._address = com_name
         #rm = visa.ResourceManager()
@@ -71,7 +71,7 @@ class NCS513(Instrument):
         self._minvoltage = -1e-6
         self._maxvoltage =  1e-6
 
-        self.add_parameter('current', flags = Instrument.FLAG_GETSET,
+        self.add_parameter('bias', flags = Instrument.FLAG_GETSET,
         units = 'A', type = float, minval = current_range[0], maxval = current_range[1])
 
         self.add_parameter('current_compliance', flags = Instrument.FLAG_GETSET,
@@ -314,7 +314,7 @@ class NCS513(Instrument):
         return 'NCS513_v2'#self._visainstrument.ask("*IDN?")
 
     def do_set_current(self, current):
-        """Set current"""
+        """Set bias"""
         self.current_value = current
         temp_float_as_4bytes = []*4
         temp_float_as_4bytes = self.float_to4bytes(current)
@@ -333,7 +333,7 @@ class NCS513(Instrument):
         self.write(ftemp)
 
     def do_get_current(self):
-        """Get current"""
+        """Get bias"""
         return float(self.current_value)
 
     def do_set_voltage(self, voltage):
@@ -374,16 +374,16 @@ class NCS513(Instrument):
         pass
 
     def do_set_current_compliance(self, compliance):
-        """Set compliance current"""
+        """Set compliance bias"""
         pass
 
     def do_get_range(self):
-        """Get current range in A"""
+        """Get bias range in A"""
         
         return float(self.current_range)
 
     def do_set_range(self, maxval):
-        """Set current range in A"""
+        """Set bias range in A"""
 		
         if maxval < 1e-6:
             self.current_range = 1e-6
@@ -417,7 +417,7 @@ class NCS513(Instrument):
 
     def set_src_mode_volt(self, current_compliance = .001):
         """
-        Changes mode from current to voltage source, compliance current is given as an argument
+        Changes mode from bias to voltage source, compliance bias is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
@@ -426,7 +426,7 @@ class NCS513(Instrument):
 
     def set_src_mode_curr(self, voltage_compliance = 1):
         """
-        Changes mode from voltage to current source, compliance voltage is given as an argument
+        Changes mode from voltage to bias source, compliance voltage is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise

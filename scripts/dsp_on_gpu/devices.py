@@ -76,16 +76,16 @@ print("IQAWG 'iqawg_sps' is loaded")
 # print(f"Digitizer 'dig_sps' is loaded. Slot #{dig_sps.get_slot_number()}")
 # print(f"Digitizer 'dig_probe' is loaded. Slot #{dig_probe.get_slot_number()}")
 
-# stabilized current sources ##
+# stabilized bias sources ##
 exec(my_import("drivers.Yokogawa_GS200", "Yokogawa_GS210"))
 sps_coil = Yokogawa_GS210("yok1")
-sps_coil.set_src_mode_curr()  # set current source mode
+sps_coil.set_src_mode_curr()  # set bias source mode
 sps_coil.set_range(0.01)  # set 10 mA range regime
 # probe_coil = Yokogawa_GS210("yok2")
-# probe_coil.set_src_mode_curr()  # set current source mode
+# probe_coil.set_src_mode_curr()  # set bias source mode
 # probe_coil.set_range(0.01)  # set 10 mA range regimeregime
 # sps_loop = Yokogawa_GS210("yok3")
-# sps_loop.set_src_mode_curr()  # set current source mode
+# sps_loop.set_src_mode_curr()  # set bias source mode
 # sps_loop.set_range(0.01)  # set 10 mA range regime
 print(f"Current source 'sps_coil' is loaded. Address {sps_coil._address}")
 # print(f"Current source 'probe_coil' is loaded. Address {probe_coil._address}")
@@ -212,7 +212,7 @@ def launch_downconv_calibration(devices_dict, params, plot=False):
 def turn_off_current_sources():
     for i in range(1, 3):
         cur_src = Yokogawa_GS210("yok" + str(i))
-    cur_src.set_src_mode_curr()  # set current source mode
+    cur_src.set_src_mode_curr()  # set bias source mode
     cur_src.set_range(1e-3)  # set 1 mA range regime
     cur_src.set_current(0)
 

@@ -44,7 +44,6 @@ class Agilent_PNA_L(Instrument):
             name (string)    : name of the instrument
             address (string) : GPIB address
         """
-
         self.logger = logging.getLogger()
         self.logger.setLevel(logging.WARNING)
 
@@ -72,10 +71,6 @@ class Agilent_PNA_L(Instrument):
             flags=Instrument.FLAG_GETSET,
             minval=0, maxval=1e9,
             units='Hz', tags=['sweep'])
-
-        self.add_parameter('averages', type=int,
-            flags=Instrument.FLAG_GETSET,
-            minval=1, maxval=65536, tags=['sweep'])
 
         self.add_parameter('average', type=bool,
             flags=Instrument.FLAG_GETSET)
@@ -110,10 +105,7 @@ class Agilent_PNA_L(Instrument):
             minval=0, maxval=20e9,
             units='Hz', tags=['sweep'])
 
-        self.add_parameter('power', type=float,
-            flags=Instrument.FLAG_GETSET,
-            minval=-90, maxval=12,
-            units='dBm', tags=['sweep'])
+        self.power = None
 
         self.add_parameter('zerospan', type=bool,
             flags=Instrument.FLAG_GETSET)
@@ -126,9 +118,6 @@ class Agilent_PNA_L(Instrument):
             flags=Instrument.FLAG_GETSET)
 
         # output trigger stuff by Elena
-        self.add_parameter('aux_num', type=int,
-                           flags=Instrument.FLAG_GETSET)
-
         self.add_parameter('trig_per_point', type=bool,
                            flags=Instrument.FLAG_GETSET)
 
@@ -464,7 +453,7 @@ class Agilent_PNA_L(Instrument):
             self.set_sweep_type(parameters_dict["sweep_type"])
 
         if "aux_num" in parameters_dict.keys():
-            self.set_aux_num(parameters_dict["aux_num"])
+            self.select_trigger_output(parameters_dict["aux_num"])
         if "trigger_source" in parameters_dict.keys():
             self.set_trigger_source(parameters_dict["trigger_source"])
         if "trig_per_point" in parameters_dict.keys():
@@ -570,7 +559,7 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : getting average status')
         return bool(int(self._visainstrument.query('SENS%i:AVER:STAT?' % (self._ci))))
 
-    def do_set_averages(self, av, mode="POINT"):
+    def set_averages(self, av, mode="POINT"):
         """
 
         Parameters
@@ -592,9 +581,11 @@ class Agilent_PNA_L(Instrument):
         if mode == "POINT":
             self._visainstrument.write("SENS%i:AVER:MODE POIN" % self._ci)
         elif mode == "SWEEP":
-            raise NotImplementedError
+            raise NotImplemented("SWEEP average mode is note implemented. "
+                                 "Please use SCPI command reference and "
+                                 "implement this bad boy!")
 
-    def do_get_averages(self):
+    def get_averages(self):
         """
         Get number of averages
 
@@ -612,30 +603,21 @@ class Agilent_PNA_L(Instrument):
     def set_sweep_type(self,sweep_type = "LIN"):
         self._visainstrument.write("SENS:SWE:TYPE "+sweep_type)
 
-    def do_set_power(self,pow):
+    def set_power(self, pow):
         """
-        Set probe power
 
-        Input:
-            pow (float) : Power in dBm
-
-        Output:
-            None
+        Parameters
+        ----------
+        pow : float
+            output power [dBm]
         """
         self.logger.debug(__name__ + ' : setting power to %s dBm' % pow)
-        self._visainstrument.write('SOUR%i:POW1:LEV:IMM:AMPL %.2f' % (self._ci,pow))
-    def do_get_power(self):
-        """
-        Get probe power
+        self._visainstrument.write(
+            'SOUR{:d}:POW1:LEV:IMM:AMPL {:.2f}'.format(self._ci, pow)
+        )
 
-        Input:
-            None
-
-        Output:
-            pow (float) : Power in dBm
-        """
-        self.logger.debug(__name__ + ' : getting power')
-        return float(self._visainstrument.query('SOUR%i:POW1:LEV:IMM:AMPL?' % (self._ci)))
+    def get_power(self):
+        return None
 
     def do_set_center(self, f):
         self.do_set_centerfreq(f)
@@ -917,11 +899,12 @@ class Agilent_PNA_L(Instrument):
         data_format : str
             "REALIMAG" - real and imaginary parts returned as tuple(real, imag)
             "AMPPHA" - amplitude and phase returned as tuple (amp, phase)
+            "RAW" - S21 as complex numbers (default).
 
         Returns
         -------
         np.ndarray
-            pairs with respect to data format requested
+            array formatted with respect to data format requested
         """
         self.prepare_for_stb()
         self.sweep_single()
@@ -975,8 +958,24 @@ class Agilent_PNA_L(Instrument):
     def query(self, msg):
         return self._visainstrument.query(msg)
 
-    def do_set_aux_num(self, aux_num):
-        self._visainstrument.write("TRIG:CHAN:AUX %i" % (aux_num))
+    def select_trigger_output(self, aux_num=1, state="ON"):
+        """
+        Turns ON / OFF the trigger output.
+        TRIGger:CHANnel<ch>:AUXiliary<n>[:ENABle] <bool>
+
+        Parameters
+        ----------
+        aux_num : int
+            Rear panel connector used to send or receive signals.
+            Choose from 1 (AUX TRIG 1) or 2 (AUX TRIG 2)
+            If unspecified, value is set to 1.
+        state : str
+            "ON" - turns trigger output ON.
+            "OFF" - turns trigger output OFF.
+        """
+        self._visainstrument.write(
+            "trigger:channel:aux{:d}:enable {}".format(aux_num, state)
+        )
 
     def do_get_aux_num(self):
         raise NotImplemented

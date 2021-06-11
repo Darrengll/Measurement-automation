@@ -144,6 +144,8 @@ class SPCM:
         self.mode: SPCM_MODE = SPCM_MODE.UNDEFINED
         self.trigger_source: SPCM_TRIGGER = SPCM_TRIGGER.EXT0
 
+        self._timeout = None
+
         self.reset_card()  # this call is recommended in manual
 
     def close(self):
@@ -306,12 +308,12 @@ class SPCM:
         -------
         self.__handle_timeout(
                 self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
-                # Wait till the card completes the current run
+                # Wait till the card completes the bias run
             )
         """
         if ret == ERR_TIMEOUT:
             raise TimeoutError(
-                "Execution exceeded the allowed timeout. Reset the Spectrum card")
+                f"Execution exceeded the allowed timeout of {self._timeout}")
         return ret
 
     def set_timeout(self, timeout):
@@ -321,6 +323,7 @@ class SPCM:
         timeout : int
             timeout in ms
         """
+        self._timeout = timeout
         self._write_to_reg_32(SPC_TIMEOUT, timeout)
 
     def setup_SSA(self, memsize, posttrigger_mem):
@@ -665,13 +668,13 @@ class SPCM:
                               M2CMD_CARD_START | M2CMD_CARD_ENABLETRIGGER)
         self.__handle_error()
 
-    def wait_for_card(self):
-        """Wait until the card completes the current run"""
-        self.set_timeout(0)
+    def wait_for_card(self, timeout = 0):
+        """Wait until the card completes the bias run"""
+        self.set_timeout(timeout)
         try:
             self.__handle_timeout(
                 self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
-                # Wait till the card completes the current run
+                # Wait till the card completes the bias run
             )
         except KeyboardInterrupt:
             self.stop_card()
@@ -881,10 +884,10 @@ class SPCM:
                 segment_size=segment_size, pretrigger=pretrigger
             )
         elif self.mode == SPCM_MODE.UNDEFINED:
-            raise Exception("current Spectrum_m4x mode is not initialized\n"
+            raise Exception("bias Spectrum_m4x mode is not initialized\n"
                             "default is: SPCM_MODE.UNDERFINED")
         else:
-            raise Exception("current Spectrum_m4x mode is initialized to "
+            raise Exception("bias Spectrum_m4x mode is initialized to "
                             "unknown value\n")
 
     def setup_trigger_source(self, trigger_source=None):
@@ -908,7 +911,7 @@ class SPCM:
             self.trigger_source = trigger_source
             init_trigger()
 
-    def measure(self):
+    def measure(self, timeout = 1000):
         """
         Launches measurement and returns data, normalized to milivolts.
         It finishes faster than safe_measure method, but cannot be interrupted
@@ -919,7 +922,7 @@ class SPCM:
         """
         self.start_card()
         try:
-            self.wait_for_card()  # wait till the end of a measurement
+            self.wait_for_card(timeout)  # wait till the end of a measurement
         except KeyboardInterrupt:
             self.stop_card()
             print("Card was interrupted")

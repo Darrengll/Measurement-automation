@@ -253,7 +253,7 @@ def write(devchan, data, freq=10000.0, minv=-10.0, maxv=10.0,
 def read_counter(devchan="/Dev1/ctr0", samples=1, freq=1.0, timeout=1.0, src=""):
     """
     Read counter 'devchan'.
-    Specify source pin with 'src'.
+    Specify source pin with 'insweep_trg_subsys'.
     """
 
     taskHandle = TaskHandle(0)

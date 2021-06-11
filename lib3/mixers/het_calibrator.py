@@ -1,9 +1,15 @@
+# Standard library imports
 import copy
 from typing import Hashable
 
-from ..core.compound_devices.iq_awg import IQAWG
-from ..core.drivers.spectrum_m4x import ADCParameters, SPCM_MODE, SPCM_TRIGGER
-from .data_structures import HetIQCalibration
+# Third party imports
+import numpy as np
+
+# Local application imports
+from lib3.core.compound_devices.iq_awg import IQAWG
+from lib3.core.drivers.spectrum_m4x import ADCParameters, SPCM_MODE, \
+    SPCM_TRIGGER
+from lib3.mixers.data_structures import HetIQCalibration
 
 
 class HetIQCalibrator:
@@ -114,6 +120,7 @@ class HetIQCalibrator:
             Re[res] - I channels dc offset
             Im[res] - Q channel dc offset
         """
+        raise NotImplemented("Not implemented yet")
         def loss_function_if_offsets(if_offsets, args):
             if_amplitudes = args[0]
             phase = args[1]

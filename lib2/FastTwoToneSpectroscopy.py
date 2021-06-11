@@ -40,7 +40,7 @@ class FastFluxTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
 
         self._mw_src[0].set_output_state("OFF")
         # print("\rDetecting a resonator within provided if_freq range of the VNA %s\
-        #            "%(str(vna_parameters["freq_limits"])), flush=True, end="")
+        #            "%(str(vna_res_find_parameters["freq_limits"])), flush=True, end="")
 
         res_result = self._detect_resonator(vna_parameters, plot=False)
 
@@ -119,7 +119,7 @@ class FastAcStarkTwoToneSpectroscopy(FastTwoToneSpectroscopyBase):
         self._mw_src[0].set_output_state("OFF")
         if vna_parameters["freq_limits"][0] != vna_parameters["freq_limits"][-1]:
             # print("\rDetecting a resonator within provided if_freq range of the VNA %s\
-            #        "%(str(vna_parameters["freq_limits"])), flush=True, end="")
+            #        "%(str(vna_res_find_parameters["freq_limits"])), flush=True, end="")
 
             res_result = self._detect_resonator(vna_parameters, plot=False)
 

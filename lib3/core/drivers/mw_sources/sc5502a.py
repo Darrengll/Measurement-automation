@@ -191,9 +191,9 @@ class SC5502A(MwSrcInterface):
                                             self._ext_ref_100Mhz,
                                             self._pxi_10MHz_ref_output)
 
-    def set_frequency_sweep(self, frequencies=None, power=None,
-                            insweep_step_trg_src=None, sweep_trg_src=None,
-                            arm_trigger_src=None):
+    def set_linear_frequency_sweep_step_triggered(self, frequencies=None, power=None,
+                                                  insweep_step_trg_src=None, sweep_trg_src=None,
+                                                  arm_trigger_src=None):
         raise NotImplemented("this device does not have such functionalyty")
 
     def get_parameters(self):

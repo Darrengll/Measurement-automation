@@ -11,6 +11,7 @@ import copy
 
 # Third party imports
 import pyvisa
+import resonator_tools.circuit
 from matplotlib._pylab_helpers import Gcf
 from matplotlib import pyplot as plt
 import numpy as np
@@ -18,9 +19,8 @@ from loggingserver import LoggingServer
 
 # Local application imports
 from drivers import *
-from lib2.MeasurementResult import MeasurementResult
-from lib2.ResonatorDetector import ResonatorDetector
-from lib2.ExperimentParameters import GlobalParameters, ResonatorType
+from lib3.core.measurementResult import MeasurementResult
+from lib3.core.drivers.agilent_PNA_L import Agilent_PNA_L
 
 
 class Measurement:
@@ -126,14 +126,14 @@ class Measurement:
         self._name = name
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
-        self._resonator_detector = ResonatorDetector()
+        # self._resonator_detector = ResonatorDetector()
         self._raw_data = None  # measurement results are stored here
         self._swept_pars: Dict[str, Tuple] = None
         self._swept_pars_names: List[str] = None
         # TODO: explicit definition of members in child classes
         self._measurement_result = None  # should be initialized in child class
 
-        self._resonator_detector = ResonatorDetector(type=GlobalParameters().resonator_type)
+        # self._resonator_detector = ResonatorDetector(type=GlobalParameters().resonator_type)
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""
@@ -190,6 +190,7 @@ class Measurement:
 
     def set_fixed_parameters(self, **fixed_pars):
         """
+        # TODO: refactor documentation
         fixed_pars: {'dev1': {'par1': value1, 'par2': value2},
                      'dev2': {par1: value1, par2: ...},...}
         """
@@ -284,10 +285,11 @@ class Measurement:
             # the returned data dimensions
             if done_iterations == 0:
                 try:
-                    self._raw_data = zeros(raw_data_shape + [len(data)],
-                                           dtype=complex_)
+                    self._raw_data = np.zeros(raw_data_shape + [len(data)],
+                                           dtype=np.complex_)
                 except TypeError:  # data has no __len__ attribute
-                    self._raw_data = zeros(raw_data_shape, dtype=complex_)
+                    self._raw_data = np.zeros(raw_data_shape,
+                                              dtype=np.complex_)
             self._raw_data[idx_group] = data
 
             # This may need to be extended in child classes:
@@ -330,7 +332,7 @@ class Measurement:
         May be overwritten in child-classes.
         -------
         """
-        pass
+        raise NotImplementedError
 
     def set_measurement_result(self, measurement_result: MeasurementResult):
         self._measurement_result = measurement_result
@@ -344,7 +346,7 @@ class Measurement:
         corresponding MeasurementResult object.
         See lib2.SingleToneSpectroscopy.py as an example implementation
         """
-        pass
+        raise NotImplementedError
 
     def _prepare_measurement_result_data(self, parameter_names, parameter_values):
         """
@@ -360,54 +362,71 @@ class Measurement:
         measurement_data["data"] = self._raw_data
         return measurement_data
 
-    def _detect_resonator(self, plot=False, vna_params=None, tries_number=3):
+    def _detect_resonator(self, method="RESONATOR_TOOLS", tries_number=3,
+                          plot=False):
         """
+        Finds resonator assuming VNA parameters is already set elsewhere.
 
         Parameters
         ----------
-        plot
-        vna_params : Dict[str,any]
-        tries_number
+        method : str
+            "RESONATOR_TOOLS" - use resonator tools library to fit resonator
+                (default).  `plot` argument used to plot results.
+            "MIN" - find absolute minimum and interpret it as resonator
+                frequency. `plot` argument value is ignored.
+        tries_number : int
+            If first try to fit value fails, averages number of data
+            sampling will be increased and new resonator search will be
+            performed. Limits amount of total resonator searches performed
+        plot : bool
+            Whether to plot results
 
         Returns
         -------
-
+        res_freq, res_amp, res_phase : Tuple[float,float,float]
+            res_freq - resonator frequency in [Hz]
+            res_amp - np.abs(S21(res_freq)) [V]
+            res_phase - np.angle(S21(res_freq)) [rad]
         """
-        vna = self._vna[0]
-        if vna_params is not None:
-            vna.set_parameters(vna_params)
-            vna_params_stashed = copy.deepcopy(vna.get_parameters())
-            vna.set_output_state("ON")
+        vna: Agilent_PNA_L = self._vna[0]
 
         init_averages = vna.get_averages()
         for i in range(1, tries_number+1):
             vna.set_averages(init_averages*i)
             vna.avg_clear()
-            vna.prepare_for_stb()
-            vna.sweep_single()
-            vna.wait_for_stb()
-            frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
+            sdata = vna.measure_and_get_data()
+            frequencies = vna.get_frequencies()
             vna.autoscale_all()
-            self._resonator_detector.set_data(frequencies, sdata)
-            self._resonator_detector.set_plot(plot)
-            result = self._resonator_detector.detect()
+
+            res_freq = None  # declare resonator freq variable
+            if method == "RESONATOR_TOOLS":
+                port = resonator_tools.circuit.notch_port(frequencies, sdata)
+                port.autofit()
+                result = port.fitresults
+                if plot:
+                    port.plotall()
+                res_freq = result["fr"]
+            elif method == "MIN":
+                res_freq_idx = np.argmin(np.abs(sdata))
+                res_freq = frequencies[res_freq_idx]
+                result = True
+
+            nearest_freq_idx = np.argmin(np.abs(frequencies - res_freq))
+            res_amp = np.abs(sdata[nearest_freq_idx])
+            res_phase = np.angle(sdata[nearest_freq_idx])
 
             if result is not None:
                 break
             else:
                 print("\rFit was inaccurate (try #%d), retrying" % i, end="")
 
-        # restore VNA's original parameters
-        if vna_params is not None:
-            vna.set_parameters(vna_params_stashed)
-            vna.set_output_state("OFF")
-        return result
+        return res_freq, res_amp, res_phase
 
     def _detect_qubit(self):
         """
         To find a peak/dip from a qubit in line automatically (to be implemented)
         """
-        pass
+        raise NotImplementedError
 
     def _write_to_log(self, line='Unknown measurement', parameters=''):
         """

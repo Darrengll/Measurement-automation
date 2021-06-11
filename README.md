@@ -68,7 +68,7 @@ ro_awg = IQAWG(AWGChannel(awg, 3), AWGChannel(awg, 4))
 q_awg = IQAWG(AWGChannel(awg, 1), AWGChannel(awg, 2))
 DR = DispersiveRamsey("%s-ramsey"%qubit_name, sample_name, vna=["vna4"], 
                       ro_awg=[ro_awg], q_awg=[q_awg], q_lo=['psg2'])
-vna_parameters = {"res_find_nop":401, "bandwidth":10, "freq_limits":res_limits, 
+vna_parameters = {"_res_find_nop":401, "bandwidth":10, "freq_limits":res_limits, 
                   "nop":10, "averages":1}
 ramsey_delays = linspace(0, 5000, 301)
 exc_frequency = q_freq - 5e6

@@ -50,13 +50,13 @@ class Yokogawa_GS210(Instrument):
         30 V            ±32.000 V           1 mV            ±200 mA
     """
 
-    current_ranges_supported = [.001, .01, .1, .2]           #possible current ranges supported by current source
+    current_ranges_supported = [.001, .01, .1, .2]           #possible bias ranges supported by bias source
     voltage_ranges_supported = [.01, .1, 1, 10, 30]
 
 
 
     def __init__(self, address, volt_compliance = 3, current_compliance = .01):
-        """Create a default Yokogawa_GS210 object as a current source"""
+        """Create a default Yokogawa_GS210 object as a bias source"""
         Instrument.__init__(self, 'Yokogawa_GS210', tags=['physical'])
         self._address = address
         rm = visa.ResourceManager()
@@ -71,7 +71,7 @@ class Yokogawa_GS210(Instrument):
         self._minvoltage = -1e-6
         self._maxvoltage =  1e-6
 
-        self.add_parameter('current', flags = Instrument.FLAG_GETSET,
+        self.add_parameter('bias', flags = Instrument.FLAG_GETSET,
         units = 'A', type = float, minval = current_range[0], maxval = current_range[1])
 
         self.add_parameter('current_compliance', flags = Instrument.FLAG_GETSET,
@@ -105,28 +105,28 @@ class Yokogawa_GS210(Instrument):
         return self._visainstrument.query("*IDN?")
 
     def do_set_current(self, current):
-        """Set current"""
+        """Set bias"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
-            print("Tough luck, mode is voltage source, cannot set current.")
+            print("Tough luck, mode is voltage source, cannot set bias.")
             return False
         else:
             if (self._mincurrent <= current <= self._maxcurrent):
                 self._visainstrument.write("SOUR:LEVEL %e"%current)
                 self._visainstrument.query("*OPC?")
             # else:
-                # print("Error: current limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
+                # print("Error: bias limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
 
     def do_get_current(self):
-        """Get current"""
+        """Get bias"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
-            print("Tough luck, mode is voltage source, cannot get current.")
+            print("Tough luck, mode is voltage source, cannot get bias.")
             return False
         return float(self._visainstrument.query("SOUR:LEVEL?"))
 
     def do_set_voltage(self, voltage):
         """Set voltage"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
-            print("Tough luck, mode is current source, cannot get voltage.")
+            print("Tough luck, mode is bias source, cannot get voltage.")
             return False
         else:
             if (self._minvoltage < voltage < self._maxvoltage):
@@ -138,7 +138,7 @@ class Yokogawa_GS210(Instrument):
     def do_get_voltage(self):
         """Get voltage"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
-            print("Tough luck, mode is current source, cannot get voltage.")
+            print("Tough luck, mode is bias source, cannot get voltage.")
             return False
         return float(self._visainstrument.query("SOUR:LEVEL?"))
 
@@ -173,22 +173,22 @@ class Yokogawa_GS210(Instrument):
         return float(self._visainstrument.query("SOUR:PROT:CURR?"))
 
     def do_set_current_compliance(self, compliance):
-        """Set compliance current"""
+        """Set compliance bias"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
-            print("Tough luck, mode is current source, cannot set current compliance.")
+            print("Tough luck, mode is bias source, cannot set bias compliance.")
             return False
         self._visainstrument.write("SOUR:PROT:CURR %e"%compliance)
 
     def do_get_range(self):
-        """Get current range in A"""
+        """Get bias range in A"""
         currange = self._visainstrument.query("SOUR:RANG?")[:-1]
         return float(currange)
 
     def do_set_range(self, maxval):
-        """Set current range in A"""
+        """Set bias range in A"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
             if not (maxval in self.current_ranges_supported):
-                print("Given current range is invalid. Please enter valid current range in !!!Amperes!!!\nValid ranges are (in A): {0}".format(self.current_ranges_supported))
+                print("Given bias range is invalid. Please enter valid bias range in !!!Amperes!!!\nValid ranges are (in A): {0}".format(self.current_ranges_supported))
                 return False
             else:
                 self._mincurrent = -maxval
@@ -218,7 +218,7 @@ class Yokogawa_GS210(Instrument):
 
     def set_src_mode_volt(self, current_compliance = .001):
         """
-        Changes mode from current to voltage source, compliance current is given as an argument
+        Changes mode from bias to voltage source, compliance bias is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
@@ -232,7 +232,7 @@ class Yokogawa_GS210(Instrument):
 
     def set_src_mode_curr(self, voltage_compliance=1):
         """
-        Changes mode from voltage to current source, compliance voltage is given as an argument
+        Changes mode from voltage to bias source, compliance voltage is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
@@ -257,7 +257,7 @@ class Yokogawa_GS210(Instrument):
             else:
                 print("Too high maxcurrent queryed to set.")
         else:
-            print("Go in current mode first.")
+            print("Go in bias mode first.")
 
     # TODO: pending to delete this function
     def set_voltage_limits(self, minvoltage = -1E-3, maxvoltage = 1E-3):

@@ -8,7 +8,7 @@ TODO: add reference to minimal working schematic (link to GDrive is ok).
 -------------------------------------
 from drivers.Yokogawa_GS200 import Yokogawa_GS210
 curr_src = Yokogawa_GS210("GS210_1")
-curr_src.set_src_mode_curr()  # set current source mode
+curr_src.set_src_mode_curr()  # set bias source mode
 curr_src.set_range(1e-3)  # set 1 mA range regime
 
 from drivers.agilent_PNA_L import Agilent_PNA_L
@@ -16,7 +16,7 @@ vna = Agilent_PNA_L("PNA-L2")
 -------------------------------------
 from lib2.SingleToneSpectroscopy import SingleToneSpectroscopy
 
-sts = SingleToneSpectroscopy("STS QOP2 Probe qubit", sample_name, vna=[vna], src=[curr_src])
+sts = SingleToneSpectroscopy("STS QOP2 Probe qubit", sample_name, vna=[vna], insweep_trg_subsys=[curr_src])
 vna.select_S_param("S21")
 vna.set_output_state("ON")
 q_freq = 5.2185e9  #Hz
@@ -30,7 +30,7 @@ vna_params_q ={
     "nop": 1001,
     "freq_limits": freq_limits
 }
-sts.set_fixed_parameters(vna_params=[vna_params_q])
+sts.set_fixed_parameters(vna=[vna_params_q])
 sts.sweep_current(currents)
 ---------------------------------------------------
 sts_res = sts.launch()
@@ -54,7 +54,7 @@ class SingleToneSpectroscopy(Measurement):
 
     must-have keywords for constructor:
         vna = list of vector network analyzers classes or internal aliases
-        src = list of voltage/current sources classes or internal aliases
+        insweep_trg_subsys = list of voltage/bias sources classes or internal aliases
 
         For internal aliases/classes see Measurement._devs_dict dictionary in lib2/Measurement.py
     """
@@ -71,36 +71,31 @@ class SingleToneSpectroscopy(Measurement):
         vna : list
             vna = list of vector network analyzers classes or internal aliases
         src : list
-            src = list of voltage/current sources classes or internal aliases
+            insweep_trg_subsys = list of voltage/bias sources classes or internal aliases
         """
         self._vna = None  # vector network analyzers list
-        self._src = None  # voltage/current sources list
+        self._src = None  # voltage/bias sources list
         devs_aliases_map = {"vna": vna, "src": src}
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
         self._measurement_result = SingleToneSpectroscopyResult(name, sample_name)
         self._measurement_result.set_unwrap_phase(True)
         self._frequencies = []
 
-    def set_fixed_parameters(self, vna_params=[]):
+    def set_fixed_parameters(self, vna=[]):
         """
-
         Parameters
         ----------
-        vna_params : list[dict]
+        vna : list[dict]
             list with dictionary of parameters for each `vna`
             from self._vna list
-
-        Returns
-        -------
-        None
         """
-        freq_limits = vna_params[0]["freq_limits"]
-        nop = vna_params[0]["nop"]
+        freq_limits = vna[0]["freq_limits"]
+        nop = vna[0]["nop"]
 
         self._frequencies = np.linspace(*freq_limits, nop)
         self._vna[0].sweep_hold()
         self._vna[0].set_output_state("ON")
-        dev_params = {"vna": vna_params}
+        dev_params = {"vna": vna}
         super().set_fixed_parameters(**dev_params)
 
     def set_swept_parameters(self, swept_parameter):
@@ -111,7 +106,7 @@ class SingleToneSpectroscopy(Measurement):
         super().set_swept_parameters(**swept_parameter)
         par_name = list(swept_parameter.keys())[0]
         par_setter, par_values = swept_parameter[par_name]
-        # NOTE: first value of the current/voltage source is set by
+        # NOTE: first value of the bias/voltage source is set by
         # DISCONTINUOUS jump to this starting value
         par_setter(par_values[0])
         sleep(1)
@@ -121,12 +116,12 @@ class SingleToneSpectroscopy(Measurement):
         SingleToneSpectroscopy only takes one swept parameter in format
         {"parameter_name":(setter, values)}
         """
-        swept_parameters = {"current, [A]": (self._src[0].set_current,
+        swept_parameters = {"bias, [A]": (self._src[0].set_current,
                                             currents)}
         super().set_swept_parameters(**swept_parameters)
         par_name = list(swept_parameters.keys())[0]
         par_setter, par_values = swept_parameters[par_name]
-        # NOTE: first value of the current/voltage source is set by
+        # NOTE: first value of the bias/voltage source is set by
         # DISCONTINUOUS jump to this starting value
         par_setter(par_values[0])
         sleep(1)
@@ -135,10 +130,7 @@ class SingleToneSpectroscopy(Measurement):
         vna = self._vna[0]
         vna.avg_clear()
         vna.prepare_for_stb()
-        vna.do_set_average(True) #
-
         vna.sweep_single()
-
         vna.wait_for_stb()
         return vna.get_sdata()
 
@@ -150,7 +142,7 @@ class SingleToneSpectroscopy(Measurement):
     def _finalize(self):
         for src in self._src:
             if((hasattr(src, "set_current")) and ( src._visainstrument.query(
-                    ":SOUR:FUNC?") == "VOLT\n" )):  # voltage src
+                    ":SOUR:FUNC?") == "VOLT\n" )):  # voltage insweep_trg_subsys
                 src.set_voltage(0)
 
 
@@ -306,7 +298,7 @@ class SingleToneSpectroscopyResult(MeasurementResult):
         Parameters:
         -----------
         direction: str
-            "avg_cur" for current slice subtraction
+            "avg_cur" for bias slice subtraction
             "avg_freq" for if_freq slice subtraction
 
         """
@@ -362,13 +354,13 @@ class SingleToneSpectroscopy2(DigitizerTimeResolvedDirectMeasurement):
         dig = list of digitizer classes or internal aliases
         q_iqawg = list of IQ AWG
         q_lo = lost of RF generators
-        src = list of voltage/current sources classes or internal aliases
+        insweep_trg_subsys = list of voltage/bias sources classes or internal aliases
 
         For internal aliases/classes see Measurement._devs_dict dictionary in lib2/Measurement.py
     """
 
     def __init__(self, name, sample_name, plot_update_interval=5, **devs_aliases_map):
-        self._src = None  # voltage/current sources list
+        self._src = None  # voltage/bias sources list
         super().__init__(name, sample_name, devs_aliases_map, plot_update_interval)
         self._measurement_result = SingleToneSpectroscopyResult(name, sample_name)
         self._frequencies = []
@@ -418,5 +410,5 @@ class SingleToneSpectroscopy2(DigitizerTimeResolvedDirectMeasurement):
 
     def _finalize(self):
         for src in self._src:
-            if((hasattr(src, "set_current")) and ( src._visainstrument.ask(":SOUR:FUNC?") == "VOLT\n" )):  # voltage src
+            if((hasattr(src, "set_current")) and ( src._visainstrument.ask(":SOUR:FUNC?") == "VOLT\n" )):  # voltage insweep_trg_subsys
                 src.set_voltage(0)

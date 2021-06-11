@@ -100,9 +100,9 @@ class Pna(instr.Instr):
         self.current_measurement_number = self.get_current_TrX();
         # print self.current_measurement_number
         if self.current_channel != channel_number:
-            print("Problem with setting current channel")
+            print("Problem with setting bias channel")
         if self.current_measurement_name != measurement_name.upper():
-            print("Problem with setting current measurement_name")
+            print("Problem with setting bias measurement_name")
         return self.current_measurement_number
 
     # def set_current_trace(self, measurement_number):
@@ -116,7 +116,7 @@ class Pna(instr.Instr):
         self.write("CALCulate{0}:PARameter:SELect {1}".format(self.current_channel, measurement_name))
         self.current_measurement_name = self.get_current_measurement_name();
         if self.current_measurement_name != measurement_name.upper():
-            print("Problem with setting current measurement_name")
+            print("Problem with setting bias measurement_name")
         self.current_measurement_number = self.get_current_TrX();
         return self.current_measurement_number        
 

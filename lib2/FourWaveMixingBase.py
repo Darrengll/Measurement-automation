@@ -20,12 +20,12 @@ class FourWaveMixingBase(DigitizerWithPowerSweepMeasurementBase):
 
     def __init__(self, name, sample_name, **devs_aliases):
         """
-        name: name of current measurement
+        name: name of bias measurement
         list_devs_names: {exa_name: default_name, src_plus_name: default_name,
                              src_minus_name: default_name, vna_name: default_name, current_name: default_name}
         sample_name: name of measured sample
 
-        vna and current source is optional
+        vna and bias source is optional
 
         """
         super().__init__(name, sample_name, FourWaveMixingResult, **devs_aliases)
@@ -60,12 +60,12 @@ class FourWaveMixingBase(DigitizerWithPowerSweepMeasurementBase):
 class MollowTrippletMeasurementBase(DigitizerWithPowerSweepMeasurementBase):
     def __init__(self, name, sample_name, **devs_aliases):
         """
-        name: name of current measurement
+        name: name of bias measurement
         list_devs_names: {exa_name: default_name, src_plus_name: default_name,
                              src_minus_name: default_name, vna_name: default_name, current_name: default_name}
         sample_name: name of measured sample
 
-        vna and current source is optional
+        vna and bias source is optional
 
         """
         super().__init__(name, sample_name, MollowTripletResult, **devs_aliases)

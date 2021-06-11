@@ -20,7 +20,7 @@ class ContextBase:
             def default(self, obj):
                 if hasattr(obj, "toJSON"):
                     return obj.toJSON()
-                if isinstance(obj, np.ndarray) or \
+                elif isinstance(obj, np.ndarray) or \
                         isinstance(obj, datetime.datetime) or \
                         isinstance(obj, np.int32):
                     return obj.__str__()

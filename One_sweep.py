@@ -55,8 +55,8 @@ freq = np.linspace(start_freq, stop_freq, P)
 
 
 
-#Presetting the current in the coil to initial current of the sweep****************
-# myyoko.set_appropriate_range(max(abs(current)))
+#Presetting the bias in the coil to initial bias of the sweep****************
+# myyoko.set_appropriate_range(max(abs(bias)))
 curstepabs = 20e-6
 
 

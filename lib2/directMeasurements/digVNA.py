@@ -78,7 +78,7 @@ class DigVNA(Measurement):
                  lo=[], iqawg=[], dig=[], save_traces=False):
         """
         name : str
-            name of current measurement
+            name of bias measurement
         sample_name : str
             name of measured sample
         comment: str

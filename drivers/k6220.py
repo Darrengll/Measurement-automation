@@ -66,7 +66,7 @@ class K6220(instr.Instr):
         if (abs(current) <= self.get_range()):
             self.write("SOUR:CURR:AMPL {0}".format(current))
         else:
-            print("Given current %f is out of range %f"%(current, self.get_range()))
+            print("Given bias %f is out of range %f"%(current, self.get_range()))
 
     def get_current(self):
         bla = self.query("SOUR:CURR:AMPL?")

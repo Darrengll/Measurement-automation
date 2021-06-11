@@ -37,8 +37,8 @@ class DispersiveRabiFromFrequency(Measurement):
             sample_name: string.
 
             ss_current_or_voltage: float
-                    sweet spot DC current or voltage depending on wether
-                    current source or AWG is used to bias qubit flux
+                    sweet spot DC bias or voltage depending on wether
+                    bias source or AWG is used to bias qubit flux
             ss_freq: float
                     if_freq of the qubit in the sweet-spot of interest
             lowest_ss: bool
@@ -59,7 +59,7 @@ class DispersiveRabiFromFrequency(Measurement):
 
             One of the following DC sources must be provided:
             current_source: alias address string or driver class
-                            current source used to tune qubit if_freq
+                            bias source used to tune qubit if_freq
             q_z_awg: alias address string or driver class
                      AWG generator that used to tune qubit if_freq
 
@@ -97,13 +97,13 @@ class DispersiveRabiFromFrequency(Measurement):
         self._tts_result = tts_result
         self._snap = Snapshot(self._tts_result._data) # can be used to exctract curves in the future
         self._tts_curves = {} # list of functions that results from scipy.interp1d
-        self._current_curve = None # current tts curve that is chosen by self.set_tts_curve(curve_key) method
+        self._current_curve = None # bias tts curve that is chosen by self.set_tts_curve(curve_key) method
 
-        ## Initial and current freq(current or voltage) point control START ##
+        ## Initial and bias freq(bias or voltage) point control START ##
         self._ss_freq = ss_freq
         self._ss_flux_var_value = ss_current_or_voltage
         self._lowest_ss = lowest_ss
-        # True if current is used, False if voltage source is used
+        # True if bias is used, False if voltage source is used
         self._current_flag = None
         self._flux_var_setter = None
 
@@ -122,7 +122,7 @@ class DispersiveRabiFromFrequency(Measurement):
                   constructor parameters:\n \
                   current_source or q_z_awg.")
             raise TypeError
-        ## Initial and current freq(current or voltage) point control END ##
+        ## Initial and bias freq(bias or voltage) point control END ##
 
         # set_fixed_params args are stored here
         self._fixed_devices_params = {}
@@ -320,7 +320,7 @@ class DispersiveRabiFromFrequency(Measurement):
     def _adjust_freq_with_TTS(self, flux_var, ro_power=None):
         """
         @brief: Function measures single line of TTS in the 'flux_val' point around the
-                current chosen curve y(flux_var) point. The scan is performed with very weak readout freq
+                bias chosen curve y(flux_var) point. The scan is performed with very weak readout freq
                 to neglect ACSTark effect. Measured curve is then fitted and maximum corresponding to the qubit
                 is exctracted.
         @params:
@@ -338,7 +338,7 @@ class DispersiveRabiFromFrequency(Measurement):
         raise NotImplementedError
 
     def _recording_iteration(self):
-        # _DRO will detect resonator and new qubit if_freq current
+        # _DRO will detect resonator and new qubit if_freq bias
         # during the call of the setters
         print("starting rabi\n")
         T_R, T_R_error = self._rabi_oscillations_record()
@@ -356,7 +356,7 @@ class DispersiveRabiFromFrequency(Measurement):
         # almost every time tries to use this parameters as the new best initial guess
         # and due to the fact, that the next measurements is performed in entirely different flux point
         # this initial guess vector does not fit the parameter's fit bounds that are generated from
-        # the data of the current measurement
+        # the data of the bias measurement
         self._DRO._measurement_result._fit_params = None
         self._DRO._measurement_result._fit_errors = None
         # this is due to the fact that first fit of the data
@@ -390,7 +390,7 @@ class DispersiveRabiFromFrequency(Measurement):
         # almost every time tries to use this parameters as the new best initial guess
         # and due to the fact, that the next measurements is performed in entirely different flux point
         # this initial guess vector does not fit the parameter's fit bounds that are generated from
-        # the data of the current measurement
+        # the data of the bias measurement
         self._measurement_result._now_meas_type = "Ramsey"
         self._DR._measurement_result._fit_params = None
         self._DR._measurement_result._fit_errors = None
@@ -524,7 +524,7 @@ class RabiFromFrequencyResult(MeasurementResult):
             self._DRO_result._axes = self._axes[1:3]
             self._DRO_result._figure = self._figure
 
-            DRO_data = self._DRO_result.get_data() # prepeare current DRO_data
+            DRO_data = self._DRO_result.get_data() # prepeare bias DRO_data
             # TODO: hotfix by Shamil
             # 'DispersiveRabiOscillationsResult' object has no attribute '_dynamic'
             # when dynamic==True the code in VNATRDM1D skips replotting the data
@@ -538,7 +538,7 @@ class RabiFromFrequencyResult(MeasurementResult):
             self._DR_result._axes = self._axes[1:3]
             self._DR_result._figure = self._figure
 
-            DR_data = self._DR_result.get_data()  # prepeare current DRO_data
+            DR_data = self._DR_result.get_data()  # prepeare bias DRO_data
             # TODO: hotfix by Shamil
             # 'DispersiveRabiOscillationsResult' object has no attribute '_dynamic'
             # when dynamic==True the code in VNATRDM1D skips replotting the data

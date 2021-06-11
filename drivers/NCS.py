@@ -60,13 +60,13 @@ class NCS(Instrument):
         30 V            ±32.000 V           1 mV            ±200 mA
     '''
 
-    current_ranges_supported = [.001, .01, .1, .2]           #possible current ranges supported by current source
+    current_ranges_supported = [.001, .01, .1, .2]           #possible bias ranges supported by bias source
     voltage_ranges_supported = [.01, .1, 1, 10, 30]
 
 
 
     def __init__(self, address, volt_compliance = 1, current_compliance = .001):
-        '''Create a default NCS object as a current source'''
+        '''Create a default NCS object as a bias source'''
         Instrument.__init__(self, 'NCS', tags=['physical'])
         self._address = address
         #rm = visa.ResourceManager()
@@ -81,7 +81,7 @@ class NCS(Instrument):
         self._minvoltage = -1e-6
         self._maxvoltage =  1e-6
 
-        self.add_parameter('current', flags = Instrument.FLAG_GETSET,
+        self.add_parameter('bias', flags = Instrument.FLAG_GETSET,
         units = 'A', type = float, minval = current_range[0], maxval = current_range[1])
 
         self.add_parameter('current_compliance', flags = Instrument.FLAG_GETSET,
@@ -106,7 +106,7 @@ class NCS(Instrument):
 
 
         temp_cmd_output = [0] * 9
-        temp_cmd_output[0] = 0xC0 | 1  # 1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1  # 1 - bias source address, as default 1
         temp_cmd_output[1] = 0x70 | 1
         temp_cmd_output[2] = 0x70  # ch1
         temp_cmd_output[3] = 0x70  # ch2
@@ -123,7 +123,7 @@ class NCS(Instrument):
 
 
         temp_cmd_output = [0] * 9
-        temp_cmd_output[0] = 0xC0 | 1  # 1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1  # 1 - bias source address, as default 1
         temp_cmd_output[1] = 0xA0 | 1
         temp_cmd_output[2] = 0xA0  # ch1
         temp_cmd_output[3] = 0xA0  # ch2
@@ -167,7 +167,7 @@ class NCS(Instrument):
     #range = 0 - '1uA'... range = 5 - '50mA'
     def ncs_output_enable(self, state=0, channel=1):
         temp_cmd_output = [0] * 9
-        temp_cmd_output[0] = 0xC0 | 1  # 1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1  # 1 - bias source address, as default 1
         temp_cmd_output[1] = 0x70 | channel
         temp_cmd_output[2] = 0x70  # ch1
         temp_cmd_output[3] = 0x70  # ch2
@@ -185,7 +185,7 @@ class NCS(Instrument):
 
     def ncs_channel_enable(self, state=0, channel=1):
         temp_cmd_output = [0] * 9
-        temp_cmd_output[0] = 0xC0 | 1  # 1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1  # 1 - bias source address, as default 1
         temp_cmd_output[1] = 0xA0 | channel
         temp_cmd_output[2] = 0xA0  # ch1
         temp_cmd_output[3] = 0xA0  # ch2
@@ -202,7 +202,7 @@ class NCS(Instrument):
 
     def ncs_set_range(self, range = 0, channel = 1):
         temp_cmd_output = [0]*9
-        temp_cmd_output[0] = 0xC0 | 1 #1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1 #1 - bias source address, as default 1
         temp_cmd_output[1] = 0x60 | channel
         temp_cmd_output[2] = 0x60 #ch1
         temp_cmd_output[3] = 0x60 #ch2
@@ -220,7 +220,7 @@ class NCS(Instrument):
 
     def ncs_set_output_mode(self, mode = 0, channel = 1):
         temp_cmd_output = [0]*9
-        temp_cmd_output[0] = 0xC0 | 1 #1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1 #1 - bias source address, as default 1
         temp_cmd_output[1] = 0x30 | channel
         temp_cmd_output[2] = 0x30 #ch1
         temp_cmd_output[3] = 0x30 #ch2
@@ -237,7 +237,7 @@ class NCS(Instrument):
 
     def ncs_set_current(self, current = 0.0, channel = 1):
         temp_cmd_output = [0]*9
-        temp_cmd_output[0] = 0xC0 | 1 #1 - current source address, as default 1
+        temp_cmd_output[0] = 0xC0 | 1 #1 - bias source address, as default 1
         temp_cmd_output[1] = 0xD0 | channel
         temp_current = float_to4bytes(current)
         temp_cmd_output[2] = temp_current[0]
@@ -253,25 +253,25 @@ class NCS(Instrument):
         temp_b += temp_crc
         return(temp_b)
     def do_set_current(self, current):
-        '''Set current'''
+        '''Set bias'''
         if (self._mincurrent <= current <= self._maxcurrent):
 
             self.ser.write(ncs_set_current(current, 1))
             time.sleep(0.1)
             sys.stdout.flush()
         else:
-            print("Error: current limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
+            print("Error: bias limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
 
 			
 				
     def do_get_current(self):
-        '''Get current'''
+        '''Get bias'''
         return float(0)
 
     def do_set_voltage(self, voltage):
         '''Set voltage'''
         if (self._visainstrument.ask(":SOUR:FUNC?") == "CURR\n"):
-            print("Tough luck, mode is current source, cannot get voltage.")
+            print("Tough luck, mode is bias source, cannot get voltage.")
             return False
         else:
             if (self._minvoltage < voltage < self._maxvoltage):
@@ -283,7 +283,7 @@ class NCS(Instrument):
     def do_get_voltage(self):
         '''Get voltage'''
         if (self._visainstrument.ask(":SOUR:FUNC?") == "CURR\n"):
-            print("Tough luck, mode is current source, cannot get voltage.")
+            print("Tough luck, mode is bias source, cannot get voltage.")
             return False
         return float(self._visainstrument.ask("SOUR:LEVEL?"))
 
@@ -319,22 +319,22 @@ class NCS(Instrument):
         return 5.0e-3 #float(self._visainstrument.ask("SOUR:PROT:CURR?"))
 
     def do_set_current_compliance(self, compliance):
-        '''Set compliance current'''
+        '''Set compliance bias'''
         #if (self._visainstrument.ask(":SOUR:FUNC?") == "CURR\n"):
-        #    print("Tough luck, mode is current source, cannot set current compliance.")
+        #    print("Tough luck, mode is bias source, cannot set bias compliance.")
         #    return False
         #self._visainstrument.write("SOUR:PROT:CURR %e"%compliance)
         pass
     def do_get_range(self):
-        '''Get current range in A'''
+        '''Get bias range in A'''
         currange = .001 #self._visainstrument.ask("SOUR:RANG?")[:-1]
         return float(currange)
 
     def do_set_range(self, maxval):
-        '''Set current range in A'''
+        '''Set bias range in A'''
         #if (self._visainstrument.ask(":SOUR:FUNC?") == "CURR\n"):
         if not (maxval in self.current_ranges_supported):
-            print("Given current range is invalid. Please enter valid current range in !!!Amperes!!!\nValid ranges are (in A): {0}".format(self.current_ranges_supported))
+            print("Given bias range is invalid. Please enter valid bias range in !!!Amperes!!!\nValid ranges are (in A): {0}".format(self.current_ranges_supported))
             return False
         else:
             if (maxval < 1e-6):
@@ -371,7 +371,7 @@ class NCS(Instrument):
 
     def set_src_mode_volt(self, current_compliance = .001):
         '''
-        Changes mode from current to voltage source, compliance current is given as an argument
+        Changes mode from bias to voltage source, compliance bias is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
@@ -385,7 +385,7 @@ class NCS(Instrument):
 
     def set_src_mode_curr(self, voltage_compliance = 1):
         '''
-        Changes mode from voltage to current source, compliance voltage is given as an argument
+        Changes mode from voltage to bias source, compliance voltage is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
@@ -409,7 +409,7 @@ class NCS(Instrument):
             else:
                 print("Too high maxcurrent asked to set.")
         #else:
-        #    print("Go in current mode first.")
+        #    print("Go in bias mode first.")
 
     def set_voltage_limits(self, minvoltage = -1E-3, maxvoltage = 1E-3):
         ''' Sets a voltage limits within the range if needed for safe sweeping'''

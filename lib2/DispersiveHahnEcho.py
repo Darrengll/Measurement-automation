@@ -1,6 +1,7 @@
+from numpy import ptp, real, imag, exp
+
 from lib2.IQPulseSequence import IQPulseBuilder
 from lib2.VNATimeResolvedDispersiveMeasurement1D import *
-
 
 class DispersiveHahnEcho(VNATimeResolvedDispersiveMeasurement1D):
 
@@ -29,4 +30,4 @@ class DispersiveHahnEchoResult(VNATimeResolvedDispersiveMeasurement1DResult):
         return self._fit_params[2], self._fit_errors[2]
 
     def _generate_annotation_string(self, opt_params, err):
-        return "$T_{2E}=%.2f \pm %.2f \mu$s"%(opt_params[2], err[2])
+        return "$T_{2E}=%.2f \pm %.2f\ \mu$s"%(opt_params[2], err[2])

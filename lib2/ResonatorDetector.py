@@ -1,17 +1,22 @@
+from loggingserver import LoggingServer
 from scipy import *
 from resonator_tools.circuit import notch_port, reflection_port
-from numpy import abs, pi, exp, angle, unwrap, arctan
+from numpy import abs, pi, exp, angle, unwrap, arctan, argmin, diff
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
 from lib2.ExperimentParameters import *
 from scipy.optimize import curve_fit
+from log.LogName import LogName
+
 
 class ResonatorDetector:
-    def __init__(self, frequencies=None, s_data=None, plot=True, fast=True, type = None):
+    def __init__(self, frequencies=None, s_data=None, plot=True, fast=True,
+                 type = None):
         self._plot = plot
         self._fast = fast
         self._type = type
         self._discarded_result = None
+        self._logger = LoggingServer.getInstance(LogName.NAME)
         self.set_data(frequencies, s_data)
 
     def set_data(self, frequencies, s_data):
@@ -26,6 +31,12 @@ class ResonatorDetector:
 
     def set_plot(self, plot):
         self._plot = plot
+
+    def get_linewidth(self):
+        try:
+            return self._port.fitresults["fr"]/self._port.fitresults["Ql"]
+        except KeyError:
+            raise ValueError("Resonator was not fitted yet or fit failed")
 
     def detect(self):
         frequencies, sdata = self._freqs, self._s_data
@@ -81,12 +92,18 @@ class ResonatorDetector:
 
     def _fit(self):
 
-        scan_range = self._freqs[-1] - self._freqs[0]
-
         self._port.autofit()
 
         if not self._freqs[0] < self._port.fitresults["fr"] < self._freqs[-1] \
-                or self._port.fitresults["Ql"] > 20000:
+                or self._port.fitresults["Ql"] > 50000:
+            self._logger.debug(f"ResonatorDetector: fit frequency"
+                               f" {self._port.fitresults['fr']/1e9:.5f} "
+                             f"outside data area "
+                             f"{self._freqs[0]/1e9:.5f}, "
+                               f"{self._freqs[-1]/1e9:.5f} or "
+                             f"Ql looks too high: "
+                               f"{self._port.fitresults['Ql']:.0f}, "
+                               f"discarding")
             return None
 
         min_idx = argmin(abs(self._s_data))
@@ -121,10 +138,11 @@ class ResonatorDetector:
         fit_angle = angle(self._port.z_data_sim)[fit_min_idx]
         res_width = fit_frequency / self._port.fitresults["Ql"]
         if self._type == ResonatorType.NOTCH:
-            if abs(fit_frequency - expected_frequency) < 0.1 * res_width and \
+            if abs(fit_frequency - expected_frequency) < 0.2 * res_width and \
                     abs(fit_amplitude - expected_amplitude) < .2 * ptp(abs(self._port.z_data_sim)):
                 return fit_frequency, fit_amplitude, fit_angle
             else:
+                self._logger.debug("ResonatorDetector: discarded fit result")
                 self._discarded_result = fit_frequency, fit_amplitude, fit_angle
                 return None
         else:

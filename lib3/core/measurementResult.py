@@ -8,7 +8,7 @@ from threading import Lock
 import copy
 import shutil
 import locale
-from typing import Union
+from typing import Union, List, Any
 
 # Third party imports
 from IPython.display import clear_output
@@ -97,6 +97,8 @@ class MeasurementResult:
     @staticmethod
     def load(sample_name, name, date='', subfolder="", return_all=False):
         """
+        Finds all files with matching result name within the file structure
+        of ./data/ folder and optionally prompts user to resolve any ambiguities.
 
         Examples
         ---------
@@ -123,22 +125,18 @@ class MeasurementResult:
 
         Returns
         -------
-
-        """
-        """
-        Finds all files with matching result name within the file structure
-        of ./data/ folder and optionally prompts user to resolve any ambiguities.
-
-        Returns:
+        res : Union[List, Any]
             an instance of the child class containing the specific measurement
             result
 
-
+        Notes
+        -------
         If the user hits EOF (*nix: Ctrl-D, Windows: Ctrl-Z+Return), raise EOFError.
         On *nix systems, readline is used if available.
         """
-
-        paths = MeasurementResult._find_paths_by(sample_name, name, ".pkl", date, subfolder, return_all)
+        paths = MeasurementResult._find_paths_by(
+            sample_name, name, ".pkl", date, subfolder, return_all
+        )
 
         if paths is None:
             return
@@ -150,8 +148,10 @@ class MeasurementResult:
                     results.append(pickle.load(f))
             except pickle.UnpicklingError as e:
                 results.append(e)
-
-        return results[0] if len(results) == 1 and not return_all else results
+        if (len(results) == 1) and (not return_all):
+            return results[0]
+        else:
+            return results
 
     @staticmethod
     def _find_paths_by(sample_name, name, extension, date, subfolder,

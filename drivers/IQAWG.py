@@ -21,7 +21,6 @@ from prompt_toolkit import output
 
 from lib2.IQPulseSequence import *
 import drivers.keysightSD1 as keysightSD1
-from drivers.keysightM3202A import KeysightM3202A
 # there are functions that are not universal and work only with M3202A
 from drivers.keysightAWG import KeysightAWG
 
@@ -84,8 +83,11 @@ class CalibratedAWG():
         pulse_sequence: PulseSequence instance
         """
         frequency = 1/pulse_sequence.get_duration()*1e9
-        self._channel.output_arbitrary_waveform(pulse_sequence\
-                        .get_waveform(), frequency, asynchronous=asynchronous)
+        self._channel.output_arbitrary_waveform(
+            pulse_sequence.get_waveform(),
+            frequency,
+            asynchronous=asynchronous
+        )
 
 class IQAWG():
     def __init__(self, channel_I: AWGChannel, channel_Q: AWGChannel, triggered=False):
@@ -158,11 +160,10 @@ class IQAWG():
 
         Parameters
         ----------
-        optimized
-        trigger_sync_every
-
-        Returns
-        -------
+        optimized : bool
+            unknown TODO: declare what it does
+        trigger_sync_every : float
+            time between trigger outputs [ns]
 
         Notes
         -------

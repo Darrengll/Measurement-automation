@@ -42,7 +42,7 @@ class DirectRabiBase(DigitizerTimeResolvedDirectMeasurement):
         devs_aliases_map = {"q_lo": q_lo,
                             "q_iqawg": q_iqawg,
                             "dig": dig,
-                            "src": src}
+                            "insweep_trg_subsys": src}
 
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval, save_traces)

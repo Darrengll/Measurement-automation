@@ -26,6 +26,7 @@ import visa
 
 # Local application imports
 # ---------------
+from drivers.BiasType import BiasType
 
 
 def format_e(n):
@@ -83,6 +84,7 @@ class YokogawaGS210:
         self.set_voltage_compliance(volt_compliance)
         self.set_current(0)
         self.set_status(1)
+        self._bias_type = BiasType.CURRENT
 
     def get_id(self):
         """Get basic info on device"""
@@ -208,11 +210,13 @@ class YokogawaGS210:
         Returns:
             True if the mode was changed, False otherwise
         """
+        self.set_current_compliance(current_compliance)
+
         if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
             return False
         else:
+            self._bias_type = BiasType.VOLTAGE
             self._visainstrument.write(":SOUR:FUNC VOLT")
-            self.set_current_compliance(current_compliance)
             return True
 
     def set_src_mode_curr(self, voltage_compliance=1):
@@ -222,11 +226,13 @@ class YokogawaGS210:
         Returns:
             True if the mode was changed, False otherwise
         """
+        self.set_voltage_compliance(voltage_compliance)
+
         if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
             return False
         else:
+            self._bias_type = BiasType.CURRENT
             self._visainstrument.write(":SOUR:FUNC CURR")
-            self.set_voltage_compliance(voltage_compliance)
             return True
 
     # TODO: pending to delete this function
@@ -264,3 +270,12 @@ class YokogawaGS210:
         Clear the event register, extended event register, and error queue.
         """
         self._visainstrument.write("*CLS")
+
+    def get_bias_type(self):
+        return self._bias_type
+
+    def set(self, parameter):
+        if self._bias_type is BiasType.VOLTAGE:
+            self.set_voltage(parameter)
+        else:
+            self.set_current(parameter)

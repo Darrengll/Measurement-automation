@@ -47,7 +47,7 @@ class DirectRamseyBase(DigitizerTimeResolvedDirectMeasurement):
         devs_aliases_map = {"q_lo": q_lo,
                             "q_iqawg": q_iqawg,
                             "dig": dig,
-                            "src": src}
+                            "insweep_trg_subsys": src}
 
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval, save_traces)
@@ -213,7 +213,7 @@ class DirectRamseyFromDelay(DirectRamseyBase):
         devs_aliases_map = {"q_lo": q_lo,
                             "q_iqawg": q_iqawg,
                             "dig": dig,
-                            "src": src}
+                            "insweep_trg_subsys": src}
         super().__init__(name, sample_name, plot_update_interval,
                          **devs_aliases_map, save_traces=save_traces)
         self._digital_filtering = None
@@ -384,7 +384,7 @@ class RamseyFromDelayResult(VNATimeResolvedDispersiveMeasurement1DResult):
 class DirectRamsey2D(DirectRamseyBase):
     """
         This class measures the oscillations after the driving pulse and
-        sweeps either pulse's if_freq or the current. Use it to measure
+        sweeps either pulse's if_freq or the bias. Use it to measure
         two-dimensional plots with Ramsey chevrons.
     """
 
@@ -397,7 +397,7 @@ class DirectRamsey2D(DirectRamseyBase):
     def sweep_lo_shift(self, shifts, ro_cals, downconv_cals, pi_durations):
         """
         This method sets up the pulse's driving if_freq as the sweep
-        parameter. Alternatively you can sweep the current with
+        parameter. Alternatively you can sweep the bias with
         sweep_current method.
 
         Parameters
@@ -442,7 +442,7 @@ class DirectRamsey2D(DirectRamseyBase):
 
     def sweep_current(self, currents):
         """
-        This method sets up the current which shifts the energy of the
+        This method sets up the bias which shifts the energy of the
         qubit. This method doesn't change any if_freq in the measurement
         equipment, easier to use and provides cleaner plots.
         Alternatively you can sweep the driving if_freq with sweep_current
