@@ -31,6 +31,7 @@ class SPCM_MODE(str, Enum):
     STANDARD = "STANDARD"
     MULTIPLE = "MULTIPLE"
     AVERAGING = "AVERAGING"
+    MULTIPLE_FIFO = "MULTIPLE_FIFO"
     UNDEFINED = "UNDEFINED"
 
 
@@ -94,7 +95,7 @@ class SPCM:
         # antialiasing filter for channel
         # '0' - no filter
         # '1' - antialiasing filter
-        self.__antialiasing: bool = 0
+        self.__antialiasing: bool = 1
         self.__acdc = self.AC
 
         self._requested_segment_size: float = None  # in samples
@@ -222,6 +223,8 @@ class SPCM:
             self.setup_multiple_recoding_mode()
         elif self.mode == SPCM_MODE.AVERAGING:
             self.setup_averaging_mode()
+        elif self.mode == SPCM_MODE.MULTIPLE_FIFO:
+            self.setup_multiple_recoding_fifo_mode()
         elif self.mode == SPCM_MODE.UNDEFINED:
             # mode was intentionally left underfined so the real mode of
             # operation will be decided later by the measurement class
@@ -364,6 +367,19 @@ class SPCM:
         self._write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
         self._write_to_reg_32(SPC_POSTTRIGGER,
                               posttrigger)  # Post trigger memory size (pretrigger  = segmentsize - posttrigger)
+        self.AVG_ON = False
+        self.__handle_error()
+
+    def setup_multi_rec_fifo(self, segmentsize, posttrigger, loops):
+        """
+        Setup Multiple Reconding FIFO Acquisition mode
+        Acquires many segments (N = memsize/segmentsize) and saves them in
+        Spectrum memory
+        """
+        self._write_to_reg_32(SPC_CARDMODE, SPC_REC_FIFO_MULTI)
+        self._write_to_reg_32(SPC_SEGMENTSIZE, segmentsize)
+        self._write_to_reg_32(SPC_POSTTRIGGER, posttrigger)
+        self._write_to_reg_32(SPC_LOOPS, loops)
         self.AVG_ON = False
         self.__handle_error()
 
@@ -803,6 +819,44 @@ class SPCM:
         self.setup_trigger_source()
         self.setup_sample_rate()
 
+    def setup_multiple_recoding_fifo_mode(self, channels=None, ampl=None,
+                                          averages=None, batch=None,
+                                          segment_size=None, pretrigger=None):
+        if channels is None:
+            channels = self.channels
+        if ampl is None:
+            ampl = self.ch_amplitude
+        if averages is None:
+            averages = self.n_avg
+        if batch is None:
+            batch = self.n_seg
+        if segment_size is None:
+            segment_size = self._segment_size
+        if pretrigger is None:
+            pretrigger = self.pretrigger_in_samples
+
+        # if function was not invoked from 'set_parameters'
+        self.mode = SPCM_MODE.MULTIPLE_FIFO
+
+        posttrigger_mem = segment_size - pretrigger
+
+        # card driver does not throw error on exceeding the segment size
+        # see manual p.153
+        max_seg_size = self.__read_reg_64(SPC_PCIMEMSIZE) // 2 // len(channels)
+        if segment_size > max_seg_size:
+            raise CardError(f"Segment size {segment_size} exceeds maximal "
+                            f"segment size {max_seg_size} for {len(channels)} "
+                            f"channels")
+
+        if segment_size % 32 > 0:
+            raise CardError(f"Segment size must be a multiple of 32")
+
+        self.setup_multi_rec_fifo(segment_size, posttrigger_mem, averages)
+        self.setup_channels(channels, ampl)
+        self.setup_internal_clock()
+        self.setup_trigger_source()
+        self.setup_sample_rate()
+
     def setup_averaging_mode(self, channels=None, ampl=None, num_segments=None,
                              segment_size=None, pretrigger=None,
                              num_averages=None):
@@ -867,6 +921,11 @@ class SPCM:
             )
         elif self.mode == SPCM_MODE.MULTIPLE:
             self.setup_multiple_recoding_mode(
+                channels=channels, ampl=ampl, num_segments=num_segments,
+                segment_size=segment_size, pretrigger=pretrigger
+            )
+        elif self.mode == SPCM_MODE.MULTIPLE_FIFO:
+            self.setup_multi_rec_fifo(
                 channels=channels, ampl=ampl, num_segments=num_segments,
                 segment_size=segment_size, pretrigger=pretrigger
             )

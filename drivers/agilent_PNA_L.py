@@ -173,6 +173,7 @@ class Agilent_PNA_L(Instrument):
         self.add_function('sweep_hold')
         self.add_function('sweep_continuous')
         self.add_function('autoscale_all')
+        self.add_function('set_cw_time')
 
         #self.add_function('avg_clear')
         #self.add_function('avg_status')
@@ -1013,3 +1014,28 @@ class Agilent_PNA_L(Instrument):
 
     def do_get_trig_dur(self):
         raise NotImplemented
+
+    def set_cw_time(self, frequency, sweep_time=0):
+        """
+        Set up continuous wave mode, that is VNA measurement vs time (not
+        frequency)
+        Parameters
+        ----------
+        frequency: Hz
+            frequency of the continuous wave
+        sweep_time: ms
+            length of time segment in ms. Pass 0 to setup VNA to the fastest
+            possible sweep time. Pass -1 to set the maximal value of 84000
+            seconds (i.e. 1 day)
+        Returns
+        -------
+
+        """
+        self.write(f"SENSe{self._ci}:SWEep:TYPE CW")
+        self.write(f"SENSe{self._ci}:FREQuency:CW {frequency:.0f}")
+        if sweep_time == 0:
+            self.write(f"SENSe{self._ci}:SWEep:TIME MIN")
+        elif sweep_time < 0:
+            self.write(f"SENSe{self._ci}:SWEep:TIME MAX")
+        else:
+            self.write(f"SENSe{self._ci}:SWEep:TIME {sweep_time:.0f}ms")

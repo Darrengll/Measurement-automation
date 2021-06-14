@@ -118,7 +118,7 @@ class StimulatedEmission(PulseMixing):
         self._pulse_edge_mult = pulse_edge_mult
         self._delay_correction = delay_correction
         self._measurement_result._freq_lims = freq_limits
-        self.apply_filter = filter # Flag: apply a digital FIR filter
+        self.apply_filter = filter  # Flag: apply a digital FIR filter
 
         # longest repetition period is initially set with data from
         # 'pulse_sequence_paramaters'

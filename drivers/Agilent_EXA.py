@@ -155,12 +155,12 @@ class Agilent_EXA_N9010A(Instrument):
         Returns a dictionary containing bandwidth, nop, power, averages and
         freq_limits currently used by the EXA
         """
-        return {"bandwidth":self.get_bandwidth(),
-                  "nop":self.get_nop(),
-                  "centerfreq":self.get_centerfreq(),
-                  "span":self.get_span(),
-                  "avs":self.get_averages(),
-                  "av_status":self.get_average()}
+        return {"bandwidth": self.get_bandwidth(),
+                  "nop": self.get_nop(),
+                  "centerfreq": self.get_centerfreq(),
+                  "span": self.get_span(),
+                  "avs": self.get_averages(),
+                  "av_status": self.get_average()}
 
     def set_parameters(self, pars_dict):
         """
@@ -374,7 +374,7 @@ class Agilent_EXA_N9010A(Instrument):
         Output:
             cf (float) :Center Frequency in Hz
         """
-        return  float(self._visainstrument.query('SENS%i:FREQ:CENT?'%(self._ci)))
+        return float(self._visainstrument.query('SENS%i:FREQ:CENT?'%(self._ci)))
 
     def do_set_span(self,span):
         """
@@ -466,8 +466,8 @@ class Agilent_EXA_N9010A(Instrument):
         Sweep single
         """
         self.init()
-        #self.write("SENSe{0}:SWEep:MODE SINGle".format(self.current_channel))
-        #self.write("SENS%i:SWE:MODE SING"%(self._ci))
+        # self.write("SENSe{0}:SWEep:MODE SINGle".format(self.current_channel))
+        # self.write("SENS%i:SWE:MODE SING"%(self._ci))
 
     def get_averaging_setup(self):
         return self._visainstrument.query("CHP:AVER:TCON?")[:-1]

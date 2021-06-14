@@ -400,7 +400,7 @@ class IQPulseBuilder():
             return window, derivative
 
         def decaying_exponent():
-            window = exp(-window_parameter * linspace(0, N_time_steps,
+            window = exp(window_parameter * linspace(0, N_time_steps,
                                                      N_time_steps,
                                                       endpoint=False) / N_time_steps)
             return window

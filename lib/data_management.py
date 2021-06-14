@@ -124,3 +124,27 @@ def load_measurement(filename):
     except IndexError:
         print("Loaded a measurement with an outdated format. Some fields will be undefined.")
     return measurement
+
+
+def save_data(timestamp, name, data, context):
+    the_folder = get_folder_path(timestamp, name)
+    filename = f"{the_folder}/{name}.pkl"
+    context_file = f"{the_folder}/context.txt"
+
+    # create folders
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+    # save data
+    with open(filename, 'wb') as f:
+        pkl.dump(data, f)
+
+    # save context
+    with open(context_file, 'w') as f:
+        f.write(str(context))
+
+
+def get_folder_path(timestamp, name):
+    date_str = timestamp.strftime("%b %d %Y")
+    time_str = timestamp.strftime("%H-%M-%S")
+    the_path = f"data/Photon_wave_mixing/{date_str}/{time_str} - {name}"
+    return the_path

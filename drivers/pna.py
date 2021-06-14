@@ -10,7 +10,6 @@ class Pna(instr.Instr):
         # self.set_current_channel_and_trace(1,1)
 
         # bla = self.ask("SYSTem:ACTive:CHANnel?")
-        # self.current_channel = int(bla)
         # bla = self.ask("SYSTem:MEAS:CATalog? {0}".format(self.current_channel))
         # self.current_measurement_number = int(bla[1:-1])
 
@@ -55,7 +54,6 @@ class Pna(instr.Instr):
         else:
             output = "No error in queue."
         return output
-
 
     def set_data_format(self, data_format):
         self.write("FORMat {1}".format(self.current_channel, data_format))
@@ -242,6 +240,33 @@ class Pna(instr.Instr):
         self.write("SENSe{0}:SWEep:TYPE LINear".format(self.current_channel))
         self.write("SENSe{0}:FREQuency:CENTer {1}".format(self.current_channel, int(fcenter)))
         self.write("SENSe{0}:FREQuency:SPAN {1}".format(self.current_channel, int(fspan)))
+
+    def set_cw_time(self, frequency, sweep_time=0):
+        """
+        Set up continuous wave mode, that is VNA measurement vs time (not
+        frequency)
+        Parameters
+        ----------
+        frequency: Hz
+            frequency of the continuous wave
+        sweep_time: ms
+            length of time segment in ms. Pass 0 to setup VNA to the fastest
+            possible sweep time. Pass -1 to set the maximal value of 84000
+            seconds (i.e. 1 day)
+        Returns
+        -------
+
+        """
+
+        self.write(f"SENSe{self.current_channel}:SWEep:TYPE CW")
+        self.write(f"SENSe{self.current_channel}:FREQuency:CW {frequency:.0f}")
+        if sweep_time == 0:
+            self.write(f"SENSe{self.current_channel}:SWEep:TIME MIN")
+        elif sweep_time < 0:
+            self.write(f"SENSe{self.current_channel}:SWEep:TIME MAX")
+        else:
+            self.write(f"SENSe{self.current_channel}:SWEep:TIME "
+                       f"{sweep_time:.0f}ms")
 
     def set_if_bw(self, if_bw):
         self.write("SENSe{0}:BANDwidth {1}".format(self.current_channel, if_bw))

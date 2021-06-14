@@ -1,7 +1,8 @@
 import fnmatch
 import os
 import pickle
-import matplotlib.figure, matplotlib.axes
+import matplotlib.figure
+import matplotlib.axes
 import platform
 import traceback
 from datetime import datetime
@@ -19,6 +20,7 @@ from typing import Union
 
 locale.setlocale(locale.LC_TIME, "C")
 
+
 def find(pattern, path):
     result = []
     for root, dirs, files in os.walk(path):
@@ -28,7 +30,7 @@ def find(pattern, path):
     return result
 
 
-class ContextBase():
+class ContextBase:
 
     def __init__(self):
         self._equipment = {}
@@ -42,6 +44,7 @@ class ContextBase():
 
         import json
         import datetime
+
         class Encoder(json.JSONEncoder):
             def default(self, obj):
                 if hasattr(obj, "toJSON"):

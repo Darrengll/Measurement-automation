@@ -23,21 +23,21 @@ class SC5502A():
         # REFERENCE_MODE(0x15)-This register sets the  behavior of the
         # reference clock  section
         if master:
-            self._ext_ref_lock = 1   # Bit  0  enables  (1) or disables(0) the
+            self._ext_ref_lock = 0   # Bit  0  enables  (1) or disables(0) the
             # device  to  phase-lock  to  an  external  source
             self._ext_ref_output = 1   # Bit  1  enables (1) or  disables  (0)
             # the  output  reference  signal,
             self._ext_ref_100Mhz = 0   # Bit 2 selects whether the output
             # reference
             # signalis 10 MHz (0) or  100  MHz  (1)
-            self._pxi_10MHz_ref_output = 1   # Bit 3 enables (1) or disables
+            self._pxi_10MHz_ref_output = 0   # Bit 3 enables (1) or disables
             # (0)
             # the PXI10 MHz clock
             self.set_ext_reference_lock(True)
         else:
             self._ext_ref_lock = 1   # Bit  0  enables  (1) or disables(0) the
             # device  to  phase-lock  to  an  external  source
-            self._ext_ref_output = 0   # Bit  1  enables (1) or  disables  (0)
+            self._ext_ref_output = 1   # Bit  1  enables (1) or  disables  (0)
             # the  output  reference  signal,
             self._ext_ref_100Mhz = 0   # Bit 2 selects whether the output
             # reference

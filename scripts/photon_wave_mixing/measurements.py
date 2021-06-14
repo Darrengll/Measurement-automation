@@ -91,6 +91,28 @@ def measure_transmission_through_sps(sps_devices, probe_devices,
 
     return setup_stimulated_emission_measurement(devices, params)
 
+def measure_transmission_through_probe(sps_devices, probe_devices, params):
+
+    # Reset AWG
+    dev.turn_off_awg(probe_devices)
+    dev.turn_off_awg(sps_devices)
+
+    # Check if all calibrations are in place
+    status, message = check_calibrations(probe_devices)
+    if not status:
+        print(f"'sps_devices' does not contain {message}")
+    status, message = check_calibrations(probe_devices)
+    if not status:
+        print(f"'probe_devices' does not contain {message}")
+
+    # Mute the second heterodyne completely
+    sps_devices['mw'].set_output_state('OFF')
+
+    devices = probe_devices.copy()
+    devices['coil1'] = sps_devices['coil']
+    devices['coil2'] = probe_devices['coil']
+
+    return setup_stimulated_emission_measurement(devices, params)
 
 def setup_stimulated_emission_measurement(devices_dict, params):
     """Sets parameters for the stimulated emission measurement class and 

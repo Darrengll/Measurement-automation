@@ -177,16 +177,20 @@ def plot_fourier_of_trace(trace: np.ndarray, sampling_resolution: float = 0.8,
 
 
 def plot_2D(xx, yy, zz, xlabel='', ylabel='', title='',
-            xlim=None, ylim=None, savepath=None, grid=False):
+            xlim=None, ylim=None, vmin=None, vmax=None,
+            savepath=None, grid=False, cmap="RdBu_r"):
     fig, ax = plt.subplots(1, figsize=(9, 6), constrained_layout=True)
     ax.set_title(title)
-    zmax = np.max(np.abs(zz))
+
+    zmax = np.max(np.abs(zz)) if vmax is None else vmax
+    zmin = -np.max(np.abs(zz)) if vmin is None else vmin
+
     step_X = xx[0, 1] - xx[0, 0]
     step_Y = yy[1, 0] - yy[0, 0]
     extent = [xx[0, 0] - 1 / 2 * step_X, xx[0, -1] + 1 / 2 * step_X,
               yy[0, 0] - 1 / 2 * step_Y, yy[-1, 0] + 1 / 2 * step_Y]
-    ax_map = ax.imshow(zz, origin='lower', cmap="RdBu_r",
-                       aspect='auto', vmax=zmax, vmin=-zmax, extent=extent)
+    ax_map = ax.imshow(zz, origin='lower', cmap=cmap,
+                       aspect='auto', vmax=zmax, vmin=zmin, extent=extent)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     if xlim is not None:
