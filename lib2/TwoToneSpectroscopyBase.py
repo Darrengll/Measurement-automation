@@ -55,6 +55,7 @@ class TwoToneSpectroscopyBase(Measurement):
                 .get_equipment()["vna"] = vna_parameters
             self._mw_src[0].set_output_state("ON")
 
+
         super().set_fixed_parameters(vna=[vna_parameters],
                                      mw_src=dev_params['mw_src'])
 

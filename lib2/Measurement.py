@@ -267,6 +267,9 @@ class Measurement:
                     manager.canvas.start_event_loop(.5)
                 except AttributeError:  # plot was closed
                     time.sleep(0.5)
+        except Exception as e:
+            self._logger.warn(f"Uncaught exception: {e}")
+            raise e
         finally:
             self._measurement_result.finalize()
             plt.close(figure_number)
@@ -280,6 +283,7 @@ class Measurement:
         try:
             self._record_data()
         except Exception:
+            self._logger(f"Exception while recording data: {sys.exc_info()}")
             self._measurement_result.set_exception_info(sys.exc_info())
         finally:
             self._measurement_result.set_is_finished(True)

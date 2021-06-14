@@ -81,13 +81,16 @@ class STSRunner():
 
         counter = 0
 
-        while (counter < 10):
+        while counter < 10:
 
-            if counter == 0:
-                # self._perform_STS_first()
-                self._perform_STS()
-            else:
-                self._perform_STS()
+            # if counter == 0:
+            #     # self._perform_STS_first()
+            #     self._perform_STS()
+            # else:
+            #     self._perform_STS()
+
+            self._perform_STS()
+
             ao = AnticrossingOracle("transmon", self._sts_result,
                                     plot=True,
                                     fast_res_detect=False,
@@ -97,11 +100,11 @@ class STSRunner():
             self._logger.debug("Scan: " + str(self._scan_area_width / 1e6))
             self._logger.debug("Ptp: " + str(ptp(res_points[:, 1]) / 1e6))
             if 0.1e6 < ptp(res_points[:, 1]) <= 10e6:
-                self._scan_area_width = ptp(res_points[:, 1]) * 1.2
+                self._scan_area_width = ptp(res_points[:, 1]) * 1.5 + 2e6
                 self._res_freq = (max(res_points[:, 1]) + min(res_points[:, 1]))/2
                 self._logger.debug("Flux dependence found. Zooming to scan area of: %s",
                                    str(self._scan_area_width))
-                break
+                # break
             elif ptp(res_points[:, 1]) > 10e6:
                 self._logger.debug("Very strong flux dependence found. "
                                    "Probably avoided crossings. Leaving as is..")
@@ -114,10 +117,15 @@ class STSRunner():
                 # self._bias_values = self._bias_values*5
 
             counter += 1
-            if self._scan_area_width_previous * 1.1 > self._scan_area_width:
+
+            if counter < 3:
+                self._scan_area_width_previous = self._scan_area_width
+            elif (self._scan_area_width_previous - 1e6) * 1.1 > (self._scan_area_width - 1e6):
                 break
             else:
                 self._scan_area_width_previous = self._scan_area_width
+            if self._scan_area_width_previous > 16e6:
+                break
 
 
         # self._vna_parameters["nop"] = 101
@@ -165,7 +173,7 @@ class STSRunner():
 
         self._sts_result = self._STS.launch()
 
-    def _perform_STS_first(self):
+    def _perform_STS_first(self):  # for the case when two resonators are too close
 
         self._vna_parameters["freq_limits"] = \
             (self._res_freq - self._scan_area_width / 2 - 8e6,
