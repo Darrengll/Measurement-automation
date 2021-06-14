@@ -11,7 +11,7 @@
       "VII": "top",
       "VIII": "top"
     },
-    "readout_power": -55,
+    "readout_power": -60,
     "excitation_power": -20
   },
   "fulaut": {
@@ -32,19 +32,19 @@
       "window": 100
     },
     "sts_runner": {
-      "rerun": true,
+      "rerun": false,
       "vna_parameters": {
-        "nop": 201,
+        "nop": 101,
         "bandwidth": 1e6,
         "averages": 1000
       },
-      "flux_nop": 101,
+      "flux_nop": 51,
       "anticrossing_oracle_hints": {
         "fqmax_below": true
       }
     },
     "tts_runner": {
-      "rerun": false,
+      "rerun": true,
       "vna_parameters": {
         "bandwidth": 1e5,
         "averages": 2000,
@@ -52,12 +52,12 @@
         "resonator_detection_bandwidth": 1e5
       },
       "frequency_span": [4.4e9, 5.7e9],
-      "periods": 1.1,
-      "flux_nop": 201,
-      "frequency_nop": 201
+      "periods": 1.2,
+      "flux_nop": 401,
+      "frequency_nop": 401
     },
     "acstts_runner": {
-      "rerun": false,
+      "rerun": true,
       "vna_parameters": {
         "bandwidth": 5e4,
         "averages": 5000,
