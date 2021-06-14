@@ -571,7 +571,7 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : getting average status')
         return bool(int(self._visainstrument.query('SENS%i:AVER:STAT?' % (self._ci))))
 
-    def do_set_averages(self, av, mode="POINT"):
+    def do_set_averages(self, av, mode="SWEEP"):
         """
 
         Parameters
@@ -585,15 +585,15 @@ class Agilent_PNA_L(Instrument):
         -------
         None
         """
-        self._visainstrument.write('SENS%i:AVER:COUN %i' % (self._ci, av))
         if av > 1:
             self._visainstrument.write("SENS%i:AVER ON" % self._ci)
         else:
             self._visainstrument.write("SENS%i:AVER OFF" % self._ci)
+        self._visainstrument.write('SENS%i:AVER:COUN %i' % (self._ci, av))
         if mode == "POINT":
             self._visainstrument.write("SENS%i:AVER:MODE POIN" % self._ci)
         elif mode == "SWEEP":
-            raise NotImplementedError
+            self._visainstrument.write("SENS%i:AVER:MODE SWEEP" % self._ci)
 
     def do_get_averages(self):
         """
