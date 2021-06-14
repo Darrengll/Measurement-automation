@@ -8,8 +8,8 @@ https://literature.cdn.keysight.com/litweb/pdf/M3201-90001.pdf?id=2787170
 user's guide for Keysight SD1 version 3.x
 https://literature.cdn.keysight.com/litweb/pdf/M3XXX-90003.pdf?id=3120777
 """
-
-from drivers.instrument import Instrument
+import numpy as np
+from scipy.interpolate import interp1d
 
 from drivers.keysightSD1 import SD_AOU, SD_Wave
 from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, \
@@ -17,9 +17,6 @@ from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, \
 from drivers.keysightSD1 import SD_WaveformTypes, SD_Waveshapes, \
     SD_MarkerModes, SD_SyncModes, SD_Error
 from drivers.keysightSD1 import SD_ModulationTypes, SD_Compatibility
-
-import numpy as np
-from scipy.interpolate import interp1d
 
 
 class KeysightM3202A:
@@ -52,7 +49,7 @@ class KeysightM3202A:
             the waveforms of same duration. Fortunately, this is the case for all PulseSequences that we usually use and
             for synchronized channels, in general.
         '''
-        self.mask = 0
+        self.alias = awg_alias
         self.module = SD_AOU()
         self.module_id = self.module.openWithSlotCompatibility(
             "M3202A", chassis, slot, compatibility=SD_Compatibility.LEGACY)

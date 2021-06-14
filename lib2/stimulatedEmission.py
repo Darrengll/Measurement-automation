@@ -13,7 +13,7 @@ from typing import List
 from drivers.Spectrum_m4x import SPCM
 from drivers.E8257D import MXG
 from drivers.IQAWG import IQAWG
-from drivers.Yokogawa_GS200 import Yokogawa_GS210
+from drivers.Yokogawa_GS210 import Yokogawa_GS210
 
 reload(lib2.directMeasurements.waveMixing)
 from lib2.directMeasurements.waveMixing import PulseMixing
@@ -118,7 +118,7 @@ class StimulatedEmission(PulseMixing):
         self._pulse_edge_mult = pulse_edge_mult
         self._delay_correction = delay_correction
         self._measurement_result._freq_lims = freq_limits
-        self.apply_filter = filter # Flag: apply a digital FIR filter
+        self.apply_filter = filter  # Flag: apply a digital FIR filter
 
         # longest repetition period is initially set with data from
         # 'pulse_sequence_paramaters'

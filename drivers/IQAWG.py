@@ -422,7 +422,7 @@ class IQAWG_Multiplexed(IQAWG):
         -----------
         parameteres: dict {"param_name":param_value, ...}
         """
-        par_names = ["calibration","calibration2"]
+        par_names = ["calibration", "calibration2"]
         for par_name in par_names:
             if par_name in parameters.keys():
                 setattr(self, "_"+par_name, parameters[par_name])

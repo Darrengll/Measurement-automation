@@ -12,7 +12,7 @@ from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiv
 from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
 from drivers.IQAWG import IQAWG
 from drivers.E8257D import MXG
-from drivers.Yokogawa_GS200 import Yokogawa_GS210
+from drivers.Yokogawa_GS210 import Yokogawa_GS210
 
 from typing import Dict, Union
 

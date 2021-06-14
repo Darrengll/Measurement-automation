@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from drivers.Yokogawa_GS200 import Yokogawa_GS210
+from drivers.Yokogawa_GS210 import Yokogawa_GS210
 from drivers.IQAWG import AWGChannel
 from lib2.IQPulseSequence import IQPulseBuilder
 from lib2.VNATimeResolvedDispersiveMeasurement1D import \

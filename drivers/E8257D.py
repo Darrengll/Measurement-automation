@@ -1,11 +1,7 @@
-import drivers.instr as instr
+import visa
+import logging
 
 from drivers.instrument import Instrument
-import visa
-import types
-import logging
-from time import sleep
-import numpy
 
 
 class MXG(Instrument):
@@ -135,8 +131,6 @@ class MXG(Instrument):
             print("Error in get_power(): value returned: {0}".format(bla))
             output = -1.0
         return output
-
-    # def set_frequency_sweep(self):
 
     def do_set_ext_trig_channel(self, ext_trig_channel):
         self.write(":LIST:TRIG:EXT:SOUR %s" % (ext_trig_channel))  # choose external trigger channel

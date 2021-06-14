@@ -64,12 +64,12 @@ class Measurement:
          'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
          # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
          'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
-         'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok3': [["GS210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok1': [["GS210_1"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok2': [["GS210_2"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok3': [["GS210_3"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok4': [["gs210"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok5': [["GS_210_3"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok6': [["YOK1"], [Yokogawa_GS210, "Yokogawa_GS210"]],
          'k6220': [["k6220"], [k6220, "K6220"]]
          }
 

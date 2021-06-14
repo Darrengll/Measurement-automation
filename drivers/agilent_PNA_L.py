@@ -169,14 +169,6 @@ class Agilent_PNA_L(Instrument):
         self.add_function('autoscale_all')
         self.add_function('set_cw_time')
 
-        #self.add_function('avg_clear')
-        #self.add_function('avg_status')
-
-        #self._oldspan = self.get_span()
-        #self._oldnop = self.get_nop()
-        #if self._oldspan==0.002:
-        #  self.set_zerospan(True)
-
         self.get_all()
 
     def get_all(self):
@@ -192,11 +184,7 @@ class Agilent_PNA_L(Instrument):
         self.get_averages()
         self.get_frequencies()
         self.get_channel_index()
-        #self.get_zerospan()
 
-    ###
-    #Communication with device
-    ###
 
     def init(self):
         if self._zerospan:

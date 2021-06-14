@@ -1,1 +1,1 @@
-__all__ = ["agilent_PNA_L", "agilent_EXA", "E8257D", "keysightAWG", "Keysight_DSOX2014", "Yokogawa_GS200", "znb", "Tektronix_AWG5014", "k6220"]
+__all__ = ["agilent_PNA_L", "agilent_EXA", "E8257D", "keysightAWG", "Keysight_DSOX2014", "Yokogawa_GS210.py", "znb", "Tektronix_AWG5014", "k6220"]

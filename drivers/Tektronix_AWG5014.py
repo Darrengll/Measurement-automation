@@ -19,7 +19,6 @@
 
 from drivers.instrument import Instrument
 import visa
-import types
 import logging
 import numpy as np
 import struct

@@ -1,18 +1,12 @@
 from tqdm.notebook import tqdm
 
-import drivers.instr as instr
-from drivers.IQAWG import IQAWG
 from drivers.IQVectorGenerator import IQVectorGenerator
 from lib.iq_mixer_calibration import *
 from drivers.Spectrum_m4x import *
-from scipy.fftpack import fft, fftfreq
-from time import sleep
 from lib.data_management import *
 
-import ipywidgets as widgets
 
-
-class DacAdcVNA():
+class DacAdcVNA:
 
     def __init__(self, iqadc, iqvg: IQVectorGenerator, sa):
         '''

@@ -15,17 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-
-from drivers.instrument import Instrument
-from numpy import *
-import numpy as np
-import visa
-import types
-import time
-import logging
-from lib2.IQPulseSequence import *
-
 from enum import Enum
+
+import visa
+
+from lib2.IQPulseSequence import *
+from drivers.instrument import Instrument
 
 
 class WaveformType(Enum):
@@ -74,8 +69,6 @@ class KeysightAWG(Instrument):
                            flags=Instrument.FLAG_GETSET, units='', type=float)
 
         self.add_function("apply_waveform")
-
-        # High-level functions
 
     def output_arbitrary_waveform(self, waveform, repetition_rate, channel, asynchronous=False):
         """

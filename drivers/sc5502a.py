@@ -20,12 +20,12 @@ MAXDESCRIPTORSIZE = 9
 
 class SC5502A():
 
-    def __init__(self, idx=0):
+    def __init__(self, idx=0, ext_ref_lock=1):
         self._idx = idx
         self.search()
         self.open()
 
-        self._ext_ref_lock = 1  # Bit  0  enables  (1) or disables(0) the
+        self._ext_ref_lock = ext_ref_lock   # Bit  0  enables  (1) or disables(0) the
         # device  to  phase-lock  to  an  external  source
         self._ext_ref_output = 1  # Bit  1  enables (1) or  disables  (0)
         # the  output  reference  signal
@@ -87,12 +87,8 @@ class SC5502A():
 
     def set_frequency(self, freq):
         self._frequency = freq
-        # self.set_output_state("OFF")
-        # time.sleep(0.01)
         setFreq = self._lib.sc5502a_SetFrequency(self._handle,
                                                  c_ulonglong(int(freq)))
-        # self.set_output_state("ON")
-        # time.sleep(0.01)
 
         if setFreq:
             msg = 'Failed to set freq on the instrument with handle {}'.format(
@@ -116,7 +112,7 @@ class SC5502A():
 
     def set_power(self, power):
         if power > 10:
-            # self._logger.debug("SignalCore: clipped power to max 10 dBm, see manual")
+            self._logger.debug("SignalCore: clipped power to max 10 dBm, see manual")
             power = 10
         self._power = power
         setPower = self._lib.sc5502a_SetPowerLevel(self._handle,

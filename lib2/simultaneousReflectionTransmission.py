@@ -11,7 +11,7 @@ from typing import List
 from drivers.Spectrum_m4x import SPCM
 from drivers.E8257D import MXG
 from drivers.IQAWG import IQAWG
-from drivers.Yokogawa_GS200 import Yokogawa_GS210
+from drivers.Yokogawa_GS210 import Yokogawa_GS210
 from lib.iq_downconversion_calibration import IQDownconversionCalibrationResult
 
 

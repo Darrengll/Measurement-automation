@@ -1,7 +1,9 @@
 import fnmatch
 import os
 import pickle
-import matplotlib.figure, matplotlib.axes
+import platform
+import matplotlib.figure
+import matplotlib.axes
 import traceback
 from datetime import datetime
 from threading import Lock
@@ -18,6 +20,7 @@ from typing import Union
 
 locale.setlocale(locale.LC_TIME, "C")
 
+
 def find(pattern, path):
     result = []
     for root, dirs, files in os.walk(path):
@@ -27,7 +30,7 @@ def find(pattern, path):
     return result
 
 
-class ContextBase():
+class ContextBase:
 
     def __init__(self):
         self._equipment = {}
@@ -36,12 +39,12 @@ class ContextBase():
     def get_equipment(self):
         return self._equipment
 
-    # @property
     def to_string(self):
         self._equipment.update({"comment:": self._comment})
 
         import json
         import datetime
+
         class Encoder(json.JSONEncoder):
             def default(self, obj):
                 if hasattr(obj, "toJSON"):
@@ -277,7 +280,6 @@ class MeasurementResult:
                 pickle.dump(self._data, f)
             with open(os.path.join(self.get_save_path(),
                                    self._name + '_context.txt'), 'w+') as f:
-
                 f.write(self.get_context().to_string())
             with open(os.path.join(self.get_save_path(),
                                    self._name + '.pkl'), 'w+b') as f:
@@ -430,8 +432,7 @@ class MeasurementResult:
         plt.tight_layout(pad=2)
         self._plot_fit(axes)
         """
-        pass
-
+        raise NotImplementedError
 
     def finalize(self):
         """

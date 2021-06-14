@@ -1,23 +1,22 @@
-import time
+from math import ceil
 
 import numpy as np
+from ipywidgets import widgets
+from tqdm.notebook import tqdm
+from matplotlib import pyplot as plt
 
 import lib.iq_mixer_calibration
 from drivers import IQAWG
 from lib.data_management import load_IQMX_calibration_database, \
     save_IQMX_calibration
 from lib.iq_mixer_calibration import IQCalibrator
-from math import ceil
-from tqdm.notebook import tqdm
-from matplotlib import pyplot as plt
-import ipywidgets as widgets
 
 
 class IQVectorGenerator:
 
     def __init__(self, name, lo, iq_awg: IQAWG, sa, calibration_db_name="IQVG",
                  default_calibration_power=-30, marker_period_divisor=None,
-                 slave_iqvgs = [], calibration_step = 10e6):
+                 slave_iqvgs=None, calibration_step=10e6):
         """
 
         Parameters
@@ -47,7 +46,8 @@ class IQVectorGenerator:
             self._marker_period_divisor = marker_period_divisor
         else:
             self._marker_period_divisor = self._if_period
-        self._slave_iqvgs = slave_iqvgs  # for marker period synchronization when iqvgs are on the same AWG
+        # for marker period synchronization when iqvgs are on the same AWG
+        self._slave_iqvgs = slave_iqvgs if slave_iqvgs is not None else []
 
         self._power = default_calibration_power
         self._dac_overridden = False
@@ -106,14 +106,13 @@ class IQVectorGenerator:
     def set_power(self, power):
         if power > self._default_calibration_power + 10:
             raise ValueError("Power can be % dBm max, requested %d dBm" % (
-                    self._default_calibration_power + 10, power))
+                self._default_calibration_power + 10, power))
 
         self._power = power
         self._requested_cal = self.get_calibration(self._frequency,
                                                    self._power)
         self._lo.set_power(self._requested_cal.get_lo_power())
         self._output_SSB()
-
 
     def get_power(self):
         return self._power
@@ -171,12 +170,12 @@ class IQVectorGenerator:
 
     def _around_frequency(self, frequency):
         # return ceil(frequency/self._calibration_step)*self._calibration_step
-        return round(frequency/self._calibration_step)*self._calibration_step
+        return round(frequency / self._calibration_step) * self._calibration_step
 
     def get_calibration(self, frequency, power):
         frequency = self._around_frequency(frequency)
         # frequency = round(frequency/self._calibration_step)*self._calibration_step
-        
+
         if self._cal_db is None:
             self._load_cal_db()
 
@@ -236,9 +235,9 @@ class IQVectorGenerator:
         fstop = self._around_frequency(fstop)
         self._recalibrate_mixer = recalibrate
         pb = tqdm(np.arange(fstart, fstop + self._calibration_step, self._calibration_step),
-                              smoothing=0)
+                  smoothing=0)
         for frequency in pb:
-            pb.set_description("%.3f GHz" % (frequency/1e9))
+            pb.set_description("%.3f GHz" % (frequency / 1e9))
 
             for counter in range(3):
                 try:
@@ -246,7 +245,7 @@ class IQVectorGenerator:
                     break
                 except ValueError:
                     print("Poor calibration at %.3f GHz, retry count "
-                          "%d"%(frequency/1e9, counter))
+                          "%d" % (frequency / 1e9, counter))
                     self._calibration_initial_guess["dc_offest"] = \
                         np.random.uniform(.03, 0.1, size=2)
         self._recalibrate_mixer = False

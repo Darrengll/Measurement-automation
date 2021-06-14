@@ -20,11 +20,6 @@
 
 from drivers.instrument import Instrument
 import visa
-import types
-import time
-import logging
-import numpy
-import sys
 
 def format_e(n):
     a = '%e' % n
@@ -32,7 +27,8 @@ def format_e(n):
 
 class Yokogawa_GS210(Instrument):
     """
-    The driver for the Yokogawa_GS210. Default operation regime is CURRENT source.
+    The driver for the Yokogawa_GS210 (GS200 on the front panel, 210 stands for the option configuration).
+    Default operation regime is CURRENT source.
 
         CURRENT SOURCE
         Source Range    Range Generated     Resolution      Max. Load Voltage
