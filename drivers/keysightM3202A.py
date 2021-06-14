@@ -119,8 +119,7 @@ class KeysightM3202A:
             self.waveforms[channel - 1] = None
             self.waveform_ids[channel - 1] = None
             self.repetition_frequencies[channel - 1] = None
-            self.waveshape_types[
-                channel - 1] = SD_Waveshapes.AOU_AWG  # default
+            self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_AWG  # default
 
         if channels == [1, 2, 3, 4]:
             # clear ALL: internal memory and AWG queues

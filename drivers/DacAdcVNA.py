@@ -1,3 +1,4 @@
+from ipywidgets import widgets
 from tqdm.notebook import tqdm
 
 from drivers.IQVectorGenerator import IQVectorGenerator
