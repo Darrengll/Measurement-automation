@@ -108,7 +108,7 @@ class KeysightM3202A:
         for channel in channels:
             # stop modulations
             self.stop_modulation(channel)
-            # clear queues (theres no command to clear memory;
+            # clear queues, theres no command to clear memory for a specific channel
             # however, leaving internal memory as is
             # is not a problem: it will inevitably be overwritten by following
             # requests to the AWG via module.reloadWaveform...)
@@ -535,43 +535,44 @@ class KeysightM3202A:
         if (frequency > 1e9):
             raise ValueError("if_freq is exceeding AWG sampling rate: 1 GHz")
 
-        duration_initial = 1 / frequency * 1e9 if frequency != 0 else 10.0  # float
-        # interpolating input waveform to the next step
-        # that rescales waveform to fit if_freq
-        interpolation_method = "cubic" if frequency != 0 else "linear"
-        old_x = np.linspace(0, duration_initial, len(waveform) + 1)
-        f_wave = interp1d(old_x, np.concatenate((waveform, [waveform[0]])),
-                          kind=interpolation_method)
+        duration_initial = 1 / frequency * 1e9 if frequency != 0 else 10.0  # float, ns
 
-        # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
-        # but to provide if_freq accuracy, we are sampling from
-        # interval 1000 times wider then the original, and we are extending
-        # interpolation function domain using its periodicity
-        # duration = duration_initial*1e4 if duration_initial < 1e2 else 1e6  # here it is
+        if not np.allclose(duration_initial, 1/self.get_sample_rate() * 1e9 * len(waveform)):
+            # interpolating input waveform to the next step
+            # that rescales waveform to fit repetition frequency
+            interpolation_method = "cubic" if frequency != 0 else "linear"
+            old_x = np.linspace(0, duration_initial, len(waveform) + 1)
+            interpolating_function = interp1d(old_x, np.concatenate((waveform, [waveform[0]])),
+                              kind=interpolation_method)
 
-        duration = duration_initial
-        new_x = np.linspace(0, duration, int(
-            np.round(duration / self.get_sample_rate() * 1e9)), endpoint=False)
+            # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
+            # but to provide if_freq accuracy, we are sampling from
+            # interval 1000 times wider then the original, and we are extending
+            # interpolation function domain using its periodicity
+            # duration = duration_initial*1e4 if duration_initial < 1e2 else 1e6  # here it is
 
-        # converting domain values in the function domain
-        new_x_converted = np.remainder(new_x, duration_initial)
-        waveform_array = f_wave(
-            new_x_converted)  # obtaining new waveform values
+            duration = duration_initial
+            new_x = np.linspace(0, duration, int(
+                np.round(duration / self.get_sample_rate() * 1e9)), endpoint=False)
 
-        normalization = np.max(np.abs(waveform_array))
+            # converting domain values in the function domain
+            new_x_converted = np.remainder(new_x, duration_initial)
+            waveform = interpolating_function(new_x_converted)  # obtaining new waveform values
+
+        normalization = np.max(np.abs(waveform))
 
         if self.waveshape_types[channel - 1] == SD_Waveshapes.AOU_AWG:
             self.output_voltages[channel - 1] = normalization
 
         # normalize waveform to (-1,1) interval
         if normalization != 0:
-            waveform_array /= normalization
+            waveform /= normalization
         else:
             # all points are equal to zero
             pass
 
         self.repetition_frequencies[channel - 1] = frequency
-        self._load_array_into_AWG(waveform_array, channel)
+        self._load_array_into_AWG(waveform, channel)
 
     def _load_array_into_AWG(self, waveform_array_normalized, channel):
         """
@@ -591,6 +592,19 @@ class KeysightM3202A:
         # only float 16 is supported by AWG (it is actually 12 bit AWG), so
         # if you want to guess what is actually outputted by AWG
         # you should properly convert this to 12 bit numbers
+        reload = False
+        if self.waveform_ids[channel-1] is not None:
+            #  we have already loaded a waveform to the AWG
+            #  the API allows to reload a waveform using the same
+            #  memory space of the on-board RAM; however, the length
+            #  of the new waveform should be smaller than or equal to
+            #  the length of the old one; if that condition is satisfied,
+            #  we will call waveformReLoad. TODO: In the opposite case, ideally
+            #  a full memory flush has to be done and all waveforms reloaded for
+            #  all channels
+            if len(self.waveforms[channel-1]) >= len(waveform_array_normalized):
+                reload = True
+
         self.waveforms[channel - 1] = waveform_array_normalized
 
         # creating SD_Wave() object from keysight API
@@ -611,12 +625,13 @@ class KeysightM3202A:
         self.module.AWGflush(channel - 1)
 
         # load waveform to board RAM
-        ret = self.module.waveformLoad(wave, waveform_number)
-        if (ret == SD_Error.INVALID_OBJECTID):
-            # probably, such wave_id already exists
+        if not reload:
+            ret = self.module.waveformLoad(wave, waveform_number)
+            if ret == SD_Error.INVALID_OBJECTID or ret == SD_Error.INVALID_OPERATION:
+                self._handle_error(ret)
+        else:
             ret = self.module.waveformReLoad(wave, waveform_number)
-
-        self._handle_error(ret)
+            self._handle_error(ret)
 
         # clear channel queue
         self.module.AWGflush(channel - 1)
