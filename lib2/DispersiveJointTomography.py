@@ -299,7 +299,7 @@ class DispersiveJointTomographyResult(VNATimeResolvedDispersiveMeasurementResult
                         for k2 in keys2] for k1 in keys1]
 
         for ax in axes:
-            ax.clear()
+            ax.reset()
 
         datas = [real(data_matrix), imag(data_matrix), real(expected_tomo_matrix), imag(expected_tomo_matrix)]
         plots = [ax.imshow(data, vmax=np.max(data), vmin=np.min(data)) for ax,data in zip(axes,datas)]

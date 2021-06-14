@@ -91,7 +91,7 @@ def measure_snr(devices_dict):
     devices_dict['mw'].set_output_state("ON")
 
     # turn off AWG
-    devices_dict['awg'].clear()
+    devices_dict['awg'].reset()
     devices_dict['awg'].synchronize_channels(channelI, channelQ)
     devices_dict['awg'].trigger_output_config(channel=channelI,
                                               trig_length=100)

@@ -509,7 +509,7 @@ class RabiFromFrequencyResult(MeasurementResult):
 
             # redrawing axes data
             ax = self._axes[0]
-            ax.clear()
+            ax.reset()
             ax.set_xlabel(r"$\delta \nu$, MHz")
             ax.set_ylabel(r"$T_R, \; \mu s$")
             ax.grid()

@@ -338,8 +338,8 @@ async def measure_p1_on_pulse_sync(devices_dict, params):
     #     return power_1
     #     # np.add(power_1, res, out=res)
     #
-    # # Measure the signal
-    # print("Measuring signal")
+    # # Measure the trace
+    # print("Measuring trace")
     # with ThreadPoolExecutor(max_workers=2) as executor:
     #     powers = list(executor.map(measurement, range(params['iterations'])))
     # res = cp.sum(cp.asarray(powers, dtype=cp.float32))

@@ -91,7 +91,7 @@ print(f"Current source 'probe_coil' is loaded. Address {probe_coil._address}")
 # print(f"Current source 'sps_loop' is loaded. Address {sps_loop._address}")
 
 # Spectral analyzers
-from drivers.Agilent_EXA import Agilent_EXA_N9010A
+from drivers.agilent_EXA import Agilent_EXA_N9010A
 exa = Agilent_EXA_N9010A("EXA")
 print("Spectral analyzer 'exa' is loaded")
 
@@ -249,7 +249,7 @@ def plot_trace_IQ(trace):
 
 def turn_off_awg(devices_dict):
     awg = devices_dict['awg']
-    awg.clear()
+    awg.reset()
     awg.synchronize_channels(channelI, channelQ)
     awg.trigger_output_config(channel=channelI, trig_length=100)
     awg.stop_AWG(channel=channelI)

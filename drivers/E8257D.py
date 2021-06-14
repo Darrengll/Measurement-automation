@@ -171,7 +171,7 @@ class MXG(Instrument):
 
     def do_set_InSweep_trg_src(self, InSweep_trg_src):
         # sweep event trigger source
-        # (BUS is equivalent to GPIB source "*TRG" signal)
+        # (BUS is equivalent to GPIB source "*TRG" trace)
         self.write(":LIST:TRIG:SOUR %s" % (InSweep_trg_src))
 
     def do_get_InSweep_trg_src(self):

@@ -7,8 +7,8 @@ from lib.measurement import Measurement
 import numpy as np
 
 
-#directory = 'Data\\IQMXCalibration'
-directory = r'D:\GitHub\Measurement-automation\data\IQMXCalibrationData\IQMXCalibration'
+directory = 'data\\IQMXCalibration'
+# directory = r'D:\GitHub\Measurement-automation\data\IQMXCalibrationData\IQMXCalibration'
 
 def save_downconversion_calibration(downconv_calibration):
     if not os.path.exists(directory):

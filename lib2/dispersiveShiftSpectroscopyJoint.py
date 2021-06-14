@@ -5,7 +5,7 @@ class DispersiveShiftSpectroscopyJoint(VNATimeResolvedDispersiveMeasurement):
 
     def __init__(self, name, sample_name, **devs_aliases_map):
         super().__init__(name, sample_name, devs_aliases_map)
-        if( len(self._q_awg) == 1 ):  # signle awg for a signle mixer - multiplexing signal sequence generator
+        if( len(self._q_awg) == 1 ):  # signle awg for a signle mixer - multiplexing trace sequence generator
             self._sequence_generator = IQPulseBuilder.build_dispersive_shift_joint_sequences_multiplex
         else:  # 2 awg for 2 mixers
             self._sequence_generator = IQPulseBuilder.build_dispersive_shift_joint_sequences

@@ -77,11 +77,11 @@ class KeysightM3202A(Instrument):
         self._prescaler = 0
         self.trigger_length = 100  # ns
 
-        self.clear()  # clear internal memory and AWG queues according to p.67 of the user guide
+        self.reset()  # clear internal memory and AWG queues according to p.67 of the user guide
 
     def __del__(self):
         if self.module.isOpen():
-            self.clear()
+            self.reset()
             self.module.close()
             del self.module
 
@@ -90,7 +90,7 @@ class KeysightM3202A(Instrument):
             print(ret_val, SD_Error.getErrorMessage(ret_val))
             raise Exception
 
-    def clear(self):
+    def reset(self):
         # clear internal memory and AWG queues
         self._handle_error(
             self.module.waveformFlush()
@@ -109,7 +109,7 @@ class KeysightM3202A(Instrument):
     def set_trigger(self, trigger_string: str = "CONT", channel: int = -1):
         """
         trigger_string : string
-           'EXT' - external trigger on the front panel is used as a trigger signal source
+           'EXT' - external trigger on the front panel is used as a trigger trace source
            'CONT' - continious output  <---- DEFAULT setting
         channel : int
             1,2,3,4 - channel number
@@ -301,7 +301,7 @@ class KeysightM3202A(Instrument):
             Channel to operate with. Numbering starts from 1.
         asynchronous
         trigger_sync_every : int
-            period of trigger signal in ns
+            period of trigger trace in ns
             trigger is synchronized with the continuous wave.
 
         Returns
@@ -344,6 +344,11 @@ class KeysightM3202A(Instrument):
         self.module.channelOffset(channel - 1, offset)
 
     def get_sample_rate(self):
+        """
+        Returns : np.int
+        -------
+            Return AWG output ports sampling frequency
+        """
         if self._prescaler == 0:
             fs = int(1e9)
         elif self._prescaler == 1:
@@ -424,12 +429,12 @@ class KeysightM3202A(Instrument):
 
     def load_waveform_to_channel(self, waveform, frequency, channel):
         if np.max(np.abs(waveform)) >= 1.5:
-            raise Exception(
-                "signal maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
+            raise ValueError(
+                "trace maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
 
         # number of points
         if (frequency > 1e9):
-            raise Exception("frequency is exceeding AWG sampling rate: 1 GHz")
+            raise ValueError("frequency is exceeding AWG sampling rate: 1 GHz")
 
         duration_initial = 1 / frequency * 1e9 if frequency != 0 else 10.0  # float
         # interpolating input waveform to the next step
@@ -456,10 +461,11 @@ class KeysightM3202A(Instrument):
 
         normalization = np.max(np.abs(waveform_array))
 
-        if (self.waveshape_types[channel - 1] == SD_Waveshapes.AOU_AWG):
+        if self.waveshape_types[channel - 1] == SD_Waveshapes.AOU_AWG:
             self.output_voltages[channel - 1] = normalization
 
-        waveform_array /= normalization  # normalize waveform to (-1,1) interval
+        # normalize waveform to (-1,1) interval
+        waveform_array /= normalization
         self.repetition_frequencies[channel - 1] = frequency
         self._load_array_into_AWG(waveform_array, channel)
 

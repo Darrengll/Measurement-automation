@@ -115,7 +115,7 @@ class DirectRamseyBase(DigitizerTimeResolvedDirectMeasurement):
         dig = self._dig[0]
 
         dig_data = dig.measure()  # in mV
-        # construct complex valued scalar signal
+        # construct complex valued scalar trace
 
         data = dig_data[0::2] + 1j * dig_data[1::2]
 
@@ -278,7 +278,7 @@ class DirectRamseyFromDelay(DirectRamseyBase):
         # centering around zero
         data -= np.mean(data)
 
-        # moving fourier so the signal carrier is now at 0 Hz.
+        # moving fourier so the trace carrier is now at 0 Hz.
         if_freq = self._q_iqawg[0].get_calibration().get_if_frequency()  # Hz
         data = data * np.exp(-1j * 2 * np.pi * if_freq * time * 1e-9)
 

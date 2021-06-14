@@ -160,7 +160,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         measurement child class based on its 'self._sequence_generator' implementation.
             'Longest pulse sequence duration' is time between start of the first pulse and end
         of the last pulse in sequnce.
-            The value provided by function is needed when you need signal phase
+            The value provided by function is needed when you need trace phase
         at the end of the pulse sequence to remain constant at the end of
         the last pulse through all iteration process. This value is used in
         'self._sequence_generator' in order to set constant phase at the end of the
@@ -171,7 +171,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
         on pulse sequence parameters provided and 'self._sequence_generator' implementation.
             'Longest pulse sequence duration' is time between start of the first pulse and end
         of the last pulse in sequnce.
-            The value provided by function is needed when you need signal phase
+            The value provided by function is needed when you need trace phase
         at the end of the pulse sequence to remain constant at the end of
         the last pulse through all iteration process. This value is used in
         'self._sequence_generator' in order to set constant phase at the end of the

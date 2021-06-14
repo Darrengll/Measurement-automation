@@ -237,7 +237,7 @@ class WMPulseBuilder(IQPulseBuilder):
         delta_freq: int, Hz
             The shift of two sidebands from the central frequency. Ought to be > 0 Hz
         phase: float, rad
-            Adds a relative phase to the outputted signal.
+            Adds a relative phase to the outputted trace.
         amplitude: float
             Calibration if_amplitudes will be scaled by the
             amplitude_value.

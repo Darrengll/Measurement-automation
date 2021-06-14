@@ -188,8 +188,8 @@ class MollowTriplet(Measurement):
         p.nice(psutil.HIGH_PRIORITY_CLASS)
         if ult_calib:
             for (fg_trace, bg_trace) in iter(data_queue.get, None):
-                # fg_pd = np.abs(signal.welch(fg_trace, 1.25e9, nperseg=nfft)[1])
-                # bg_pd = np.abs(signal.welch(bg_trace, 1.25e9, nperseg=nfft)[1])
+                # fg_pd = np.abs(trace.welch(fg_trace, 1.25e9, nperseg=nfft)[1])
+                # bg_pd = np.abs(trace.welch(bg_trace, 1.25e9, nperseg=nfft)[1])
                 # if len(buff_fg) != len(fg_pd):
                 #     buff_fg = np.zeros(len(fg_pd))
                 #     buff_bg = np.zeros(len(bg_pd))
@@ -351,7 +351,7 @@ class MollowTriplet(Measurement):
 
     def turn_signal_on(self):
         # DC mode
-        # v_max_tuple = tuple((awg_channel._host_awg.MAX_OUTPUT_VOLTAGE for awg_channel in self._q_iqawg[0]._channels))
+        # v_max_tuple = tuple((awg_channel.host_awg.MAX_OUTPUT_VOLTAGE for awg_channel in self._q_iqawg[0]._channels))
         # self._q_iqawg[0].output_continuous_IQ_waves(0, (0, 0), 0, v_max_tuple, 1)
         self._q_iqawg[0].output_IQ_waves_from_calibration()
 

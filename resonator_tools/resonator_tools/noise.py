@@ -13,10 +13,10 @@ class noisedata(object):
     def __init__(self,IQ,IQref,fr,Ql,fs,gain_corr=[1.,1.],Z=50):
         '''
         units are assumed to be in volts
-        -> IQ = I+1j*Q ; with amplitude signal on Q and phase on I
-        this signal is measured on resonance
-        -> IQref = Iref+1j*Qref ; with amplitude signal on Qref and phase on Iref
-        this signal is measured far off resonance
+        -> IQ = I+1j*Q ; with amplitude trace on Q and phase on I
+        this trace is measured on resonance
+        -> IQref = Iref+1j*Qref ; with amplitude trace on Qref and phase on Iref
+        this trace is measured far off resonance
         IMPORTANT: IQ and IQref describe signals on opposite sides of the resonance circle
         Therefore, take care that Q and Qref have the correct signs in order that 
         the program can determine the diameter of the resonance circle.
