@@ -82,7 +82,8 @@ class TwoToneSpectroscopyBase(Measurement):
         return mean(data)
 
     def _finalize(self):
-        pass
+        for src in self._bias_src:
+            src.set(0)
 
 
 class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
