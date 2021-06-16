@@ -1,22 +1,22 @@
 import fnmatch
 import os
 import pickle
-import platform
-import matplotlib.figure
-import matplotlib.axes
 import traceback
-from datetime import datetime
-from threading import Lock
-from IPython.display import clear_output
-import matplotlib
-from matplotlib import animation, pyplot as plt
-from matplotlib._pylab_helpers import Gcf
-import numpy as np
 import copy
 import shutil
 import locale
-
+import pathlib
 from typing import Union
+from datetime import datetime
+from threading import Lock
+
+import numpy as np
+import matplotlib.figure
+import matplotlib.axes
+import matplotlib
+from matplotlib import animation, pyplot as plt
+from matplotlib._pylab_helpers import Gcf
+from IPython.display import clear_output
 
 locale.setlocale(locale.LC_TIME, "C")
 
@@ -55,6 +55,7 @@ class ContextBase:
                     return obj.__str__()
                 else:
                     return json.JSONEncoder.default(self, obj)
+
         def nice_dict(d):
             return json.dumps(d, indent=4, cls=Encoder)
 
@@ -97,7 +98,7 @@ class MeasurementResult:
         self._parameter_names = parameter_names
 
     @staticmethod
-    def delete(sample_name, name, date='', subfolder = "", delete_all=False):
+    def delete(sample_name, name, date='', subfolder="", delete_all=False):
         """
         Finds all files with matching result name within the file structure of ./data/
         folder, prompts user to resolve any ambiguities. Then deletes selected
@@ -194,7 +195,7 @@ class MeasurementResult:
 
         sorted_dates, sorted_paths = zip(*sorted(z))
 
-        if not return_all and len(paths)>1:
+        if not return_all and len(paths) > 1:
             # force user to choose
             return MeasurementResult._prompt_user_to_choose(sorted_paths)
 
@@ -211,28 +212,15 @@ class MeasurementResult:
     def get_name(self):
         return self._name
 
-    def get_save_path(self):
-
-        if not os.path.exists("data"):
-            os.makedirs("data")
-
-        sample_directory = os.path.join('data', self._sample_name)
-        if not os.path.exists(sample_directory):
-            os.makedirs(sample_directory)
-
+    def get_save_path(self, subdirectory=""):
         locale.setlocale(locale.LC_TIME, "C")
-        date_directory = os.path.join(sample_directory,
-                                      self.get_start_datetime().strftime("%b %d %Y"))
-        if not os.path.exists(date_directory):
-            os.makedirs(date_directory)
-
-        time_directory = os.path.join(date_directory,
+        time_directory = os.path.join("data",
+                                      self._sample_name,
+                                      subdirectory,
+                                      self.get_start_datetime().strftime("%b %d %Y"),
                                       self.get_start_datetime().strftime("%H-%M-%S")
                                       + " - " + self._name)
-
-        if not os.path.exists(time_directory):
-            os.makedirs(time_directory)
-
+        pathlib.Path(time_directory).mkdir(parents=True, exist_ok=True)
         return time_directory
 
     def __getstate__(self):
@@ -249,7 +237,7 @@ class MeasurementResult:
         self.__dict__.update(state)
         self._data_lock = Lock()
 
-    def save(self, plot_maximized = True):
+    def save(self, plot_maximized=True, subfolder=""):
         """
         This method may be overridden in a child class but super().save()
         must be called in the beginning of the overridden method.
@@ -268,20 +256,20 @@ class MeasurementResult:
         """
         fig, axes, caxes = self.visualize(plot_maximized)
 
-        plt.savefig(os.path.join(self.get_save_path(), self._name + ".png"),
-                    bbox_inches='tight')
-        plt.savefig(os.path.join(self.get_save_path(), self._name + ".pdf"),
-                    bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(subfolder), self._name + ".png"),
+                    bbox_inches='tight', dpi=400)
+        plt.savefig(os.path.join(self.get_save_path(subfolder), self._name + ".pdf"),
+                    bbox_inches='tight', dpi=400)
         plt.close(fig)
 
         with self._data_lock:
-            with open(os.path.join(self.get_save_path(),
+            with open(os.path.join(self.get_save_path(subfolder),
                                    self._name + '_raw_data.pkl'), 'w+b') as f:
                 pickle.dump(self._data, f)
-            with open(os.path.join(self.get_save_path(),
+            with open(os.path.join(self.get_save_path(subfolder),
                                    self._name + '_context.txt'), 'w+') as f:
                 f.write(self.get_context().to_string())
-            with open(os.path.join(self.get_save_path(),
+            with open(os.path.join(self.get_save_path(subfolder),
                                    self._name + '.pkl'), 'w+b') as f:
                 pickle.dump(self, f)
 
@@ -383,7 +371,6 @@ class MeasurementResult:
         """
         fig, axes = plt.subplots(1, 2, figsize=(15, 7))
         return fig, None, None
-
 
     def _plot(self, data):
         """
@@ -503,8 +490,8 @@ class MeasurementResult:
         try:
             idx = int(np.where(np.array([
                 manager.canvas.figure.canvas.get_window_title() \
-                                   for manager in matplotlib._pylab_helpers.Gcf \
-                                  .get_all_fig_managers()]) == window_name)[0][0])
+                for manager in matplotlib._pylab_helpers.Gcf \
+                    .get_all_fig_managers()]) == window_name)[0][0])
             plt.close(plt.get_fignums()[idx])
         except IndexError:
             print("Figure with window name '%s' not found" % window_name)

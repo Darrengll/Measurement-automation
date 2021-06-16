@@ -258,6 +258,7 @@ class Measurement:
                 manager.canvas.start_event_loop(.1)
         except (KeyboardInterrupt, AttributeError) as e:
             print(stop_messages[type(e)])
+            self._measurement_result.save(subfolder="tmp")
             self._interrupted = True
             if not self._measurement_result.is_finished():
                 print("Waiting for the measurement to complete...")
@@ -283,9 +284,10 @@ class Measurement:
         try:
             self._record_data()
         except Exception:
-            self._logger(f"Exception while recording data: {sys.exc_info()}")
+            self._logger.warn(f"Exception while recording data: {sys.exc_info()}")
             self._measurement_result.set_exception_info(sys.exc_info())
         finally:
+            self._finalize()
             self._measurement_result.set_is_finished(True)
 
     def _record_data(self):
@@ -350,7 +352,6 @@ class Measurement:
         self._measurement_result.set_recording_time(time_elapsed)
         print(f"\nElapsed time: "
               f"{self._format_time_delta(time_elapsed.total_seconds())}")
-        self._finalize()
 
     def _finalize(self):
         """
