@@ -16,8 +16,12 @@ class ResonatorDetector:
         self._fast = fast
         self._type = type
         self._discarded_result = None
+        self._port = None
         self._logger = LoggingServer.getInstance(LogName.NAME)
         self.set_data(frequencies, s_data)
+
+    def get_port(self):
+        return self._port
 
     def set_data(self, frequencies, s_data):
         self._freqs = frequencies
