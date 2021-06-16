@@ -96,6 +96,9 @@ class KeysightM3202A:
             self.module.close()
             del self.module
 
+    def get_voltage_range(self):
+        return [-1.5, 1.5]  # see specification
+
     def _handle_error(self, ret_val):
         if ret_val < 0:
             print(ret_val, SD_Error.getErrorMessage(ret_val))
@@ -527,9 +530,8 @@ class KeysightM3202A:
                                               deviation_gain)
 
     def load_waveform_to_channel(self, waveform, frequency, channel):
-        if np.max(np.abs(waveform)) >= 1.5:
-            raise ValueError(
-                "trace maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
+        if np.max(np.abs(waveform)) > 1.5:
+            raise ValueError("Trace maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
 
         # number of points
         if (frequency > 1e9):
