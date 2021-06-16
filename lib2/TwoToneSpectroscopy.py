@@ -15,8 +15,10 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
         super().__init__(name, sample_name, devs_aliases_map)
         self._resonator_area = []
         self._adaptive = False
-        self._last_resonator_result = None
+        self._resonator_fit_results = []
+        self._resonator_scans = []
         self._resonator_fits = []
+        self._resonator_scan_areas = []
 
     def set_fixed_parameters(self, sweet_spot_bias, adaptive=False,
                              **dev_params):
@@ -44,6 +46,7 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
 
         vna_parameters = self._fixed_pars["vna"][0]
         vna_parameters["freq_limits"] = self._resonator_area
+        self._resonator_scan_areas.append(self._resonator_area)
 
         self._mw_src[0].set_output_state("OFF")
         print("\rDetecting a resonator within provided frequency range of the "
@@ -51,21 +54,20 @@ class FluxTwoToneSpectroscopy(TwoToneSpectroscopyBase):
                     " % (str(vna_parameters["freq_limits"])), flush=True, end="")
         try:
             res_result = self._detect_resonator(vna_parameters, plot=False)
+            self._resonator_fit_results.append(res_result)
+            self._resonator_scans.append(self._resonator_detector.get_port().z_data_raw)
+            self._resonator_fits.append(self._resonator_detector.get_port().z_data_sim)
         except ValueError:
-            res_result = None
-
-        if res_result is None:
             self._logger.debug("Failed to fit resonator, trying to use last successful fit")
-            if self._last_resonator_result is None:
+            if len(self._resonator_fit_results) < 1:
                 self._logger.warn("No successful fit is present, terminating")
                 raise ValueError("Couldn't find resonator!")
             else:
-                res_result = self._last_resonator_result
-        else:
-            self._last_resonator_result = res_result
-        self._resonator_fits.append(res_result)
+                self._resonator_fit_results.append(self._resonator_fit_results[-1])
+                self._resonator_scans.append(self._resonator_scans[-1])
+                self._resonator_fits.append(self._resonator_fits[-1])
 
-        res_freq, res_amp, res_phase = self._last_resonator_result
+        res_freq, res_amp, res_phase = self._resonator_fit_results[-1]
         print("\rDetected if_freq is %.5f GHz, at %.2f mU and %.2f \
                     degrees" % (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180), end="")
         self._mw_src[0].set_output_state("ON")
