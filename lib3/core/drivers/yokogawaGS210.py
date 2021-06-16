@@ -115,11 +115,7 @@ class YokogawaGS210:
             print("Tough luck, mode is current source, cannot get voltage.")
             return False
         else:
-            if (self._minvoltage < voltage < self._maxvoltage):
-                self._visainstrument.write("SOUR:LEVEL %e"%voltage)
-                print("Voltage set",format_e(voltage), "V")
-            else:
-                print("Error: voltage limits exceeded.")
+             self._visainstrument.write("SOUR:LEVEL %e"%voltage)
 
     def get_voltage(self):
         """Get voltage"""
@@ -169,7 +165,7 @@ class YokogawaGS210:
     def get_range(self):
         """Get current range in A"""
         currange = self._visainstrument.query("SOUR:RANG?")[:-1]
-        return float(currange)
+        return -float(currange), float(currange)
 
     def set_range(self, maxval):
         """Set current range in A"""
@@ -190,49 +186,56 @@ class YokogawaGS210:
                 self._maxvoltage = maxval
                 self._visainstrument.write("SOUR:RANG %e"%maxval)
 
-    def set_appropriate_range(self, maxcurrent=1E-3, mincurrent=-1E-3):
+    def set_appropriate_range(self, max_bias=1E-3, min_bias=-1E-3):
         """Detect which range includes limits and set it"""
+        if self._bias_type == BiasType.CURRENT:
+            required_current = max(abs(max_bias), abs(min_bias))
+            for current_range in self.current_ranges_supported:
+                if current_range >= required_current:
+                    self.set_range(current_range)
+                    return True
+                if(current_range == self.current_ranges_supported[-1]):
+                    print("Current is too big, can't handle it!")
+                    return False
+        else:
+            required_voltage = max(abs(max_bias), abs(min_bias))
+            for voltage_range in self.voltage_ranges_supported:
+                if voltage_range >= required_voltage:
+                    self.set_range(voltage_range)
+                    return True
+                if (voltage_range == self.voltage_ranges_supported[-1]):
+                    print("Current is too big, can't handle it!")
+                    return False
 
-        required_current = max(abs(maxcurrent), abs(mincurrent))
-        for current_range in self.current_ranges_supported:
-            if current_range >= required_current:
-                self.set_range(current_range)
-                return True
-            if(current_range == self.current_ranges_supported[-1]):
-                print("Current is too big, can't handle it!")
-                return False
 
-
-    def set_src_mode_volt(self, current_compliance = .001):
+    def set_src_mode_volt(self):
         """
         Changes mode from current to voltage source, compliance current is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
         """
-        self.set_current_compliance(current_compliance)
-
-        if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
+        if self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n":
             return False
         else:
             self._bias_type = BiasType.VOLTAGE
             self._visainstrument.write(":SOUR:FUNC VOLT")
+            self.set_status(1)
             return True
 
-    def set_src_mode_curr(self, voltage_compliance=1):
+    def set_src_mode_curr(self):
         """
         Changes mode from voltage to current source, compliance voltage is given as an argument
 
         Returns:
             True if the mode was changed, False otherwise
         """
-        self.set_voltage_compliance(voltage_compliance)
-
-        if (self._visainstrument.query(":SOUR:FUNC?") == "CURR\n"):
+        if self._visainstrument.query(":SOUR:FUNC?") == "CURR\n":
             return False
         else:
             self._bias_type = BiasType.CURRENT
             self._visainstrument.write(":SOUR:FUNC CURR")
+            self.set_status(1)
             return True
 
     # TODO: pending to delete this function
