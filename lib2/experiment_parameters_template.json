@@ -41,7 +41,9 @@
       "flux_nop": 51,
       "anticrossing_oracle_hints": {
         "fqmax_below": true
-      }
+      },
+      "default_current_limits": [-1e-3, 1e-3],
+      "default_voltage_limits": [-1.25, 1.25]
     },
     "tts_runner": {
       "rerun": true,

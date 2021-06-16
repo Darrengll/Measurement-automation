@@ -77,6 +77,8 @@ class STSRunnerParameters(FulautParameters):
         self.flux_nop = None
         self.vna_parameters = None
         self.anticrossing_oracle_hints = None
+        self.default_current_limits = None
+        self.default_voltage_limits = None
         super().__init__()
 
 
