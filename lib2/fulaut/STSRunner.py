@@ -26,9 +26,9 @@ class STSRunner():
         self._bias_type = self._bias_src[0].get_bias_type()
         self._bias_parameter_name = BiasType.NAMES[self._bias_type]
         if self._bias_type is BiasType.VOLTAGE:
-            self._bias_values = linspace(-1, 1, 101)
+            self._bias_values = linspace(*STSRunnerParameters().default_voltage_limits, 101)
         else:
-            self._bias_values = linspace(-7e-3, 7e-3, 101)
+            self._bias_values = linspace(*STSRunnerParameters().default_current_limits, 101)
         self._sts_result = None
         self._launch_datetime = datetime.today()
         self._bias_src[0].set_appropriate_range(max(abs(self._bias_values)))
@@ -82,13 +82,6 @@ class STSRunner():
         counter = 0
 
         while counter < 10:
-
-            # if counter == 0:
-            #     # self._perform_STS_first()
-            #     self._perform_STS()
-            # else:
-            #     self._perform_STS()
-
             self._perform_STS()
 
             ao = AnticrossingOracle("transmon", self._sts_result,
@@ -114,11 +107,10 @@ class STSRunner():
                 self._logger.debug("No dependence found. Trying to zoom in.")
                 self._res_freq = (max(res_points[:, 1]) + min(res_points[:, 1]))/2
                 self._scan_area_width = self._scan_area_width / 5
-                # self._bias_values = self._bias_values*5
 
             counter += 1
 
-            if counter < 3:
+            if counter < 2:
                 self._scan_area_width_previous = self._scan_area_width
             elif (self._scan_area_width_previous - 1e6) * 1.1 > (self._scan_area_width - 1e6):
                 break
@@ -143,18 +135,18 @@ class STSRunner():
         if N_periods > 1:
             self._bias_values = \
                 (self._bias_values - mean(self._bias_values)) / N_periods * 1.5 + mean(self._bias_values)
-            self._bias_values = linspace(self._bias_values[0], self._bias_values[-1], 201)
+            b_min, b_max = self._bias_src[0].get_range()
+            self._bias_values = linspace(max(self._bias_values[0], b_min), min(b_max, self._bias_values[-1]), 201)
 
             self._vna_parameters["nop"] = self._vna_parameters["nop"]*2
             self._vna_parameters["bandwidth"] = self._vna_parameters["bandwidth"]*2
             self._perform_STS()
         elif N_periods < 1:
-            if max(abs(self._bias_values)) > 1e-3:
-                raise ValueError("Flux period is too large!")
-
-            self._logger.debug("Current range too narrow" + str(N_periods))
+            self._logger.debug(f"Current range too narrow: estimated {str(N_periods)} periods")
             self._bias_values = \
                 (self._bias_values - mean(self._bias_values)) * 2 + mean(self._bias_values)
+            b_min, b_max = self._bias_src[0].get_range()
+            self._bias_values = linspace(max(self._bias_values[0], b_min), min(b_max, self._bias_values[-1]), 201)
             self._perform_STS()
 
     def _perform_STS(self):
@@ -172,23 +164,6 @@ class STSRunner():
                                             (self._STS._src[0].set, self._bias_values)})
 
         self._sts_result = self._STS.launch()
-
-    def _perform_STS_first(self):  # for the case when two resonators are too close
-
-        self._vna_parameters["freq_limits"] = \
-            (self._res_freq - self._scan_area_width / 2 - 8e6,
-             self._res_freq + self._scan_area_width / 2 - 1e6)
-
-        self._STS = SingleToneSpectroscopy(self._sts_name,
-                                           self._sample_name, plot_update_interval=1,
-                                           vna=self._vna, src=self._bias_src)
-
-        self._STS.set_fixed_parameters(vna=[self._vna_parameters])
-        self._STS.set_swept_parameters({self._bias_parameter_name: \
-                                            (self._STS._src[0].set, self._bias_values)})
-
-        self._sts_result = self._STS.launch()
-
 
     def get_scan_area(self):
         return (self._res_freq - self._scan_area_width / 2,

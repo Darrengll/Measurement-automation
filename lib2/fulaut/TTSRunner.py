@@ -40,8 +40,9 @@ class TTSRunner:
             center = sweet_spot
 
         span = period * TTSRunnerParameters().periods
-        self._bias_values = linspace(center - span / 2,
-                                     center + span / 2,
+        b_min, b_max = self._bias_src[0].get_range()
+        self._bias_values = linspace(max(center - span / 2, b_min),
+                                     min(center + span / 2, b_max),
                                      TTSRunnerParameters().flux_nop)
 
         min_q_freq = \
