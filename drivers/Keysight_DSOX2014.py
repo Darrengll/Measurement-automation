@@ -173,7 +173,7 @@ class Keysight_DSOX2014(Instrument):
     def set_time_range(self, time_range):
         """
         Sets the full-scale horizontal time for the oscilloscope.
-        The range is 10 times the current time-per-division setting
+        The range is 10 times the bias time-per-division setting
 
         Parameters:
         -----------
@@ -185,7 +185,7 @@ class Keysight_DSOX2014(Instrument):
     def get_time_range(self):
         """
         Returns the full-scale horizontal time in seconds for the oscilloscope.
-        The range is 10 times the current time-per-division setting
+        The range is 10 times the bias time-per-division setting
         """
         return float(self._visainstrument.query(":TIMebase:RANGe?"))
 

@@ -20,8 +20,10 @@ from numpy import *
 from prompt_toolkit import output
 
 from lib2.IQPulseSequence import *
-import drivers.keysightSD1 as keysightSD1
-from drivers.keysightM3202A import KeysightM3202A
+try:
+    import drivers.keysightSD1 as keysightSD1
+except OSError:
+    pass  # we are not on the measurement PC
 # there are functions that are not universal and work only with M3202A
 from drivers.keysightAWG import KeysightAWG
 
@@ -35,8 +37,9 @@ class AWGChannel():
 
     def output_arbitrary_waveform(self, waveform, frequency, asynchronous=False):
 
-        self._host_awg.output_arbitrary_waveform(waveform, frequency,
-                                                 self._channel_number, asynchronous=asynchronous)
+        self._host_awg.output_arbitrary_waveform(
+            waveform, frequency, self._channel_number
+        )
 
     def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous=False,
                                trigger_sync_every=None):
@@ -68,7 +71,6 @@ class CalibratedAWG():
     def get_calibration(self):
         return self._calibration
 
-
     def get_pulse_builder(self):
         """
         Returns a PulseBuilder instance using the calibration loaded before
@@ -84,8 +86,11 @@ class CalibratedAWG():
         pulse_sequence: PulseSequence instance
         """
         frequency = 1/pulse_sequence.get_duration()*1e9
-        self._channel.output_arbitrary_waveform(pulse_sequence\
-                        .get_waveform(), frequency, asynchronous=asynchronous)
+        self._channel.output_arbitrary_waveform(
+            pulse_sequence.get_waveform(),
+            frequency,
+            asynchronous=asynchronous
+        )
 
 class IQAWG():
     def __init__(self, channel_I: AWGChannel, channel_Q: AWGChannel, triggered=False):
@@ -126,12 +131,13 @@ class IQAWG():
     def output_continuous_IQ_waves(self, frequency, amplitudes, relative_phase,
         offsets, waveform_resolution, optimized=True):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form:
+        y = A*sin(2*pi*if_freq + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output waves
+        if_freq: float, Hz
+            if_freq of the output waves
         amplitudes: float, V
             amplitude of the output waves
         phase: float
@@ -139,12 +145,13 @@ class IQAWG():
         offsets: float, V
             voltage offset of the waveforms
         waveform_resolution: float, ns
-            resolution in time of the arbitrary waveform representing one period
-            of the wave
+            resolution in time of the arbitrary waveform representing one
+            period of the wave
         channel: 1 or 2
             channel which will output the wave
         optimized: boolean
-            first channel will be called with asynchronous = True if optimized is True
+            first channel will be called with asynchronous = True if optimized
+            is True
         """
         self._output_continuous_wave(frequency, amplitudes[0], relative_phase,
             offsets[0], waveform_resolution, 1, asynchronous = optimized)
@@ -156,11 +163,10 @@ class IQAWG():
 
         Parameters
         ----------
-        optimized
-        trigger_sync_every
-
-        Returns
-        -------
+        optimized : bool
+            unknown TODO: declare what it does
+        trigger_sync_every : float
+            time between trigger outputs [ns]
 
         Notes
         -------
@@ -201,10 +207,16 @@ class IQAWG():
         else:
             # 100 ns trigger length after every 'start' of the playing
             awg.trigger_output_config(trig_mode="ON", trig_length=100)
-        waveform0 = np.zeros(int(trigger_sync_every/awg.get_sample_rate()*1e9)) + cal._if_offsets[0]
-        waveform1 = np.zeros(int(trigger_sync_every/awg.get_sample_rate()*1e9)) + cal._if_offsets[1]
-        self._channels[0].output_arbitrary_waveform(waveform0, 1/trigger_sync_every*1e9)
-        self._channels[1].output_arbitrary_waveform(waveform1, 1/trigger_sync_every*1e9)
+        waveform0 = np.zeros(
+            int(trigger_sync_every / awg.get_sample_rate() * 1e9)) \
+            + cal._dc_offsets[0]
+        waveform1 = np.zeros(
+            int(trigger_sync_every / awg.get_sample_rate() * 1e9)) \
+            + cal._dc_offsets[1]
+        self._channels[0].output_arbitrary_waveform(
+            waveform0, 1 / trigger_sync_every * 1e9)
+        self._channels[1].output_arbitrary_waveform(
+            waveform1, 1 / trigger_sync_every * 1e9)
 
     def output_continuous_two_freq_IQ_waves(self, dfreq, ampl_coefs=(2, 2)):
         fs = self._channels[0]._host_awg.get_sample_rate()  # Hz
@@ -224,7 +236,7 @@ class IQAWG():
         Parameters
         ----------
         modulation_amp : float
-            amplitude of the modulation signal
+            amplitude of the modulation trace
             G * AWG(t) * carrier_signal(t)
             G = 'modulation_amp'
             AWG(t) - normalized such that max(abs(AWG(t))) = 1
@@ -242,7 +254,7 @@ class IQAWG():
     def setup_AM_and_carrier_from_calibration(self, calibration=None, amp_coeffs=(1, 1)):
         """
         This function tells awg that it's output will be modulated and setups
-        carrier sine signal parameters based on calibration parameters.
+        carrier sine trace parameters based on calibration parameters.
         This function is used primarly by time domain measurement classes that utilize sine
         function generator feature of the AWG. This function is called by them during
         'set_fixed_parameters'.
@@ -258,8 +270,8 @@ class IQAWG():
         calibration : IQCalibrationData
             Overwrites 'self._calibration' if provided
         amp_coeffs : tuple[float]
-            Multipliers for carrier signal amplitude
-            Used to tune the power of the output signal
+            Multipliers for carrier trace amplitude
+            Used to tune the power of the output trace
             that is roughly proportional to the this coefficients
 
         Returns
@@ -291,7 +303,7 @@ class IQAWG():
         # tell AWG that amplitude modulation is chosen
         awg.setup_modulation_amp(chanI, cal._if_amplitudes[0] * amp_coeffs[0])
         awg.setup_modulation_amp(chanQ, cal._if_amplitudes[1] * amp_coeffs[1])
-        # setup carrier signal according to calibration
+        # setup carrier trace according to calibration
         awg.setup_fg_sine(cal._if_frequency, 0,
                           cal._if_phase[0], cal._if_offsets[0], chanI)
         awg.setup_fg_sine(cal._if_frequency, 0,
@@ -308,7 +320,7 @@ class IQAWG():
 
         Example:
         --------
-        for required signal s(t) = A * cos(2*pi*f*t) * cos(2*pi*dfreq*t)
+        for required trace s(t) = A * cos(2*pi*f*t) * cos(2*pi*dfreq*t)
         Modulation should be
         A + G * AWG(t) = A * cos(2*pi*dfreq*t)
         G * AWG(t) = A * (cos(2*pi*dfreq*t) - 1)
@@ -324,7 +336,7 @@ class IQAWG():
         awg.synchronize_channels(chanI, chanQ)
 
         awg.stop_AWG(chanI)
-        awg.clear()
+        awg.reset()
         awg.setup_fg_sine(cal._if_frequency, 0,
                           cal._if_phase[0], cal._if_offsets[0], chanI)
         awg.setup_fg_sine(cal._if_frequency, 0,
@@ -351,12 +363,12 @@ class IQAWG():
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous=False, trigger_sync_every=None):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output wave
+        if_freq: float, Hz
+            if_freq of the output wave
         amplitude: float, V
             amplitude of the output wave
         phase: float
@@ -384,7 +396,7 @@ class IQAWG():
         resolution = pulse_sequence.get_waveform_resolution()
         length = len(pulse_sequence.get_I_waveform())
         if self._triggered:
-            # this is made if 2 AWG is triggering another one and has the same signal period
+            # this is made if 2 AWG is triggering another one and has the same trace period
             duration = pulse_sequence.get_duration() - 1000 * resolution
             end_idx = length - 1000
         else:
@@ -413,7 +425,7 @@ class IQAWG_Multiplexed(IQAWG):
         -----------
         parameteres: dict {"param_name":param_value, ...}
         """
-        par_names = ["calibration","calibration2"]
+        par_names = ["calibration", "calibration2"]
         for par_name in par_names:
             if par_name in parameters.keys():
                 setattr(self, "_"+par_name, parameters[par_name])
@@ -427,12 +439,12 @@ class IQAWG_Multiplexed(IQAWG):
     def output_continuous_IQ_waves(self, frequency, amplitudes, relative_phase,
         offsets, waveform_resolution, optimized = True):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output waves
+        if_freq: float, Hz
+            if_freq of the output waves
         amplitudes: float, V
             amplitude of the output waves
         phase: float
@@ -455,12 +467,12 @@ class IQAWG_Multiplexed(IQAWG):
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output wave
+        if_freq: float, Hz
+            if_freq of the output wave
         amplitude: float, V
             amplitude of the output wave
         phase: float

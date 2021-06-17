@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+service Digitizer {
+  // Sends a greeting
+  rpc measure_correlation_matrix (DigParams) returns (CorrelationMatrix) {}
+}
+
+message DigParams {
+	uint64 channels = 1;  // e.g. [1, 2], a list of channels to measure
+    uint64 ch_amplitude = 2;  // mV, amplitude for every channel (allowed values are 200, 500, 1000, 2500 mV)
+    float dur_seg = 3;  // duration of a segment in ns
+    uint64 n_seg = 4;  // number of segments
+    uint64 oversampling_factor = 5; //sample_rate = max_sample_rate / oversampling_factor
+    // "n_avg":1
+    uint64 pretrigger = 6;  //# pretrigger value, 1,2 and some other (see datasheet).
+    // "mode": SPCM_MODE.MULTIPLE,
+    // "trig_source": SPCM_TRIGGER.EXTERNAL
+}
+
+message CorrelationMatrix {
+	int32 trace_len = 1;
+	repeated float samples = 2 [packed=true];
+}

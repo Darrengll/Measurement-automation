@@ -21,7 +21,7 @@ class DispersiveRamseyFringes(VNATimeResolvedDispersiveMeasurement2D):
                           (self._output_pulse_sequence,
                            ramsey_delays),
                       "excitation_frequency":
-                          (lambda x: self._q_lo.set_frequency(x + q_if_frequency),
+                          (lambda x: self._exc_iqvg.set_frequency(x + q_if_frequency),
                            excitation_freqs)}
         super().set_swept_parameters(**swept_pars)
 
@@ -40,5 +40,5 @@ class DispersiveRamseyFringesResult(VNATimeResolvedDispersiveMeasurement2DResult
     def _annotate_axes(self, axes):
         axes[0].set_ylabel("Ramsey delay [$\mu$s]")
         axes[-2].set_ylabel("Ramsey delay [$\mu$s]")
-        axes[-1].set_xlabel("Excitation frequency [GHz]")
-        axes[-2].set_xlabel("Excitation frequency [GHz]")
+        axes[-1].set_xlabel("Excitation if_freq [GHz]")
+        axes[-2].set_xlabel("Excitation if_freq [GHz]")

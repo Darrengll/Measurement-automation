@@ -2,12 +2,54 @@ import time
 import pickle as pkl
 import os
 from lib import plotting as pl
+from lib.iq_downconversion_calibration import IQDownconversionCalibrationResult
 from lib.measurement import Measurement
 import numpy as np
 
 
+directory = 'data\\IQMXCalibration'
+# directory = r'D:\GitHub\Measurement-automation\data\IQMXCalibrationData\IQMXCalibration'
+
+def save_downconversion_calibration(downconv_calibration):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    calibration = downconv_calibration.get_dict()
+
+    filename = calibration["_mixer_id"]
+    iffreq = downconv_calibration.get_if_frequency()
+    try:
+        with open(directory + "\\" + filename + '.pkl', 'rb') as f:
+            known_cal_data = pkl.load(f)
+
+            known_cal_data[iffreq] = calibration
+
+        with open(directory + "\\" + filename + '.pkl', 'wb') as f:
+            pkl.dump(known_cal_data, f)
+
+    except FileNotFoundError:
+        new_cal_data = {iffreq: calibration}
+
+        with open(directory + "\\" + filename + '.pkl', 'w+b') as f:
+            pkl.dump(new_cal_data, f)
+
+
+def load_downconversion_calibration(mixer_id, iffreq):
+    # directory = 'data\\IQMXCalibration'
+    filename = mixer_id
+
+    try:
+        with open(directory + "\\" + filename + '.pkl', 'rb') as f:
+            known_cal_data = pkl.load(f)
+
+    except FileNotFoundError:
+        return None
+    cal_dict = known_cal_data[iffreq]
+    return IQDownconversionCalibrationResult.load_dict(cal_dict)
+
+
 def save_IQMX_calibration(iqmx_calibration):
-    directory = 'Data\\IQMXCalibration'
+    # directory = 'data\\IQMXCalibration'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -35,14 +77,16 @@ def save_IQMX_calibration(iqmx_calibration):
 
 
 def load_IQMX_calibration_database(mixer_id, iq_attenuation):
-    directory = 'Data\\IQMXCalibration'
+    # directory = 'data\\IQMXCalibration'
     filename = mixer_id
 
     try:
         with open(directory + "\\" + filename + '.pkl', 'rb') as f:
             known_cal_data = pkl.load(f)
-
     except FileNotFoundError:
+        print("Creating database...")
+        with open(directory + "\\" + filename + '.pkl', 'wb') as f:
+            pkl.dump({iq_attenuation: {}}, f)
         return None
     return known_cal_data[iq_attenuation]
 
@@ -82,3 +126,27 @@ def load_measurement(filename):
     except IndexError:
         print("Loaded a measurement with an outdated format. Some fields will be undefined.")
     return measurement
+
+
+def save_data(timestamp, name, data, context):
+    the_folder = get_folder_path(timestamp, name)
+    filename = f"{the_folder}/{name}.pkl"
+    context_file = f"{the_folder}/context.txt"
+
+    # create folders
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+    # save data
+    with open(filename, 'wb') as f:
+        pkl.dump(data, f)
+
+    # save context
+    with open(context_file, 'w') as f:
+        f.write(str(context))
+
+
+def get_folder_path(timestamp, name):
+    date_str = timestamp.strftime("%b %d %Y")
+    time_str = timestamp.strftime("%H-%M-%S")
+    the_path = f"data/Photon_wave_mixing/{date_str}/{time_str} - {name}"
+    return the_path

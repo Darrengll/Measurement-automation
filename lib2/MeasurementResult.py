@@ -1,19 +1,25 @@
 import fnmatch
 import os
 import pickle
-import matplotlib.figure, matplotlib.axes
 import traceback
-from datetime import datetime
-from threading import Lock
-from IPython.display import clear_output
-import matplotlib
-from matplotlib import animation, pyplot as plt
-from matplotlib._pylab_helpers import Gcf
-from numpy import array, where
 import copy
 import shutil
 import locale
+import pathlib
+from typing import Union
+from datetime import datetime
+from threading import Lock
+
+import numpy as np
+import matplotlib.figure
+import matplotlib.axes
+import matplotlib
+from matplotlib import animation, pyplot as plt
+from matplotlib._pylab_helpers import Gcf
+from IPython.display import clear_output
+
 locale.setlocale(locale.LC_TIME, "C")
+
 
 def find(pattern, path):
     result = []
@@ -24,7 +30,7 @@ def find(pattern, path):
     return result
 
 
-class ContextBase():
+class ContextBase:
 
     def __init__(self):
         self._equipment = {}
@@ -34,8 +40,26 @@ class ContextBase():
         return self._equipment
 
     def to_string(self):
-        return "Equipment with parameters:\n" + str(self._equipment) + \
-               "\nComment:\n" + self._comment
+        self._equipment.update({"comment:": self._comment})
+
+        import json
+        import datetime
+
+        class Encoder(json.JSONEncoder):
+            def default(self, obj):
+                if hasattr(obj, "toJSON"):
+                    return obj.toJSON()
+                if isinstance(obj, np.ndarray) or \
+                        isinstance(obj, datetime.datetime) or \
+                        isinstance(obj, np.int32):
+                    return obj.__str__()
+                else:
+                    return json.JSONEncoder.default(self, obj)
+
+        def nice_dict(d):
+            return json.dumps(d, indent=4, cls=Encoder)
+
+        return str(nice_dict(self._equipment))
 
     def update(self, equipment={}, comment=""):
         self._equipment.update(equipment)
@@ -65,7 +89,7 @@ class MeasurementResult:
         self._lines = []
 
         # iteration index from main loop that indicates the last
-        # valiable data index stored into 'self._data["data"]'
+        # avaliable data index stored into 'self._data["data"]'
         self._iter_idx_ready = None
 
         self._exception_info = None
@@ -74,7 +98,7 @@ class MeasurementResult:
         self._parameter_names = parameter_names
 
     @staticmethod
-    def delete(sample_name, name, date='', subfolder = "", delete_all=False):
+    def delete(sample_name, name, date='', subfolder="", delete_all=False):
         """
         Finds all files with matching result name within the file structure of ./data/
         folder, prompts user to resolve any ambiguities. Then deletes selected
@@ -102,6 +126,29 @@ class MeasurementResult:
     @staticmethod
     def load(sample_name, name, date='', subfolder="", return_all=False):
         """
+        Examples
+        ---------
+        >>> from lib2.MeasurementResult import MeasurementResult
+        >>> result = MeasurementResult.load("<sample_name>", "<name>")
+
+        Parameters
+        ----------
+        sample_name : str
+        name : str
+            measurement name
+        date : int
+            optional, date of measurement
+            format is "%b %d %Y" (see `datetime.strptime` for details)
+        subfolder : str
+            Not supported, I assume
+        return_all : Union[bool, int]
+            `True` - return all measurements with specified `name` and
+            `sample_name`
+            `False` - prompts user to choose specific measurement from
+            list sorted by date.
+            int - return specific measurement from sorted list of measurements
+            found
+
         Finds all files with matching result name within the file structure
         of ./data/ folder and optionally prompts user to resolve any ambiguities.
 
@@ -109,9 +156,6 @@ class MeasurementResult:
             an instance of the child class containing the specific measurement
             result
 
-        Example usage:
-        >>> from lib2.MeasurementResult import MeasurementResult
-        >>> result = MeasurementResult.load("<sample_name>", "<name>")
 
         If the user hits EOF (*nix: Ctrl-D, Windows: Ctrl-Z+Return), raise EOFError.
         On *nix systems, readline is used if available.
@@ -133,7 +177,8 @@ class MeasurementResult:
         return results[0] if len(results) == 1 and not return_all else results
 
     @staticmethod
-    def _find_paths_by(sample_name, name, extension, date, subfolder, return_all=False):
+    def _find_paths_by(sample_name, name, extension, date, subfolder,
+                       return_all=False):
         paths = find(name + extension, os.path.join('data', sample_name, subfolder, date))
 
         if len(paths) == 0:
@@ -144,9 +189,14 @@ class MeasurementResult:
         dates = [datetime.strptime(path.split(os.sep)[-3], "%b %d %Y")
                  for path in paths]
         z = zip(dates, paths)
+
+        if not isinstance(return_all, bool):
+            return [paths[int(return_all)]]
+
         sorted_dates, sorted_paths = zip(*sorted(z))
 
-        if not return_all and len(paths)>1:
+        if not return_all and len(paths) > 1:
+            # force user to choose
             return MeasurementResult._prompt_user_to_choose(sorted_paths)
 
         return sorted_paths
@@ -159,28 +209,18 @@ class MeasurementResult:
         index = input()
         return [paths[int(index)]]
 
-    def get_save_path(self):
+    def get_name(self):
+        return self._name
 
-        if not os.path.exists("data"):
-            os.makedirs("data")
-
-        sample_directory = os.path.join('data', self._sample_name)
-        if not os.path.exists(sample_directory):
-            os.makedirs(sample_directory)
-
+    def get_save_path(self, subdirectory=""):
         locale.setlocale(locale.LC_TIME, "C")
-        date_directory = os.path.join(sample_directory,
-                                      self.get_start_datetime().strftime("%b %d %Y"))
-        if not os.path.exists(date_directory):
-            os.makedirs(date_directory)
-
-        time_directory = os.path.join(date_directory,
+        time_directory = os.path.join("data",
+                                      self._sample_name,
+                                      subdirectory,
+                                      self.get_start_datetime().strftime("%b %d %Y"),
                                       self.get_start_datetime().strftime("%H-%M-%S")
                                       + " - " + self._name)
-
-        if not os.path.exists(time_directory):
-            os.makedirs(time_directory)
-
+        pathlib.Path(time_directory).mkdir(parents=True, exist_ok=True)
         return time_directory
 
     def __getstate__(self):
@@ -197,13 +237,14 @@ class MeasurementResult:
         self.__dict__.update(state)
         self._data_lock = Lock()
 
-    def save(self, plot_maximized = True):
+    def save(self, plot_maximized=True, subfolder=""):
         """
         This method may be overridden in a child class but super().save()
         must be called in the beginning of the overridden method.
 
-        Saves the MeasurementResult object using pickle, creating the folder
-        structure if necessary.
+        NOTE: Changed for better usability 29.01.2021
+        Saves the __dict__ of the MeasurementResult object using pickle,
+        creating the folder structure if necessary.
 
         The path is structured as follows:
             data/<sample name>/DD MM YYYY/HH-MM-SS - <name>/
@@ -215,17 +256,22 @@ class MeasurementResult:
         """
         fig, axes, caxes = self.visualize(plot_maximized)
 
-        with self._data_lock:
-            with open(os.path.join(self.get_save_path(), self._name + '.pkl'), 'w+b') as f:
-                pickle.dump(self, f)
-            with open(os.path.join(self.get_save_path(), self._name + '_raw_data.pkl'), 'w+b') as f:
-                pickle.dump(self._data, f)
-            with open(os.path.join(self.get_save_path(), self._name + '_context.txt'), 'w+') as f:
-                f.write(self.get_context().to_string())
-
-        plt.savefig(os.path.join(self.get_save_path(), self._name + ".png"), bbox_inches='tight')
-        plt.savefig(os.path.join(self.get_save_path(), self._name + ".pdf"), bbox_inches='tight')
+        plt.savefig(os.path.join(self.get_save_path(subfolder), self._name + ".png"),
+                    bbox_inches='tight', dpi=400)
+        plt.savefig(os.path.join(self.get_save_path(subfolder), self._name + ".pdf"),
+                    bbox_inches='tight', dpi=400)
         plt.close(fig)
+
+        with self._data_lock:
+            with open(os.path.join(self.get_save_path(subfolder),
+                                   self._name + '_raw_data.pkl'), 'w+b') as f:
+                pickle.dump(self._data, f)
+            with open(os.path.join(self.get_save_path(subfolder),
+                                   self._name + '_context.txt'), 'w+') as f:
+                f.write(self.get_context().to_string())
+            with open(os.path.join(self.get_save_path(subfolder),
+                                   self._name + '.pkl'), 'w+b') as f:
+                pickle.dump(self, f)
 
     def visualize(self, maximized=True):
         """
@@ -293,7 +339,7 @@ class MeasurementResult:
 
         Examples
         ------------------------
-        # waveMixing.py, waveMixingResult.
+        # waveMixing.py, PulseMixingResult.
             def _prepare_figure2D_re_n_im(self):
                 self._last_tr = None
                 self._peaks_last_tr = None
@@ -325,7 +371,6 @@ class MeasurementResult:
         """
         fig, axes = plt.subplots(1, 2, figsize=(15, 7))
         return fig, None, None
-
 
     def _plot(self, data):
         """
@@ -374,8 +419,7 @@ class MeasurementResult:
         plt.tight_layout(pad=2)
         self._plot_fit(axes)
         """
-        pass
-
+        raise NotImplementedError
 
     def finalize(self):
         """
@@ -444,9 +488,10 @@ class MeasurementResult:
     @staticmethod
     def close_figure_by_window_name(window_name):
         try:
-            idx = int(where(array([manager.canvas.figure.canvas.get_window_title() \
-                                   for manager in matplotlib._pylab_helpers.Gcf \
-                                  .get_all_fig_managers()]) == window_name)[0][0])
+            idx = int(np.where(np.array([
+                manager.canvas.figure.canvas.get_window_title() \
+                for manager in matplotlib._pylab_helpers.Gcf \
+                    .get_all_fig_managers()]) == window_name)[0][0])
             plt.close(plt.get_fignums()[idx])
         except IndexError:
             print("Figure with window name '%s' not found" % window_name)

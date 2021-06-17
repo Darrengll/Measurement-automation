@@ -21,7 +21,7 @@ class DataGen:
     def get_sdata(self):
         retval = self.fun(self._counter)
         self._counter += 1
-        sleep(0.1)
+        sleep(0.001)
         return retval
 
     def get_frequencies(self):

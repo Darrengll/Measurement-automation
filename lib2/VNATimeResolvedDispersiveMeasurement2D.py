@@ -13,12 +13,12 @@ class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeas
 
     def __init__(self, name, sample_name):
         super().__init__(name, sample_name)
-        self._maps = [None]*4
-        self._cbs = [None]*4
+        self._maps = [None]*2
+        self._cbs = [None]*2
 
     def _prepare_figure(self):
         fig, axes, caxes = super()._prepare_figure()
-        plt.tight_layout(pad=2, h_pad=5, w_pad=0)
+        plt.tight_layout(h_pad=5, w_pad=5)
         caxes = []
         for ax in axes:
             caxes.append(colorbar.make_axes(ax)[0])
@@ -69,10 +69,8 @@ class VNATimeResolvedDispersiveMeasurement2DResult(VNATimeResolvedDispersiveMeas
                 self._cbs[idx].set_clim(min_Z, max_Z)
 
 
-        plt.draw()
-
     def __getstate__(self):
         d = super().__getstate__()
-        d['_maps'] = [None]*4
-        d['_cbs'] = [None]*4
+        d['_maps'] = [None]*2
+        d['_cbs'] = [None]*2
         return d

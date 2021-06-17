@@ -696,7 +696,7 @@ class Instrument():
             query (bool): whether to query the instrument or return the
                 last stored value
             fast (bool): if True perform as fast as possible, e.g. don't
-                emit a signal to update the GUI.
+                emit a trace to update the GUI.
             kwargs: Optional keyword args that will be passed on.
 
         Output: Single value, or dictionary of parameter -> values
@@ -938,7 +938,7 @@ class Instrument():
                 parameter -> value
             value (any): the value to set
             fast (bool): if True perform as fast as possible, e.g. don't
-                emit a signal to update the GUI.
+                emit a trace to update the GUI.
             kwargs: Optional keyword args that will be passed on.
 
         Output: True or False whether the operation succeeded.

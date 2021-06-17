@@ -176,8 +176,8 @@ class Snapshot:
     @_inplace
     def calibrate_phase(self):
         """
-        @brief: Substracts singal's phases of the lowest frequency from all the frequency phases
-        It turn all phases at the lowest frequency to be equal to zero.
+        @brief: Substracts singal's phases of the lowest if_freq from all the if_freq phases
+        It turn all phases at the lowest if_freq to be equal to zero.
         @params:
         @return: None
         """
@@ -282,7 +282,7 @@ class Snapshot:
                     method = CV_TM_CCORR_NORMED - match function implemented in this function
         @params:
                     snapshot2find : class Snapshot
-                        represents an image that participates as a second variable in scipy.signal.correlate method
+                        represents an image that participates as a second variable in scipy.trace.correlate method
         @return:    (res,res_norm)
                     res : 1D numpy array.
                         len(res) = self.shape[1] + snapshot2find.shape[1] - 1

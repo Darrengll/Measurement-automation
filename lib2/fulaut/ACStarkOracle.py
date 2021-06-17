@@ -22,10 +22,10 @@ class ACStarkOracle:
         if self._plot:
             self._plot_result()
 
-        power = bisect(lambda power: (-self._exponent(power, self._k, self._f_max)+self._f_max)
-                                      -self._N_photons*self._chi, -70, -10)
+        # power = bisect(lambda power: (-self._exponent(power, self._k, self._f_max)+self._f_max)
+        #                               -self._N_photons*self._chi, -70, -10)
 
-        return self._f_max*1e9, power
+        return self._f_max*1e9, -100
 
     def _extract_data(self):
         data = self._result.get_data()

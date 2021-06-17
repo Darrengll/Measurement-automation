@@ -45,7 +45,7 @@ class MollowTriplet(Measurement):
 
         # Fourier and measurement parameters
         # see purpose in 'self.set_fixed_parameters()'
-        self._freq_limits = None  # tuple with frequency limits
+        self._freq_limits = None  # tuple with if_freq limits
         self._nfft = 0  # number of FFT points
         self._frequencies = None
         # self._frequencies[self._start_idx-1]  < self._freq_limits[0] <= self._frequencies[self._start_idx]
@@ -102,8 +102,8 @@ class MollowTriplet(Measurement):
         self._measurement_result._data["frequencies"] = self._frequencies
         self._measurement_result._data["data"] = self._internal_data.copy()
 
-        # Find index of the carrier frequency and store into result
-        # This frequency is excluded from y-scaling of the visualization
+        # Find index of the carrier if_freq and store into result
+        # This if_freq is excluded from y-scaling of the visualization
         self._measurement_result._if_freq_idx = np.argmin(np.abs(self._frequencies+self._q_iqawg[0]._calibration._if_frequency))
 
         # Array to store temporary data of internal averages (these are not saved to disk and lost forever)
@@ -188,8 +188,8 @@ class MollowTriplet(Measurement):
         p.nice(psutil.HIGH_PRIORITY_CLASS)
         if ult_calib:
             for (fg_trace, bg_trace) in iter(data_queue.get, None):
-                # fg_pd = np.abs(signal.welch(fg_trace, 1.25e9, nperseg=nfft)[1])
-                # bg_pd = np.abs(signal.welch(bg_trace, 1.25e9, nperseg=nfft)[1])
+                # fg_pd = np.abs(trace.welch(fg_trace, 1.25e9, nperseg=nfft)[1])
+                # bg_pd = np.abs(trace.welch(bg_trace, 1.25e9, nperseg=nfft)[1])
                 # if len(buff_fg) != len(fg_pd):
                 #     buff_fg = np.zeros(len(fg_pd))
                 #     buff_bg = np.zeros(len(bg_pd))
@@ -309,10 +309,8 @@ class MollowTriplet(Measurement):
 
     def _single_measurement(self):
         dig = self._dig[0]
-        dig_data = dig.measure(dig._bufsize)
-        # WTF??
-        # dig_data = (2*(dig_data / dig.n_avg + 128) / 255 - 1) * dig.ch_amplitude
-        dig_data = dig_data / dig.n_avg / 128 * dig.ch_amplitude
+        dig_data = dig.measure(dig._bufsize)  # data in mV
+
         data_i = dig_data[0::2]
         data_i = data_i[self._n_samples_to_drop_by_dig_delay: -self._n_samples_to_drop_in_end]
 
@@ -353,7 +351,7 @@ class MollowTriplet(Measurement):
 
     def turn_signal_on(self):
         # DC mode
-        # v_max_tuple = tuple((awg_channel._host_awg.MAX_OUTPUT_VOLTAGE for awg_channel in self._q_iqawg[0]._channels))
+        # v_max_tuple = tuple((awg_channel.host_awg.MAX_OUTPUT_VOLTAGE for awg_channel in self._q_iqawg[0]._channels))
         # self._q_iqawg[0].output_continuous_IQ_waves(0, (0, 0), 0, v_max_tuple, 1)
         self._q_iqawg[0].output_IQ_waves_from_calibration()
 

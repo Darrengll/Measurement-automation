@@ -13,8 +13,8 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
         create Measurement object, set up all devices and take them from the class;
         set up all the parameters
         make measurements:
-         -- sweep power/frequency of one/another/both of generators
-            and/or central frequency of EXA and measure single trace / list sweep for certain frequencies
+         -- sweep power/if_freq of one/another/both of generators
+            and/or central if_freq of EXA and measure single trace / list sweep for certain frequencies
          --
     """
 
@@ -23,7 +23,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
         Parameters
         ----------
         name : str
-            name of current measurement
+            name of bias measurement
         sample_name : str
             name of measured sample
         measurement_result_class : MeasurementResult
@@ -33,7 +33,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
         Notes
         ---------
-        vna and current source is optional
+        vna and bias source is optional
 
         list_devs_names: {exa_name: default_name, src_plus_name: default_name,
                          src_minus_name: default_name, vna_name: default_name, current_name: default_name}
@@ -85,6 +85,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
             "pretrigger": 32,
 
         freq_limits : tuple[float]
+            fourier limits for visualization
         lo_parameters : list[dict[str, Any]]
 
         Returns
@@ -110,7 +111,7 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
                     "pretrigger": 32,
                    }
         lo_pars = { "power": lo_power,
-                    "frequency": lo_freq,
+                    "if_freq": lo_freq,
                   }
 
         wmBase.set_fixed_parameters(delta = 20e3, awg_parameters=[{"calibration": ro_cal}],
@@ -204,18 +205,19 @@ class DigitizerWithPowerSweepMeasurementBase(Measurement):
 
     def _prepare_measurement_result_data(self, parameter_names, parameters_values):
         measurement_data = super()._prepare_measurement_result_data(parameter_names, parameters_values)
-        measurement_data["frequency"] = self._frequencies
+        measurement_data["if_freq"] = self._frequencies
         return measurement_data
 
     def _recording_iteration(self):
-        data = self._dig.measure(self._bufsize)
+        data = self._dig.measure(self._bufsize)  # data in mV
         # deleting extra samples from segments
         a = np.arange(self._segment_size_optimal, len(data), self._segment_size)
         b = np.concatenate([a + i for i in range(0, self._segment_size - self._segment_size_optimal)])
-        data_cut = np.delete(data, b) * self._adc_parameters["ch_amplitude"] / 128 / self._adc_parameters["n_avg"]
+        data_cut = np.delete(data, b)
         yf = np.abs(np.fft.fft(data_cut, self.nfft))[self._start_idx:self._end_idx + 1] * 2 / self.nfft
         self._measurement_result._iter += 1
         return yf
+
 
 class WMPulseBuilder(IQPulseBuilder):
     """IQ Pulse builder for wave mixing and for other measurements for a single qubit in line """
@@ -225,7 +227,7 @@ class WMPulseBuilder(IQPulseBuilder):
         """
         Adds two simultaneous pulses with amplitudes defined by the iqmx_calibration at frequencies
         (f_lo-f_if) ± delta_freq (or simpler w0 ± dw) and some phase to the sequence. All sine pulses will be parts
-        of the same continuous wave at frequency of f_if
+        of the same continuous wave at if_freq of f_if
 
         Parameters:
         -----------
@@ -233,9 +235,9 @@ class WMPulseBuilder(IQPulseBuilder):
             Duration of the pulse in nanoseconds. For pulses other than rectangular
             will be interpreted as t_g (see F. Motzoi et al. PRL (2009))
         delta_freq: int, Hz
-            The shift of two sidebands from the central frequency. Ought to be > 0 Hz
+            The shift of two sidebands from the central if_freq. Ought to be > 0 Hz
         phase: float, rad
-            Adds a relative phase to the outputted signal.
+            Adds a relative phase to the outputted trace.
         amplitude: float
             Calibration if_amplitudes will be scaled by the
             amplitude_value.

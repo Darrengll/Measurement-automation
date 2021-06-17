@@ -1,24 +1,28 @@
+import time
+
 import pyvisa
 from matplotlib._pylab_helpers import Gcf
-from matplotlib import pyplot as plt
+from collections import OrderedDict
 
+from lib2.ExperimentParameters import GlobalParameters
+from lib2.ResonatorDetector import ResonatorDetector
 from itertools import product
 from functools import reduce
 from operator import mul
+from matplotlib import pyplot as plt
 import sys
 import numpy as np
-from numpy import zeros, complex_, ptp
+from numpy import zeros, complex_
 
-from drivers import *
 from datetime import datetime as dt
 from threading import Thread
 from typing import Dict, Tuple, List
 
 from lib2.MeasurementResult import MeasurementResult
-from lib2.ResonatorDetector import ResonatorDetector
-from lib2.ExperimentParameters import GlobalParameters, ResonatorType
-
+import copy
 from loggingserver import LoggingServer
+from drivers import *
+from log.LogName import LogName
 
 
 class Measurement:
@@ -27,7 +31,7 @@ class Measurement:
     Every new distinct measurement type is implemented as a child class of Measurement.
     """
     _actual_devices = {}
-    _log = []
+    _software_log = []
 
     """
     Measurement._devs_dict - dictionary with the following structure:
@@ -49,7 +53,7 @@ class Measurement:
          'vna2': [["PNA-L-2", "PNA-L2"], [agilent_PNA_L, "Agilent_PNA_L"]],
          'vna3': [["pna"], [agilent_PNA_L, "Agilent_PNA_L"]],
          'vna4': [["ZNB"], [znb, "Znb"]],
-         'exa': [["EXA"], [Agilent_EXA, "Agilent_EXA_N9010A"]],
+         'exa': [["EXA"], [agilent_EXA, "Agilent_EXA_N9010A"]],
          'exg': [["EXG"], [E8257D, "EXG"]],
          'psg2': [['PSG'], [E8257D, "EXG"]],
          'mxg': [["MXG"], [E8257D, "MXG"]],
@@ -60,16 +64,17 @@ class Measurement:
          'awg4': [["TEK1"], [Tektronix_AWG5014, "Tektronix_AWG5014"]],
          # 'awg3202' : [["M3202A"], [keysightM3202A, "KeysightM3202A"]],
          'dso': [["DSO"], [Keysight_DSOX2014, "Keysight_DSOX2014"]],
-         'yok1': [["GS210_1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok2': [["GS210_2"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok3': [["GS210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok4': [["gs210"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok5': [["GS_210_3"], [Yokogawa_GS200, "Yokogawa_GS210"]],
-         'yok6': [["YOK1"], [Yokogawa_GS200, "Yokogawa_GS210"]],
+         'yok1': [["GS210_1"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok2': [["GS210_2"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok3': [["GS210_3"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok4': [["gs210"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok5': [["GS_210_3"], [Yokogawa_GS210, "Yokogawa_GS210"]],
+         'yok6': [["YOK1"], [Yokogawa_GS210, "Yokogawa_GS210"]],
          'k6220': [["k6220"], [k6220, "K6220"]]
          }
 
-    def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=5):
+    def __init__(self, name, sample_name, devs_aliases_map,
+                 plot_update_interval=5, logger_name = "manual_meas"):
         """
         Constructor creates variables for devices passed to it and initialises all devices.
 
@@ -116,21 +121,24 @@ class Measurement:
 
         """
 
-        self._logger = LoggingServer.getInstance('manual_meas')
+        self._logger = LoggingServer.getInstance(LogName.NAME)
 
-        self._logger.debug("Measurement " + name + " init, devs: " + str(devs_aliases_map))
+        # self._logger.debug("Measurement " + name + " init, devs: "+ str(devs_aliases_map))
 
         self._interrupted = False
         self._name = name
         self._sample_name = sample_name
         self._plot_update_interval = plot_update_interval
+        # self._resonator_detector = ResonatorDetector()
         self._raw_data = None  # measurement results are stored here
         self._swept_pars: Dict[str, Tuple] = None
         self._swept_pars_names: List[str] = None
         # TODO: explicit definition of members in child classes
         self._measurement_result = None  # should be initialized in child class
 
-        self._resonator_detector = ResonatorDetector(type=GlobalParameters().resonator_type)
+        self._resonator_detector = ResonatorDetector(
+            type=GlobalParameters().resonator_type,
+            fast=False)
 
         self._devs_aliases_map = devs_aliases_map
         self._list = ""
@@ -141,7 +149,8 @@ class Measurement:
             temp_list = list(rm.list_resources_info().values())
             self._devs_info = [item[4] for item in list(temp_list)]
         except ValueError:
-            print("NI Visa implementation not found; automatic device discovery unavailable")
+            print(
+                "NI Visa implementation not found; automatic device discovery unavailable")
 
         for field_name, dev_list in self._devs_aliases_map.items():
             atr_name = "_" + field_name
@@ -156,12 +165,18 @@ class Measurement:
                         continue
                     if name in Measurement._devs_dict.keys():
                         for device_address in self._devs_info:
-                            if device_address in Measurement._devs_dict[name][0]:
+                            if device_address in Measurement._devs_dict[name][
+                                0]:
                                 # print(name, device_address)
-                                device_object = getattr(*Measurement._devs_dict[name][1])(device_address)
-                                Measurement._actual_devices[name] = device_object
-                                print("The device %s is detected as %s" % (name, device_address))
-                                self.__getattribute__(atr_name)[index] = device_object
+                                device_object = getattr(
+                                    *Measurement._devs_dict[name][1])(
+                                    device_address)
+                                Measurement._actual_devices[
+                                    name] = device_object
+                                print("The device %s is detected as %s" % (
+                                    name, device_address))
+                                self.__getattribute__(atr_name)[
+                                    index] = device_object
                                 break
                     else:
                         print("Device", name, "is unknown!")
@@ -192,7 +207,8 @@ class Measurement:
         """
         self._fixed_pars = fixed_pars
         for dev_name in self._fixed_pars.keys():
-            self._measurement_result.get_context().get_equipment()[dev_name] = fixed_pars[dev_name]
+            self._measurement_result.get_context().get_equipment()[dev_name] = \
+                fixed_pars[dev_name]
         self._load_fixed_parameters_into_devices()
 
     def set_swept_parameters(self, **swept_pars):
@@ -200,7 +216,7 @@ class Measurement:
         swept_pars = {'par1_name': (par1_setter_func, [par1_val1, par1_val1 ]),
                       'par2_name': (par2_setter_func, par2_values_list), ...}
         """
-        self._swept_pars = swept_pars
+        self._swept_pars = OrderedDict(swept_pars)
         self._swept_pars_names = list(swept_pars.keys())
         self._measurement_result.set_parameter_names(self._swept_pars_names)
         self._last_swept_pars_values = \
@@ -210,7 +226,8 @@ class Measurement:
         for name, value in zip(self._swept_pars_names, values_group):
             if self._last_swept_pars_values[name] != value:
                 self._last_swept_pars_values[name] = value
-                self._swept_pars[name][0](value)  # this is setter call, look carefully
+                self._swept_pars[name][0](
+                    value)  # this is setter call, look carefully
 
     def launch(self):
 
@@ -241,7 +258,19 @@ class Measurement:
                 manager.canvas.start_event_loop(.1)
         except (KeyboardInterrupt, AttributeError) as e:
             print(stop_messages[type(e)])
+            self._measurement_result.save(subfolder="tmp")
             self._interrupted = True
+            if not self._measurement_result.is_finished():
+                print("Waiting for the measurement to complete...")
+            while not self._measurement_result.is_finished():
+                try:
+                    manager = Gcf.get_fig_manager(figure_number)
+                    manager.canvas.start_event_loop(.5)
+                except AttributeError:  # plot was closed
+                    time.sleep(0.5)
+        except Exception as e:
+            self._logger.warn(f"Uncaught exception: {e}")
+            raise e
         finally:
             self._measurement_result.finalize()
             plt.close(figure_number)
@@ -255,8 +284,10 @@ class Measurement:
         try:
             self._record_data()
         except Exception:
+            self._logger.warn(f"Exception while recording data: {sys.exc_info()}")
             self._measurement_result.set_exception_info(sys.exc_info())
         finally:
+            self._finalize()
             self._measurement_result.set_is_finished(True)
 
     def _record_data(self):
@@ -264,12 +295,15 @@ class Measurement:
         done_iterations = 0
         start_time = self._measurement_result.get_start_datetime()
 
-        parameters_values = [self._swept_pars[parameter_name][1] for parameter_name in par_names]
-        parameters_idxs = [list(range(len(self._swept_pars[parameter_name][1]))) for parameter_name in par_names]
+        parameters_values = [self._swept_pars[parameter_name][1]
+                             for parameter_name in par_names]
+        parameters_idxs = [list(range(len(self._swept_pars[parameter_name][1]))
+                                ) for parameter_name in par_names]
         raw_data_shape = [len(indices) for indices in parameters_idxs]
         total_iterations = reduce(mul, raw_data_shape, 1)
 
-        for idx_group, values_group in zip(product(*parameters_idxs), product(*parameters_values)):
+        for idx_group, values_group in zip(product(*parameters_idxs),
+                                           product(*parameters_values)):
             self._call_setters(values_group)
             # This should be implemented in child classes:
             data = self._recording_iteration()
@@ -278,44 +312,50 @@ class Measurement:
             # the returned data dimensions
             if done_iterations == 0:
                 try:
-                    self._raw_data = zeros(raw_data_shape + [len(data)], dtype=complex_)
+                    self._raw_data = zeros(raw_data_shape + [len(data)],
+                                           dtype=complex_)
                 except TypeError:  # data has no __len__ attribute
                     self._raw_data = zeros(raw_data_shape, dtype=complex_)
             self._raw_data[idx_group] = data
 
             # This may need to be extended in child classes:
-            measurement_data = self._prepare_measurement_result_data(par_names, parameters_values)
+            measurement_data = self._prepare_measurement_result_data(par_names,
+                                                                     parameters_values)
             self._measurement_result.set_data(measurement_data)
             self._measurement_result._iter_idx_ready = idx_group
 
             done_iterations += 1
 
-            avg_time = (dt.now() - start_time).total_seconds() / done_iterations
-            time_left = self._format_time_delta(avg_time * (total_iterations - done_iterations))
+            avg_time = (dt.now() - start_time).total_seconds() / \
+                       done_iterations
+            time_left = self._format_time_delta(
+                avg_time * (total_iterations - done_iterations))
 
             formatted_values_group = "["
             for idx, value in enumerate(values_group):
                 if isinstance(value, (float, int, np.float)):
-                    formatted_values_group += "{}: {:.2f}, ".format(par_names[idx], value)
+                    formatted_values_group += "{}: {:.2e}, ".format(
+                        par_names[idx], value)
                 else:
-                    formatted_values_group += "{}: {}, ".format(par_names[idx], value)
+                    formatted_values_group += "{}: {}, ".format(par_names[idx],
+                                                                value)
             formatted_values_group = formatted_values_group[:-2] + "]"
 
-            print("\rTime left: " + time_left + ", %s" % formatted_values_group +
-                  ", average cycle time: " + str(round(avg_time, 2)) + " s       ",
+            print(f"\rTime left: {time_left}, {formatted_values_group}, "
+                  f"average cycle time: {avg_time:.2f} s",
                   end="", flush=True)
 
             if self._interrupted:
                 return
 
-        self._measurement_result.set_recording_time(dt.now() - start_time)
-        print("\nElapsed time: %s" % self._format_time_delta((dt.now() - start_time)
-                                                             .total_seconds()))
-        self._finalize()
+        time_elapsed = dt.now() - start_time
+        self._measurement_result.set_recording_time(time_elapsed)
+        print(f"\nElapsed time: "
+              f"{self._format_time_delta(time_elapsed.total_seconds())}")
 
     def _finalize(self):
         """
-        Post-measurement clean-up. E.g. setting all voltage/current sources to 0,
+        Post-measurement clean-up. E.g. setting all voltage/bias sources to 0,
         closing other stuff.
         May be overwritten in child-classes.
         -------
@@ -336,7 +376,8 @@ class Measurement:
         """
         pass
 
-    def _prepare_measurement_result_data(self, parameter_names, parameter_values):
+    def _prepare_measurement_result_data(self, parameter_names,
+                                         parameter_values):
         """
         This method MAY be overridden for a new measurement type.
 
@@ -350,43 +391,54 @@ class Measurement:
         measurement_data["data"] = self._raw_data
         return measurement_data
 
-    def _detect_resonator(self, plot=False, tries_number=3):
+    def _detect_resonator(self, plot=False, vna_params=None, tries_number=3):
         """
-        Finds frequency of the resonator visible on the VNA screen
+
+        Parameters
+        ----------
+        plot
+        vna_params : Dict[str,any]
+        tries_number
+
+        Returns
+        -------
+
         """
         vna = self._vna[0]
+        if vna_params is not None:
+            vna.set_parameters(vna_params)
+            vna_params_stashed = copy.deepcopy(vna.get_parameters())
+            vna.set_output_state("ON")
+
         init_averages = vna.get_averages()
-        init_freq_limits = vna.get_frequencies()[0], vna.get_frequencies()[-1]
-        init_span = ptp(init_freq_limits)
+        for i in range(1, tries_number + 1):
+            vna.set_averages(init_averages)
+            vna.avg_clear()
+            vna.prepare_for_stb()
+            vna.sweep_single()
+            vna.wait_for_stb()
+            frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
+            vna.autoscale_all()
+            self._resonator_detector.set_data(frequencies, sdata)
+            self._resonator_detector.set_plot(plot)  # warning, do not plot
+                                                     # outside
+                                                     # the main thread!
+            result = self._resonator_detector.detect()
 
-        def iterate_increasing_averages():
-            result = None
-            for i in range(1, tries_number + 1):
-                vna.set_averages(init_averages * i)
-                vna.avg_clear()
-                vna.prepare_for_stb()
-                vna.sweep_single()
-                vna.wait_for_stb()
-                frequencies, sdata = vna.get_frequencies(), vna.get_sdata()
-                vna.autoscale_all()
-                self._resonator_detector.set_data(frequencies, sdata)
-                self._resonator_detector.set_plot(plot)
-                result = self._resonator_detector.detect()
-                if result is not None:
-                    break
-                else:
-                    print("\rFit was inaccurate (try #%d), retrying" % i, end="")
-            return result
-
-        result = iterate_increasing_averages()
-
+            if result is not None:
+                break
+            else:
+                self._resonator_detector.set_plot(True)
+                self._logger.warn(f"Failed to fit (try #{i}), vna parameters: "
+                      f"{vna.get_parameters()}, will retry with "
+                      f"{init_averages * (i + 1)} "
+                      f"averages")
         if result is None:
-            print("\rFit was inaccurate (try #%d), doubling span", end="")
-            vna.set_freq_limits(init_freq_limits[0] - init_span/2,
-                                init_freq_limits[1] + init_span/2)
-            iterate_increasing_averages()
-
-        vna.set_averages(init_averages)
+            raise ValueError("Couldn't find resonator!")
+        # restore VNA's original parameters
+        if vna_params is not None:
+            vna.set_parameters(vna_params_stashed)
+            vna.set_output_state("OFF")
         return result
 
     def _detect_qubit(self):
@@ -400,19 +452,21 @@ class Measurement:
         A method writes line with the name of measurement
         (probably with formatted parameters) to log list
         """
-        self._log += str(dt.now().replace(microsecond=0)) + "  " + line + parameters + '\n'
+        self._software_log += str(
+            dt.now().replace(microsecond=0)) + "  " + line + parameters + '\n'
 
     def return_log(self):
         """
         Returns string of log containing all adressed measurements in chronological order.
         """
-        return self._log
+        return self._software_log
 
     def _construct_fixed_parameters(self):
 
         self._fixed_params = {}
 
-        yn = input('Do you want to set the dictionary of fixed parameters interactively: yes/no \n')
+        yn = input(
+            'Do you want to set the dictionary of fixed parameters interactively: yes/no \n')
 
         if yn == 'yes':
             while True:
@@ -420,8 +474,9 @@ class Measurement:
                     'Enter name of device : "exa", "vna", etc.\n' + 'If finished enter whatever else you want \n')
                 if dev_name in self._actual_devices.keys():
                     self._fixed_params[dev_name] = {}
-                    print('Enter parameter and value as: "frequency 5e9" and press Enter)\n' + \
-                          'If finished with this device enter "stop next"\n')
+                    print(
+                        'Enter parameter and value as: "if_freq 5e9" and press Enter)\n' + \
+                        'If finished with this device enter "stop next"\n')
                     while True:
                         par_name, vs = input().split()
                         if par_name == 'stop':
@@ -441,4 +496,4 @@ class Measurement:
     def _format_time_delta(self, delta):
         hours, remainder = divmod(delta, 3600)
         minutes, seconds = divmod(remainder, 60)
-        return '%s h %s m %s s' % (int(hours), int(minutes), round(seconds, 2))
+        return f'{hours:g} h {minutes:g} m {seconds:.2f} s'

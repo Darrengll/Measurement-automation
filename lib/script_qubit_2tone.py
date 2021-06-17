@@ -15,7 +15,7 @@ try:
     lo.set_power(-5)
     lo.set_status(1)
     #lo.set_frequency(13.8477e9)
-    #current.set_current(-7231.25e-6)
+    #bias.set_current(-7231.25e-6)
     
     Frequencies = arange (3e9, 10e9, 30e6)
     currents = arange (-10000e-6, -4000e-6, 30e-6)

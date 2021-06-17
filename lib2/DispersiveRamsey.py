@@ -1,4 +1,6 @@
+from numpy import *
 
+from lib2.IQPulseSequence import IQPulseBuilder
 from lib2.VNATimeResolvedDispersiveMeasurement1D import *
 
 

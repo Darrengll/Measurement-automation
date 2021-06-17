@@ -19,7 +19,6 @@
 
 from drivers.instrument import Instrument
 import visa
-import types
 import logging
 import numpy as np
 import struct
@@ -98,7 +97,7 @@ class Tektronix_AWG5014(Instrument):
         waveform: array
             ADC levels, in Volts
         repetition_rate: foat, Hz
-            frequency at which the waveform will be repeated
+            if_freq at which the waveform will be repeated
         channel: int
             1..4 for DACs or -1..-8 for corresponding marker outputs, two for one
             DAC
@@ -239,7 +238,7 @@ class Tektronix_AWG5014(Instrument):
             m1 (int[nop])  : marker1
             m2 (int[nop])  : marker2
             filename (string)    : filename
-            clock (int)          : frequency (Hz)
+            clock (int)          : if_freq (Hz)
 
         Output:
             None
@@ -437,7 +436,7 @@ class Tektronix_AWG5014(Instrument):
             w (float[nop]) : waveform
             m1 (int[nop])  : marker1
             m2 (int[nop])  : marker2
-            clock (int) : frequency
+            clock (int) : if_freq
 
         Output:
             None

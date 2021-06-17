@@ -15,17 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-
-from drivers.instrument import Instrument
-from numpy import *
-import numpy as np
-import visa
-import types
-import time
-import logging
-from lib2.IQPulseSequence import *
-
 from enum import Enum
+
+import visa
+
+from lib2.IQPulseSequence import *
+from drivers.instrument import Instrument
 
 
 class WaveformType(Enum):
@@ -75,8 +70,6 @@ class KeysightAWG(Instrument):
 
         self.add_function("apply_waveform")
 
-        # High-level functions
-
     def output_arbitrary_waveform(self, waveform, repetition_rate, channel, asynchronous=False):
         """
         Prepare and output an arbitrary waveform repeated at some repetition_rate
@@ -86,7 +79,7 @@ class KeysightAWG(Instrument):
         waveform: array
             ADC levels, in Volts
         repetition_rate: foat, Hz
-            frequency at which the waveform will be repeated
+            if_freq at which the waveform will be repeated
         channel: 1 or 2
             channel which will output the waveform
         """
@@ -101,7 +94,7 @@ class KeysightAWG(Instrument):
     def set_trigger(self, trigger_string: str):
         """
         trigger_string : string
-           'EXT' - external trigger on the front panel is used as trigger signal source
+           'EXT' - external trigger on the front panel is used as trigger trace source
            'CONT' - continious output
         """
         if( trigger_string == "EXT"):
@@ -148,7 +141,7 @@ class KeysightAWG(Instrument):
             # are connected as intended and output tigger option setting
             # is outputting both triggers at the same time (chan1:syncAB or something like that)
 
-            # big frequency in order to repeat very short trigger sequences
+            # big if_freq in order to repeat very short trigger sequences
             big_freq = 250e6
             self.output_arbitrary_waveform(np.zeros(100), big_freq, 1)
             self.output_arbitrary_waveform(np.zeros(100), big_freq, 2)
@@ -158,12 +151,12 @@ class KeysightAWG(Instrument):
     def output_continuous_wave(self, frequency=100e6, amplitude=0.1, phase=0, offset=0, waveform_resolution=1,
                                channel=1, asynchronous=False):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float
-            frequency of the output wave
+        if_freq: float
+            if_freq of the output wave
         amplitude: float
             amplitude of the output wave
         phase: float
@@ -195,11 +188,11 @@ class KeysightAWG(Instrument):
         waveform: KeysightAWG.WaveformType
             one of the supported types of the waveform
         freq: float
-            frequency of the applied waveform, i.e. 1000 or 1e3
+            if_freq of the applied waveform, i.e. 1000 or 1e3
         amp: float
-            amplitude of the applied signal
+            amplitude of the applied trace
         offset: float
-            dc-offset added to the signal
+            dc-offset added to the trace
         channel = 1: int
             channel which will be set to ON and used as output, 1 or 2
 
@@ -218,11 +211,11 @@ class KeysightAWG(Instrument):
         waveform: KeysightAWG.WaveformType
             one of the supported types of the waveform
         freq: float
-            frequency of the applied waveform, i.e. 1000 or 1e3
+            if_freq of the applied waveform, i.e. 1000 or 1e3
         amp: float
-            amplitude of the applied signal
+            amplitude of the applied trace
         offset: float
-            dc-offset added to the signal
+            dc-offset added to the trace
         channel = 1: int
             channel which will be set to ON and used as output, 1 or 2
 
@@ -288,7 +281,7 @@ class KeysightAWG(Instrument):
         It then will be available in select_arbitrary_waveform method.
 
         The actual timescale and amplitude of the waveform will be defined by
-        its frequency and amplitude as specified in apply_waveform method.
+        its if_freq and amplitude as specified in apply_waveform method.
 
         Parameters:
         -----------

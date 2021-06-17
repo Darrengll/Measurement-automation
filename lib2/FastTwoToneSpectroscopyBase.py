@@ -36,7 +36,7 @@ class FastTwoToneSpectroscopyBase(Measurement):
         # frequencies are no longer in self._swept_pars
         # sweep over frequencies is provided automatically through
         # trigger settings of the mw_src -> there is no need to call
-        # mw_src.set_frequency() setter and cycle through frequency parameters
+        # mw_src.set_frequency() setter and cycle through if_freq parameters
         # in Measurement._record_data()
         # but it is still swept parameter in some sense.
         # TODO: I propose following solution
@@ -86,12 +86,12 @@ class FastTwoToneSpectroscopyBase(Measurement):
         
         if detect_resonator:
             self._mw_src[0].set_output_state("OFF")
-            msg = "Detecting a resonator within provided frequency range of the VNA %s \
+            msg = "Detecting a resonator within provided if_freq range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
             print(msg + self._info_suffix % flux_control_parameter, flush=True)
 
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
-            print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
+            print("Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % (
                 res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
             vna_parameters["freq_limits"] = (res_freq, res_freq)
             self._measurement_result.get_context() \

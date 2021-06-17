@@ -19,7 +19,7 @@ import numpy as np
 class AnticrossingOracle():
     """
     This class automatically processes anticrossing spectral data for
-    different types of qubits and frequency arrangements between the qubits and
+    different types of qubits and if_freq arrangements between the qubits and
     resonators
     """
 
@@ -156,7 +156,7 @@ class AnticrossingOracle():
         except:
             # maybe we have raw dict
             data = self._sts_result
-        param_keys = ["Current [A]", "current", "Voltage [V]"]
+        param_keys = ["Current [A]", "bias", "Voltage [V]"]
         for param_key in param_keys:
             if param_key in data:
                 param_values = data[param_key]
@@ -184,7 +184,7 @@ class AnticrossingOracle():
         # Taking delay peaks higher than half of the distance between the median
         # level and the highest point for all 2D data
         threshold = (delay.max() -
-                     0.5 * (delay.max() - median(delay))) / 100
+                     0.75 * (delay.max() - median(delay)))
 
         res_points = []
         self._extracted_indices = []
