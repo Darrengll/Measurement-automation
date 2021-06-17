@@ -8,7 +8,7 @@ import numpy as np
 def test_save_load_no_excess_plot():
 
     result = SingleToneSpectroscopyResult("test_no_excess_plot", "test")
-    frequencies = linspace(0, 20000, 201)
+    frequencies = np.linspace(0, 20000, 201)
     currents = np.linspace(0, 0.5, 20)
 
     XX, YY = np.meshgrid(frequencies, currents)
