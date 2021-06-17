@@ -20,7 +20,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 from drivers.instrument import Instrument
-import visa
+import pyvisa as visa
 import types
 import logging
 from time import sleep
@@ -302,7 +302,8 @@ class Agilent_PNA_L(Instrument):
         pass
 
     def get_avg_status(self):
-        return self._visainstrument.query('STAT:OPER:AVER1:COND?')
+        status = self._visainstrument.query(f'SENSe{self._ci}:AVERage:STATe?')
+        return True if status[0] == '1' else False
 
     def still_avg(self):
         if int(self.get_avg_status()) == 1: return True
@@ -441,10 +442,11 @@ class Agilent_PNA_L(Instrument):
         if "bandwidth" in parameters_dict.keys():
             self.set_bandwidth(parameters_dict["bandwidth"])
         if "averages" in parameters_dict.keys():
-            # TODO: not working properly
-            # causes error -113 (unknown header)
-            # debug `self.do_set_averages` for details
-            self.set_averages(parameters_dict["averages"])
+            if "averaging_mode" in parameters_dict.keys():
+                self.set_averages(parameters_dict["averages"],
+                                  mode=parameters_dict["averaging_mode"])
+            else:
+                self.set_averages(parameters_dict["averages"])
         if "power" in parameters_dict.keys():
             self.set_power(parameters_dict["power"])
         if "nop" in parameters_dict.keys():
@@ -571,7 +573,7 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : getting average status')
         return bool(int(self._visainstrument.query('SENS%i:AVER:STAT?' % (self._ci))))
 
-    def do_set_averages(self, av, mode="POINT"):
+    def do_set_averages(self, av, mode="SWEEP"):
         """
 
         Parameters
@@ -591,9 +593,11 @@ class Agilent_PNA_L(Instrument):
         else:
             self._visainstrument.write("SENS%i:AVER OFF" % self._ci)
         if mode == "POINT":
+            self._visainstrument.write(f"SENS{self._ci}:SWE:GRO:COUN 1")
             self._visainstrument.write("SENS%i:AVER:MODE POIN" % self._ci)
         elif mode == "SWEEP":
-            raise NotImplementedError
+            self._visainstrument.write(f"SENS{self._ci}:SWE:GRO:COUN {av}")
+            self._visainstrument.write(f"SENS{self._ci}:AVER:MODE SWEEP")
 
     def do_get_averages(self):
         """
@@ -710,8 +714,13 @@ class Agilent_PNA_L(Instrument):
         self.write("SENS:SWE:MODE CONT")
 
     def sweep_single(self):
-        self.write("SENSe{0}:SWEep:MODE SINGle".format(self._ci))
-        # self.write("SENS%i:SWE:MODE GROUPS"%(self._ci))
+        if self.get_avg_status():
+            self.sweep_groups()
+        else:
+            self.write("SENSe{0}:SWEep:MODE SINGle".format(self._ci))
+
+    def sweep_groups(self):
+        self._visainstrument.write(f"SENS{self._ci}:SWE:MODE GROups")
 
     def do_set_startfreq(self,val):
         """
