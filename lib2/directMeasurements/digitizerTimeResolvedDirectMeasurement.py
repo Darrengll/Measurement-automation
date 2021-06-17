@@ -9,7 +9,10 @@ from drivers.keysightM3202A import KeysightM3202A
 import inspect
 import lib2.IQPulseSequence
 from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiveMeasurement1DResult
-from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
+try:
+    from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
+except OSError:
+    pass # we are not on the measurement PC
 from drivers.IQAWG import IQAWG
 from drivers.E8257D import MXG
 from drivers.Yokogawa_GS210 import Yokogawa_GS210

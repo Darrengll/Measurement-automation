@@ -11,13 +11,15 @@ https://literature.cdn.keysight.com/litweb/pdf/M3XXX-90003.pdf?id=3120777
 import numpy as np
 from scipy.interpolate import interp1d
 
-from drivers.keysightSD1 import SD_AOU, SD_Wave
-from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, \
-    SD_TriggerBehaviors, SD_TriggerDirections
-from drivers.keysightSD1 import SD_WaveformTypes, SD_Waveshapes, \
-    SD_MarkerModes, SD_SyncModes, SD_Error
-from drivers.keysightSD1 import SD_ModulationTypes, SD_Compatibility
-
+try:
+    from drivers.keysightSD1 import SD_AOU, SD_Wave
+    from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, \
+        SD_TriggerBehaviors, SD_TriggerDirections
+    from drivers.keysightSD1 import SD_WaveformTypes, SD_Waveshapes, \
+        SD_MarkerModes, SD_SyncModes, SD_Error
+    from drivers.keysightSD1 import SD_ModulationTypes, SD_Compatibility
+except OSError:
+    pass  # we are not on the measurement PC
 
 class KeysightM3202A:
     MAX_OUTPUT_VOLTAGE = 1.5  # V
