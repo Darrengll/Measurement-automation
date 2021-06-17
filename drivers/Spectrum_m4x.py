@@ -11,12 +11,12 @@ https://spectrum-instrumentation.com/sites/default/files/download/m4x22_datashee
 '''
 import itertools
 import time
+from enum import Enum
 
 import numpy as np
 from scipy import fftpack
 import matplotlib.pyplot as plt
 from drivers.pyspcm import *
-from enum import Enum
 
 
 class CardError(Exception):
@@ -41,9 +41,11 @@ class SPCM_TRIGGER(str, Enum):
 
 
 class ADCParameters:
-    def __init__(self, mode, oversampling_factor, channels, ch_amplitude,
-                 dur_seg, trigger_source,
-                 n_seg, n_avg, digitizer_delay, pretrigger):
+    def __init__(self, mode=None, oversampling_factor=None, channels=None,
+                 ch_amplitude=None,
+                 dur_seg=None, trigger_source=None,
+                 n_seg=None, n_avg=None, digitizer_delay=None,
+                 pretrigger=None):
         """
         Class that contains only field and represents ADC parameters.
 
@@ -142,6 +144,8 @@ class SPCM:
         self.pretrigger_in_samples: int = 0  # pretrigger in samples
         self.mode: SPCM_MODE = SPCM_MODE.UNDEFINED
         self.trigger_source: SPCM_TRIGGER = SPCM_TRIGGER.EXT0
+
+        self._timeout = None
 
         self.reset_card()  # this call is recommended in manual
 
@@ -307,12 +311,12 @@ class SPCM:
         -------
         self.__handle_timeout(
                 self.__write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
-                # Wait till the card completes the current run
+                # Wait till the card completes the bias run
             )
         """
         if ret == ERR_TIMEOUT:
             raise TimeoutError(
-                "Execution exceeded the allowed timeout. Reset the Spectrum card")
+                f"Execution exceeded the allowed timeout of {self._timeout}")
         return ret
 
     def set_timeout(self, timeout):
@@ -322,6 +326,7 @@ class SPCM:
         timeout : int
             timeout in ms
         """
+        self._timeout = timeout
         self._write_to_reg_32(SPC_TIMEOUT, timeout)
 
     def setup_SSA(self, memsize, posttrigger_mem):
@@ -679,13 +684,13 @@ class SPCM:
                               M2CMD_CARD_START | M2CMD_CARD_ENABLETRIGGER)
         self.__handle_error()
 
-    def wait_for_card(self):
-        """Wait until the card completes the current run"""
-        self.set_timeout(0)
+    def wait_for_card(self, timeout = 0):
+        """Wait until the card completes the bias run"""
+        self.set_timeout(timeout)
         try:
             self.__handle_timeout(
                 self._write_to_reg_32(SPC_M2CMD, M2CMD_CARD_WAITREADY)
-                # Wait till the card completes the current run
+                # Wait till the card completes the bias run
             )
         except KeyboardInterrupt:
             self.stop_card()
@@ -938,10 +943,10 @@ class SPCM:
                 segment_size=segment_size, pretrigger=pretrigger
             )
         elif self.mode == SPCM_MODE.UNDEFINED:
-            raise Exception("current Spectrum_m4x mode is not initialized\n"
+            raise Exception("bias Spectrum_m4x mode is not initialized\n"
                             "default is: SPCM_MODE.UNDERFINED")
         else:
-            raise Exception("current Spectrum_m4x mode is initialized to "
+            raise Exception("bias Spectrum_m4x mode is initialized to "
                             "unknown value\n")
 
     def setup_trigger_source(self, trigger_source=None):
@@ -965,7 +970,7 @@ class SPCM:
             self.trigger_source = trigger_source
             init_trigger()
 
-    def measure(self):
+    def measure(self, timeout = 1000):
         """
         Launches measurement and returns data, normalized to milivolts.
         It finishes faster than safe_measure method, but cannot be interrupted
@@ -976,7 +981,7 @@ class SPCM:
         """
         self.start_card()
         try:
-            self.wait_for_card()  # wait till the end of a measurement
+            self.wait_for_card(timeout)  # wait till the end of a measurement
         except KeyboardInterrupt:
             self.stop_card()
             print("Card was interrupted")
@@ -1224,9 +1229,9 @@ class SPCM:
                 Size of a pretrigger
                 from 32 to 64k-32 with a step 32
             freq_from: float, MHz
-                where should the frequency window of the plot begin
+                where should the if_freq window of the plot begin
             freq_until: float, MHz
-                where should the frequency window of the plot end
+                where should the if_freq window of the plot end
             num_averages: int, default 10 000
                 number of averages from 4 to 16 000 000
         """

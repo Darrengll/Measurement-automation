@@ -33,7 +33,7 @@ class DispersiveRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DRes
         time_step = x[1]-x[0]
         max_frequency = 1/time_step/5
         min_frequency = 0.1
-        frequency = random.random(1)*(max_frequency-.1)+.1
+        frequency = random.uniform(min_frequency, max_frequency)
         p0 = [amp_r, amp_i, 1, frequency*2*pi, offset_r, offset_i]
 
         bounds =([-abs(amp_r)*1.5, -abs(amp_i)*1.5, 0.1,
@@ -43,7 +43,7 @@ class DispersiveRabiOscillationsResult(VNATimeResolvedDispersiveMeasurement1DRes
         return p0, bounds
 
     def _generate_annotation_string(self, opt_params, err):
-        return "$T_R=%.2f \pm %.2f \mu$s\n$\Omega_R/2\pi = %.2f \pm %.2f$ MHz"%\
+        return "$T_R=%.2f \pm %.2f\ \mu$s\n$\Omega_R/2\pi = %.2f \pm %.2f$ MHz"%\
                 (opt_params[2], err[2], opt_params[3]/2/pi, err[3]/2/pi)
 
     def get_pi_pulse_duration(self):

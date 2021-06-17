@@ -105,7 +105,7 @@ class CorrelatorMeasurement(StimulatedEmission):
 
         """ Supplying additional arrays to 'self._measurement_result' class """
         meas_data = self._measurement_result.get_data()
-        # frequency is already set in call of 'super()' class method
+        # if_freq is already set in call of 'super()' class method
         # time in nanoseconds
         meas_data["sample_rate"] = dig.get_sample_rate()
         self._measurement_result.sample_rate = dig.get_sample_rate()

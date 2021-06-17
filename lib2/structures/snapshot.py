@@ -176,8 +176,8 @@ class Snapshot:
     @_inplace
     def calibrate_phase(self):
         """
-        @brief: Substracts singal's phases of the lowest frequency from all the frequency phases
-        It turn all phases at the lowest frequency to be equal to zero.
+        @brief: Substracts singal's phases of the lowest if_freq from all the if_freq phases
+        It turn all phases at the lowest if_freq to be equal to zero.
         @params:
         @return: None
         """

@@ -24,13 +24,15 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
 
     def __init__(self, name, sample_name, devs_aliases_map, plot_update_interval=1):
 
+        self._exc_iqvg = None
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval=plot_update_interval)
         self._sequence_generator = None
         self._basis = None
         self._ult_calib = False
         self._pulse_sequence_parameters = \
-            {"modulating_window": "rectangular", "excitation_amplitude": 1,
+            {"modulating_window": "rectangular",
+             "excitation_amplitude": 1,
              "z_smoothing_coefficient": 0}
 
     def set_fixed_parameters(self, pulse_sequence_parameters,
@@ -61,6 +63,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
                                               dev_params['q_awg'][0]["calibration"],
                                               q_z_cal, plot_resonator_fit=plot_resonator_fit)
             dev_params['vna'][0]["freq_limits"] = (res_freq, res_freq)
+        self._exc_iqvg[0].set_output_state("ON")
 
         super().set_fixed_parameters(**dev_params)
 
@@ -92,22 +95,22 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
 
     def _recording_iteration(self):
         vna = self._vna[0]
-        q_lo = self._q_lo[0]
+        exc_iqvg = self._exc_iqvg[0]
         vna.avg_clear()
         vna.prepare_for_stb()
         vna.sweep_single()
         vna.wait_for_stb()
         data = vna.get_sdata()
         if self._ult_calib:
-            for q_lo in self._q_lo:
-                q_lo.set_output_state("OFF")
+            for exc_iqvg in self._exc_iqvg:
+                exc_iqvg.set_output_state("OFF")
             vna.avg_clear()
             vna.prepare_for_stb()
             vna.sweep_single()
             vna.wait_for_stb()
             bg = vna.get_sdata()
-            for q_lo in self._q_lo:
-                q_lo.set_output_state("ON")
+            for exc_iqvg in self._exc_iqvg:
+                exc_iqvg.set_output_state("ON")
             mean_data = mean(data-bg)
         else:
             mean_data = mean(data)
@@ -120,21 +123,18 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
             p_i = (imag(mean_data) - imag(basis[0])) / (imag(basis[1]) - imag(basis[0]))
             return p_r + 1j * p_i
 
-    def _detect_resonator(self, vna_parameters, ro_calibration, q_calibration,
+    def _detect_resonator(self, vna_parameters, ro_calibration : IQCalibrationData, q_calibration,
                           q_z_calibration=None, plot_resonator_fit=True, z_offset=None):
 
         # turning all microwave OFF
-        for q_lo in self._q_lo:
-            q_lo.set_output_state("OFF")
+        for iqvg in self._exc_iqvg:
+            iqvg.set_output_state("OFF")
 
-        print("Detecting a resonator within provided frequency range of the VNA %s\
+        print("Detecting a resonator within provided if_freq range of the VNA %s\
                     " % (str(vna_parameters["freq_limits"])))
 
-        self._vna[0].set_nop(vna_parameters["res_find_nop"])
-        self._vna[0].set_freq_limits(*vna_parameters["freq_limits"])
-        self._vna[0].set_power(vna_parameters["power"])
-        self._vna[0].set_bandwidth(vna_parameters["bandwidth"] * 10)
-        self._vna[0].set_averages(vna_parameters["averages"])
+        self._vna[0].set_parameters(vna_parameters)
+        self._vna[0].set_nop(vna_parameters["_res_find_nop"])
 
         rep_period = self._pulse_sequence_parameters["repetition_period"]
         ro_duration = self._pulse_sequence_parameters["readout_duration"]
@@ -142,7 +142,10 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
         # making sure that readout is in pulse regime
         ro_pb = IQPulseBuilder(ro_calibration)
         self._ro_awg[0].output_pulse_sequence(ro_pb
-                                              .add_dc_pulse(ro_duration).add_zero_until(rep_period).build())
+                                              .add_zero_pulse(rep_period-ro_duration)
+                                              .add_pulse(ro_duration)
+                                              .build())
+
 
         # turning all the AWG output OFF
         q_pb = IQPulseBuilder(q_calibration)
@@ -158,11 +161,11 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
 
         res_freq, res_amp, res_phase = super()._detect_resonator(plot_resonator_fit)
-        print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % \
+        print("Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % \
               (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
 
         # turning microwave back ON
-        for q_lo in self._q_lo:
+        for q_lo in self._exc_iqvg:
             q_lo.set_output_state("ON")
         return res_freq
 
@@ -207,10 +210,10 @@ class VNATimeResolvedDispersiveMeasurementResult(MeasurementResult):
         self._phase_units = "rad"
         self._data_formats = {
             "imag": (imag, "$\mathfrak{Im}[S_{21}]$ [a.u.]"),
-            "real": (real, "$\mathfrak{Re}[S_{21}]$ [a.u.]"),
-            "phase": (self._unwrapped_phase, \
-                      r"$\angle S_{21}$ [%s]" % self._phase_units),
-            "abs": (abs, r"$\left.|S_{21}|\right.$ [a.u.]")}
+            "real": (real, "$\mathfrak{Re}[S_{21}]$ [a.u.]")}
+            # "phase": (self._unwrapped_phase, \
+            #           r"$\angle S_{21}$ [%s]" % self._phase_units),
+            # "abs": (abs, r"$\left.|S_{21}|\right.$ [a.u.]")}
 
     def _generate_fit_arguments(self):
         """
@@ -241,7 +244,7 @@ class VNATimeResolvedDispersiveMeasurementResult(MeasurementResult):
             return angle(sdata)
 
     def _prepare_figure(self):
-        fig, axes = plt.subplots(2, 2, figsize=(15, 7), sharex=True)
+        fig, axes = plt.subplots(1, 2, figsize=(15, 7), sharey=True)
         fig.canvas.set_window_title(self._name)
         axes = ravel(axes)
         return fig, axes, (None, None)

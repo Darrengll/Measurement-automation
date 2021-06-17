@@ -1,4 +1,4 @@
-from numpy import mean, median, greater, array, concatenate, argmin
+from numpy import mean, median, greater, array, concatenate, argmin, diff
 from scipy.optimize import curve_fit, bisect
 from scipy.signal import argrelextrema
 from matplotlib import pyplot as plt
@@ -22,10 +22,10 @@ class ACStarkOracle:
         if self._plot:
             self._plot_result()
 
-        power = bisect(lambda power: (-self._exponent(power, self._k, self._f_max)+self._f_max)
-                                      -self._N_photons*self._chi, -70, -10)
+        # power = bisect(lambda power: (-self._exponent(power, self._k, self._f_max)+self._f_max)
+        #                               -self._N_photons*self._chi, -70, -10)
 
-        return self._f_max*1e9, power
+        return self._f_max*1e9, -100
 
     def _extract_data(self):
         data = self._result.get_data()
@@ -41,7 +41,7 @@ class ACStarkOracle:
         highest_peak = argrelextrema(first_row, greater, order=100)[0][-1]
 
         bounds = ((min(first_row), min(first_row), min(self._frequencies), 5e6),
-                  (max(first_row), max(first_row), max(self._frequencies), 20e6))
+                  (max(first_row), max(first_row), max(self._frequencies), 50e6))
 
         p_opt, p_cov = curve_fit(self._lorentzian_peak, self._frequencies, first_row,
                                  p0=(max(first_row), median(first_row), self._frequencies[highest_peak], 10e6),
@@ -49,10 +49,13 @@ class ACStarkOracle:
 
         q_freqs = [p_opt[-2]]
         for row in abs(self._s_data)[1:]:
+            peak_ids = argrelextrema(row, greater, order=100)[0]
+            closest_peak_id = peak_ids[argmin(abs(self._frequencies[peak_ids] - p_opt[-2]))]
+
             bounds = ((min(row), min(row), min(self._frequencies), 1e6),
-                      (max(row), max(row), max(self._frequencies), 20e6))
+                      (max(row), max(row), max(self._frequencies), 50e6))
             p_opt, p_cov = curve_fit(self._lorentzian_peak, self._frequencies, row,
-                                     p0=(max(row), median(row), p_opt[-2], p_opt[-1]),
+                                     p0=(max(row), median(row),  self._frequencies[closest_peak_id], p_opt[-1]),
                                      bounds=bounds)
             q_freqs.append(p_opt[-2])
         self._q_freqs = array(q_freqs)
@@ -66,18 +69,20 @@ class ACStarkOracle:
         fig = plt.figure()
         fig.canvas.set_window_title(self._result._name + "-fit")
 
-        self._n_photons = abs(10 ** (self._powers / 10) * self._k / self._chi)
+        powers = concatenate((self._powers, [self._powers[-1] + diff(self._powers)[0]]))
+
+        self._n_photons = abs(10 ** (powers / 10) * self._k / self._chi)
         plt.pcolormesh(self._n_photons, self._frequencies/1e9, abs(self._s_data - self._s_data[0,0]).T)
-        plt.plot(self._n_photons, self._q_freqs / 1e9, "r.")
-        plt.plot(self._n_photons, self._exponent(self._powers, self._k, self._f_max), "orange")
+        plt.plot(self._n_photons[:-1], self._q_freqs / 1e9, "r.")
+        plt.plot(self._n_photons[:-1], self._exponent(self._powers, self._k, self._f_max), "orange")
         plt.xlabel(r"Shift [$\chi$ = %.2f MHz]" % (self._chi*1e3))
         plt.ylabel("Frequency [GHz]")
-        # plt.xscale("log")
+        plt.xscale("log")
         plt.title("AC-Stark calibration")
 
     def _exponent(self, power, k, f_max):
         return 10 ** (power / 10) * k + f_max
 
     def _lorentzian_peak(self, frequency, amplitude, offset, res_frequency, width):
-        return amplitude * (0.5 * width) ** 2 / ((frequency - res_frequency) ** 2 + (0.5 * width) ** 2) + offset
+        return amplitude / (((frequency - res_frequency)/0.5 * width) ** 2 + 1) + offset
 

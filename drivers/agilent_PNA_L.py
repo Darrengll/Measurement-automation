@@ -21,7 +21,6 @@
 
 from drivers.instrument import Instrument
 import pyvisa as visa
-import types
 import logging
 from time import sleep
 import numpy as np
@@ -100,11 +99,6 @@ class Agilent_PNA_L(Instrument):
             minval=0, maxval=20e9,
             units='Hz', tags=['sweep'])
 
-        self.add_parameter('CWfreq', type=float,
-            flags=Instrument.FLAG_GETSET,
-            minval=300e3, maxval=20e9,
-            units='Hz', tags=['sweep'])
-
         self.add_parameter('span', type=float,
             flags=Instrument.FLAG_GETSET,
             minval=0, maxval=20e9,
@@ -112,7 +106,7 @@ class Agilent_PNA_L(Instrument):
 
         self.add_parameter('power', type=float,
             flags=Instrument.FLAG_GETSET,
-            minval=-90, maxval=12,
+            minval=-90, maxval=15,
             units='dBm', tags=['sweep'])
 
         self.add_parameter('zerospan', type=bool,
@@ -150,7 +144,7 @@ class Agilent_PNA_L(Instrument):
                         # lines of code there is no trace selected after self.select_default_trace()
                         # and self.get_all seem do interrupt the program with timeout exception thrown by low-level visa
                         # GPIB drivers. The reason is that PNA-L doesn't have any number of points in sweep (get_all start
-                        # by quering number of points in current sweep), because there is no traces defined, hence there
+                        # by quering number of points in bias sweep), because there is no traces defined, hence there
                         # is no number of points parameter available to read
         # self.select_default_trace()
 
@@ -175,14 +169,6 @@ class Agilent_PNA_L(Instrument):
         self.add_function('autoscale_all')
         self.add_function('set_cw_time')
 
-        #self.add_function('avg_clear')
-        #self.add_function('avg_status')
-
-        #self._oldspan = self.get_span()
-        #self._oldnop = self.get_nop()
-        #if self._oldspan==0.002:
-        #  self.set_zerospan(True)
-
         self.get_all()
 
     def get_all(self):
@@ -198,11 +184,7 @@ class Agilent_PNA_L(Instrument):
         self.get_averages()
         self.get_frequencies()
         self.get_channel_index()
-        #self.get_zerospan()
 
-    ###
-    #Communication with device
-    ###
 
     def init(self):
         if self._zerospan:
@@ -410,16 +392,16 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : setting start freq to %s Hz' % start)
         self._visainstrument.write('SENS%i:FREQ:STAR %f' % (self._ci,start))
         self._start = start
-        self.get_centerfreq();
-        self.get_stopfreq();
-        self.get_span();
+        self.get_centerfreq()
+        self.get_stopfreq()
+        self.get_span()
 
         self.logger.debug(__name__ + ' : setting stop freq to %s Hz' % stop)
         self._visainstrument.write('SENS%i:FREQ:STOP %f' % (self._ci,stop))
         self._stop = stop
-        self.get_startfreq();
-        self.get_centerfreq();
-        self.get_span();
+        self.get_startfreq()
+        self.get_centerfreq()
+        self.get_span()
 
 
     def get_parameters(self):
@@ -427,12 +409,12 @@ class Agilent_PNA_L(Instrument):
         Returns a dictionary containing bandwidth, nop, power, averages and
         freq_limits currently used by the VNA
         """
-        return {"bandwidth":self.get_bandwidth(),
+        return {"bandwidth": self.get_bandwidth(),
                   "nop":self.get_nop(),
-                  "sweep_type":self.get_sweep_type(),
-                  "power":self.get_power(),
-                  "averages":self.get_averages(),
-                  "freq_limits":self.get_freq_limits()}
+                  "sweep_type": self.get_sweep_type(),
+                  "power": self.get_power(),
+                  "averages": self.get_averages(),
+                  "freq_limits": self.get_freq_limits()}
 
     def set_parameters(self, parameters_dict):
         """
@@ -454,7 +436,7 @@ class Agilent_PNA_L(Instrument):
         if "freq_limits" in parameters_dict.keys():
             try:
                 if (parameters_dict["sweep_type"] == "CW"):
-                    self.do_set_CWfreq(np.mean(parameters_dict["freq_limits"]))
+                    self.set_cw_time(np.mean(parameters_dict["freq_limits"]))
                 else:
                     self.set_freq_limits(*parameters_dict["freq_limits"])
             except:
@@ -478,21 +460,6 @@ class Agilent_PNA_L(Instrument):
             self.set_bef(parameters_dict["bef"])
         if "trig_dur" in parameters_dict.keys():
             self.set_trig_dur(parameters_dict["trig_dur"])
-
-    def do_set_CWfreq(self,freq):
-        """
-        Set CW frequency valid if sweepind in CW mode.
-        """
-
-        self.logger.debug(__name__ + ' : set CW frequency')
-        self._visainstrument.write("SENS%i:FOM:RANG:FREQ:CW %.6f" %(self._ci,freq))
-
-    def do_get_CWfreq(self):
-        """
-        Asking for CW freq
-        """
-        self.logger.debug(__name__ + ' : getting CW freq')
-        return float(self._visainstrument.query('SENS%i:FOM:RANG:FREQ:CW?' % (self._ci)))
 
     def get_sweep_time(self):
         """
@@ -520,7 +487,7 @@ class Agilent_PNA_L(Instrument):
         self.logger.debug(__name__ + ' : setting Number of Points to %s ' % (nop))
         self._visainstrument.write(':SENS%i:SWE:POIN %i' %(self._ci,nop))
         self._nop = nop
-        self.get_frequencies() #Update List of frequency points
+        self.get_frequencies() #Update List of if_freq points
 
     def do_get_nop(self):
         """
@@ -650,7 +617,7 @@ class Agilent_PNA_L(Instrument):
 
     def do_set_centerfreq(self,cf):
         """
-        Set the center frequency
+        Set the center if_freq
 
         Input:
             cf (float) :Center Frequency in Hz
@@ -658,7 +625,7 @@ class Agilent_PNA_L(Instrument):
         Output:
             None
         """
-        self.logger.debug(__name__ + ' : setting center frequency to %s' % cf)
+        self.logger.debug(__name__ + ' : setting center if_freq to %s' % cf)
         self._visainstrument.write('SENS%i:FREQ:CENT %f' % (self._ci,cf))
         self.get_startfreq();
         self.get_stopfreq();
@@ -666,7 +633,7 @@ class Agilent_PNA_L(Instrument):
 
     def do_get_centerfreq(self):
         """
-        Get the center frequency
+        Get the center if_freq
 
         Input:
             None
@@ -674,7 +641,7 @@ class Agilent_PNA_L(Instrument):
         Output:
             cf (float) :Center Frequency in Hz
         """
-        self.logger.debug(__name__ + ' : getting center frequency')
+        self.logger.debug(__name__ + ' : getting center if_freq')
         return float(self._visainstrument.query('SENS%i:FREQ:CENT?' % (self._ci)))
 
     def do_set_span(self,span):
@@ -702,7 +669,7 @@ class Agilent_PNA_L(Instrument):
         Output:
             span (float) : Span in Hz
         """
-        #self.logger.debug(__name__ + ' : getting center frequency')
+        #self.logger.debug(__name__ + ' : getting center if_freq')
         span = self._visainstrument.query(
             'SENS%i:FREQ:SPAN?' % (self._ci))  # float( self.query('SENS1:FREQ:SPAN?'))
         return span
@@ -724,7 +691,7 @@ class Agilent_PNA_L(Instrument):
 
     def do_set_startfreq(self,val):
         """
-        Set Start frequency
+        Set Start if_freq
 
         Input:
             span (float) : Frequency in Hz
@@ -741,7 +708,7 @@ class Agilent_PNA_L(Instrument):
 
     def do_get_startfreq(self):
         """
-        Get Start frequency
+        Get Start if_freq
 
         Input:
             None
@@ -749,13 +716,13 @@ class Agilent_PNA_L(Instrument):
         Output:
             span (float) : Start Frequency in Hz
         """
-        self.logger.debug(__name__ + ' : getting start frequency')
+        self.logger.debug(__name__ + ' : getting start if_freq')
         self._start = float(self._visainstrument.query('SENS%i:FREQ:STAR?' % (self._ci)))
         return  self._start
 
     def do_set_stopfreq(self,val):
         """
-        Set STop frequency
+        Set STop if_freq
 
         Input:
             val (float) : Stop Frequency in Hz
@@ -772,7 +739,7 @@ class Agilent_PNA_L(Instrument):
 
     def do_get_stopfreq(self):
         """
-        Get Stop frequency
+        Get Stop if_freq
 
         Input:
             None
@@ -780,7 +747,7 @@ class Agilent_PNA_L(Instrument):
         Output:
             val (float) : Start Frequency in Hz
         """
-        self.logger.debug(__name__ + ' : getting stop frequency')
+        self.logger.debug(__name__ + ' : getting stop if_freq')
         self._stop = float(self._visainstrument.query('SENS%i:FREQ:STOP?' % (self._ci)))
         return  self._stop
 
@@ -1048,3 +1015,15 @@ class Agilent_PNA_L(Instrument):
             self.write(f"SENSe{self._ci}:SWEep:TIME MAX")
         else:
             self.write(f"SENSe{self._ci}:SWEep:TIME {sweep_time:.0f}ms")
+
+    def set_frequency(self, frequency):
+        """
+        Method to use the vna as a local oscillator (microwave source).
+        First set the CW mode with the set_cw_frewquency
+        Parameters
+        ----------
+        frequency: float, Hz
+        """
+        self.do_set_centerfreq(frequency)
+        self.query("*OPC?")
+

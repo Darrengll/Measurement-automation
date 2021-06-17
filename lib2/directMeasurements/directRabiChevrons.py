@@ -24,16 +24,16 @@ class DirectRabiChevrons(DirectRabiBase):
     """
     Class measures dependence of the averaged voltage
     response trace of the qubit radiation. Qubit is embedded in line and
-    excited by applying pulse with carrier frequency close to qubit 0-1
-    frequency and some duration.
+    excited by applying pulse with carrier if_freq close to qubit 0-1
+    if_freq and some duration.
 
     Qubit assumed directly coupled with CPW line.
 
-    Only fourier component of trace with frequency corresponding to qubit
-    frequency is extracted from trace and saved.
+    Only fourier component of trace with if_freq corresponding to qubit
+    if_freq is extracted from trace and saved.
 
     Rabi Chevrons is dependence of aforementioned fourier component on pulse
-    duration and carrier frequency.
+    duration and carrier if_freq.
     """
 
     def __init__(self, name, sample_name, plot_update_interval=1,
@@ -57,12 +57,12 @@ class DirectRabiChevrons(DirectRabiBase):
             q_lo=q_lo, q_iqawg=q_iqawg, dig=dig, save_traces=save_traces
         )
 
-        # exctracted as target sideband frequency of IQAWG's calibration
+        # exctracted as target sideband if_freq of IQAWG's calibration
         self._qubit_frequency = None
-        # IF frequency where frequency shift is counted from
+        # IF if_freq where if_freq shift is counted from
         self._central_if_freq = None
-        # downconvertion frequency should be changed according to IF
-        # frequency change in order to exctract RF trace at qubit frequency
+        # downconvertion if_freq should be changed according to IF
+        # if_freq change in order to exctract RF trace at qubit if_freq
         # no matter the freq_shift value
         self._downconv_freq = None
 
@@ -77,12 +77,12 @@ class DirectRabiChevrons(DirectRabiBase):
                              dig_params=[]):
 
         upconv_cal = q_iqawg_params[0]["calibration"]
-        # if_frequency will be changed during frequency sweep, so we need
+        # if_frequency will be changed during if_freq sweep, so we need
         # to force initial calibration structure to remain unchanged
         q_iqawg_params[0]["calibration"] = copy.deepcopy(upconv_cal)
 
-        # make quick access to qubit frequency and
-        # initial intermediate frequency
+        # make quick access to qubit if_freq and
+        # initial intermediate if_freq
         self._qubit_frequency = upconv_cal._sideband_to_maintain_freq
         self._central_if_freq = upconv_cal._if_frequency
         self._upconv_sideband_calib = upconv_cal._sideband_to_maintain
@@ -107,14 +107,14 @@ class DirectRabiChevrons(DirectRabiBase):
         excitation_durations : np.ndarray
             excitation pulse durations in 'ns'
         frequency_shifts : np.ndarray
-            excitation pulse carrier frequency shift
+            excitation pulse carrier if_freq shift
 
         Returns
         -------
 
         """
         # order of arguments is important
-        # Order below sweeps frequency first, then changes duration
+        # Order below sweeps if_freq first, then changes duration
         # so we put 'self._output_pulse_sequence()' call into the
         # function that sets excitation duration
         # (See 'self._set_freq_shift' below)
@@ -159,5 +159,5 @@ class DirectRabiChevronsResult(VNATimeResolvedDispersiveMeasurement2DResult):
     def _annotate_axes(self, axes):
         axes[0].set_ylabel("Excitation duration [ns]")
         axes[-2].set_ylabel("Excitation duration [ns]")
-        axes[-1].set_xlabel("Excitation frequency [GHz]")
-        axes[-2].set_xlabel("Excitation frequency [GHz]")
+        axes[-1].set_xlabel("Excitation if_freq [GHz]")
+        axes[-2].set_xlabel("Excitation if_freq [GHz]")

@@ -1,0 +1,4 @@
+
+class LogName:
+
+    NAME = "default"

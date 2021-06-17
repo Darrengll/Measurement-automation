@@ -41,11 +41,11 @@ class CrosstalksCalibrationBase(Measurement):
 
         if detect_resonator:
             self._mw_src[0].set_output_state("OFF")
-            msg = "Detecting a resonator within provided frequency range of the VNA %s \
+            msg = "Detecting a resonator within provided if_freq range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
             print(msg, flush=True)
             res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters, plot=True)
-            print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
+            print("Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % (
                 res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
             vna_parameters["freq_limits"] = (res_freq, res_freq)
             self._measurement_result.get_context() \
@@ -77,8 +77,8 @@ class CrosstalksCalibrationBase(Measurement):
             self._vna[0].set_power(vna_parameters["res_find_power"])
         else:
             self._vna[0].set_power(vna_parameters["power"])
-        if "res_find_nop" in vna_parameters.keys():
-            self._vna[0].set_nop(vna_parameters["res_find_nop"])
+        if "_res_find_nop" in vna_parameters.keys():
+            self._vna[0].set_nop(vna_parameters["_res_find_nop"])
         else:
             self._vna[0].set_nop(vna_parameters["nop"])
         self._vna[0].set_bandwidth(vna_parameters["bandwidth"] * self._bandwidth_factor)

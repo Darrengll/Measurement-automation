@@ -55,9 +55,9 @@ vna.set_nop = dg.set_nop
 def test_loading_pars_to_devices():
 
     equipment = {"vna": [vna], "q_lo":[q_lo, q_lo], "q_awg": [q_awg], \
-     "ro_awg": [ro_awg], "q_z_awg": [q_z_awg], "mw_src": [mw_src], "current_src": [cur_src]}
+     "ro_awg": [ro_awg], "q_z_awg": [q_z_awg], "mw_src": [mw_src], "bias_src": [cur_src]}
     meas = Measurement("test_delete", "test", {"vna":[vna], "q_lo":[q_lo], "q_awg":[q_awg],\
-                         "ro_awg":[ro_awg], "q_z_awg":[q_z_awg], "mw_src":[mw_src], "current_src": [cur_src]})
+                         "ro_awg":[ro_awg], "q_z_awg":[q_z_awg], "mw_src":[mw_src], "bias_src": [cur_src]})
     vna_parameters = {"bandwidth": 10, "freq_limits": [6e9] * 2, "nop": 10, "averages": 1}
     sequence_parameters = {"awg_trigger_reaction_delay": 0, "readout_duration": 3000,
                            "repetition_period": 30000, "half_pi_pulse_duration": 100 / 2}
@@ -68,7 +68,7 @@ def test_loading_pars_to_devices():
     q_z_awg_params = {"calibration": MagicMock()}
     q_freq = 8.7e9
     currents = linspace(0,0.5, 20)
-    q_lo_params = {'power': -10, 'frequency': q_freq + 100e6}
+    q_lo_params = {'power': -10, 'if_freq': q_freq + 100e6}
     dev_params = {'vna': [vna_parameters],
                   'ro_awg': [ro_awg_params],
                   'q_awg': [q_awg_params],

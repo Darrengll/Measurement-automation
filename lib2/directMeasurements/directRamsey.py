@@ -47,7 +47,7 @@ class DirectRamseyBase(DigitizerTimeResolvedDirectMeasurement):
         devs_aliases_map = {"q_lo": q_lo,
                             "q_iqawg": q_iqawg,
                             "dig": dig,
-                            "src": src}
+                            "insweep_trg_subsys": src}
 
         super().__init__(name, sample_name, devs_aliases_map,
                          plot_update_interval, save_traces)
@@ -213,7 +213,7 @@ class DirectRamseyFromDelay(DirectRamseyBase):
         devs_aliases_map = {"q_lo": q_lo,
                             "q_iqawg": q_iqawg,
                             "dig": dig,
-                            "src": src}
+                            "insweep_trg_subsys": src}
         super().__init__(name, sample_name, plot_update_interval,
                          **devs_aliases_map, save_traces=save_traces)
         self._digital_filtering = None
@@ -384,7 +384,7 @@ class RamseyFromDelayResult(VNATimeResolvedDispersiveMeasurement1DResult):
 class DirectRamsey2D(DirectRamseyBase):
     """
         This class measures the oscillations after the driving pulse and
-        sweeps either pulse's frequency or the current. Use it to measure
+        sweeps either pulse's if_freq or the bias. Use it to measure
         two-dimensional plots with Ramsey chevrons.
     """
 
@@ -396,26 +396,26 @@ class DirectRamsey2D(DirectRamseyBase):
 
     def sweep_lo_shift(self, shifts, ro_cals, downconv_cals, pi_durations):
         """
-        This method sets up the pulse's driving frequency as the sweep
-        parameter. Alternatively you can sweep the current with
+        This method sets up the pulse's driving if_freq as the sweep
+        parameter. Alternatively you can sweep the bias with
         sweep_current method.
 
         Parameters
         ----------
         shifts: np.array
-            A list of frequncy shifts from the major LO frequency.
+            A list of frequncy shifts from the major LO if_freq.
         ro_cals: list
-            A list of up-conversion IQ mixer's calibrations. The frequency
+            A list of up-conversion IQ mixer's calibrations. The if_freq
             shift must be already included into every calibration.
         downconv_cals: list
-            A list of down-conversion IQ mixer's calibrations. The frequency
+            A list of down-conversion IQ mixer's calibrations. The if_freq
             shift and the delay through the fridge must be already included
             into every calibration.
         pi_durations: list
             A list of pi-pulse durations, which are used to calculate
             pi/2-pulse durations. The pi pulse duration depends on
-            the driving frequency. Nevertheless, you need not measure
-            pi-pulse duration for every frequency, because the oscillations
+            the driving if_freq. Nevertheless, you need not measure
+            pi-pulse duration for every if_freq, because the oscillations
             are still visible and give a good result even for a non-perfect
             pi/2-pulse, although have a lower amplitude. Supplying a list of
             same pi-pulse durations will result in white spots on the plot.
@@ -436,16 +436,16 @@ class DirectRamsey2D(DirectRamseyBase):
             1 / self._dig[0].get_sample_rate() * 1e9
         )  # ns
         meas_data = self._measurement_result.get_data()
-        # frequency is already set in call of 'super()' class method
+        # if_freq is already set in call of 'super()' class method
         meas_data["Delay, ns"] = delays
         self._measurement_result.set_data(meas_data)
 
     def sweep_current(self, currents):
         """
-        This method sets up the current which shifts the energy of the
-        qubit. This method doesn't change any frequency in the measurement
+        This method sets up the bias which shifts the energy of the
+        qubit. This method doesn't change any if_freq in the measurement
         equipment, easier to use and provides cleaner plots.
-        Alternatively you can sweep the driving frequency with sweep_current
+        Alternatively you can sweep the driving if_freq with sweep_current
         method.
 
         Parameters

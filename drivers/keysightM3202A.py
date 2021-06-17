@@ -8,8 +8,8 @@ https://literature.cdn.keysight.com/litweb/pdf/M3201-90001.pdf?id=2787170
 user's guide for Keysight SD1 version 3.x
 https://literature.cdn.keysight.com/litweb/pdf/M3XXX-90003.pdf?id=3120777
 """
-
-from drivers.instrument import Instrument
+import numpy as np
+from scipy.interpolate import interp1d
 
 from drivers.keysightSD1 import SD_AOU, SD_Wave
 from drivers.keysightSD1 import SD_TriggerModes, SD_TriggerExternalSources, \
@@ -18,34 +18,43 @@ from drivers.keysightSD1 import SD_WaveformTypes, SD_Waveshapes, \
     SD_MarkerModes, SD_SyncModes, SD_Error
 from drivers.keysightSD1 import SD_ModulationTypes, SD_Compatibility
 
-import numpy as np
-from scipy.interpolate import interp1d
 
-
-class KeysightError(Exception):
-    pass
-
-
-class KeysightM3202A(Instrument):
+class KeysightM3202A:
     MAX_OUTPUT_VOLTAGE = 1.5  # V
+    VOLTAGE_RESOLUTION_BITS = 12
+    MIN_SAMPLE_PERIOD = 1  # ns
 
-    def __init__(self, name, slot, chassis=0):
+    def __init__(self, awg_alias, slot,
+                 chassis=0, allow_unmatched_waveforms=True):
         '''
 
         Parameters
         ----------
-        name : redundant parameter for `Instrument` class
-        slot
-        chassis
+        slot: int
+            Slot where the m3202 is physically installed, written on the chassis or
+            can be found in the Windows Device Manager
+        chassis: int
+            If several chassis are mounted, will be used to specify in which one the
+            AWG is installed
+        allow_unmatched_waveforms: bool
+            If true, the waveforms on different channels will be allowed to have different durations.
+            This may be not safe when we share the AWG channel pairs between two virtual IQ devices since
+            it may lead to leftover sequences and thus m3202-state-dependent behaviours of the virtual
+            IQ devices (e.g. we can't set the repetition rate for IQAWG(ch1, ch2) higher than already set in
+            IQAWG(ch3,ch4) because its trailing sequence will remain too long, and will have to manually clear ch3,ch4
+            to work around this, see also output_arbitraty_waveform())
+            Therefore, as for the Tektronix5014c device which does not allow different-duration waveforms, setting
+            this parameter to False will ensure that all waveforms that do not match the most recently loaded waveform
+            are deleted. This way the user will always get what he requests though will have to make sure he loads
+            the waveforms of same duration. Fortunately, this is the case for all PulseSequences that we usually use and
+            for synchronized channels, in general.
         '''
-        super().__init__(name, tags=['physical'])
-        self.mask = 0
+        self.alias = awg_alias
         self.module = SD_AOU()
         self.module_id = self.module.openWithSlotCompatibility(
             "M3202A", chassis, slot, compatibility=SD_Compatibility.LEGACY)
         self._handle_error(self.module_id)
 
-        # Shamil a.k.a. 'BATYA' code here
         self.waveforms = [None] * 4
         # store `waveform_number` parameter, see manual for details
         self.waveform_ids = [-1] * 4
@@ -57,25 +66,27 @@ class KeysightM3202A(Instrument):
         self.deviation_gains = [0.0] * 4
         self.trigger_modes = [SD_TriggerModes.AUTOTRIG] * 4
         # from front panel, can be also from PXI_n triggering bus
-        self.trigger_ext_sources = [SD_TriggerExternalSources.TRIGGER_EXTERN] * 4
+        self.trigger_ext_sources = [
+                                       SD_TriggerExternalSources.TRIGGER_EXTERN] * 4
         # rising edge by default
         self.trigger_behaviours = [SD_TriggerBehaviors.TRIGGER_RISE] * 4
         self.trigger_output = True
-        # default and only option at MIPT is synchronizing with PXI 10 MHz
-        # clock
+        # see self.trigger_output_config()
         self.trigger_sync_mode = SD_SyncModes.SYNC_CLK10
-        # as written in manual at p.31 in case of CLK10 trigger sync
-        # trigger can be outputted only at the 10 MHz PXI clock cycles
-        self.trigger_clock_period = 100  # ns
-        self.synchronized_channels = []
-        self.sync_mode = SD_SyncModes.SYNC_CLK10  # 0 - PXI 10 MHz ; 1 - CLKSYS 1 GHz
 
+        self.sync_mode = 1  # 0 is for CLKsys (1 GHz)
+                            # 1 is for the 10  MHz PXI clock
+
+        self.synchronized_channels = None
         self._source_channels_group = []  # channels that are the source of the waveforms for dependent group
-        self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms from _source_channels_group
+        self._dependent_channels_group = []  # channels which waveforms repeats corresponding waveforms
+        # from _source_channels_group
         self._update_dependent_on_start = False
 
-        self._prescaler = 0
+        self._prescaler = 0  # from 0 to 4095 p.23 user manual
         self.trigger_length = 100  # ns
+
+        self._allow_unmatched_waveforms = allow_unmatched_waveforms
 
         self.reset()  # clear internal memory and AWG queues according to p.67 of the user guide
 
@@ -85,26 +96,44 @@ class KeysightM3202A(Instrument):
             self.module.close()
             del self.module
 
+    def get_voltage_range(self):
+        return [-1.5, 1.5]  # see specification
+
     def _handle_error(self, ret_val):
         if ret_val < 0:
             print(ret_val, SD_Error.getErrorMessage(ret_val))
             raise Exception
 
-    def reset(self):
-        # clear internal memory and AWG queues
-        self._handle_error(
-            self.module.waveformFlush()
-        )
+    def reset(self, channels=None):
+        if channels is None:
+            channels = [1, 2, 3, 4]
 
-        # stop all modulations
-        for channel in [1, 2, 3, 4]:
+        for channel in channels:
+            # stop modulations
             self.stop_modulation(channel)
+            # clear queues, theres no command to clear memory for a specific channel
+            # however, leaving internal memory as is
+            # is not a problem: it will inevitably be overwritten by following
+            # requests to the AWG via module.reloadWaveform...)
+            ret = self.module.AWGflush(channel - 1)
+            self._handle_error(ret)
+
+            # clearing software variables
+            self.waveforms[channel - 1] = None
+            self.waveform_ids[channel - 1] = None
+            self.repetition_frequencies[channel - 1] = None
+            self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_AWG  # default
+
+        if channels == [1, 2, 3, 4]:
+            # clear ALL: internal memory and AWG queues
+            ret = self.module.waveformFlush()
+            self._handle_error(ret)
 
     def synchronize_channels(self, *channels):
         self.synchronized_channels = channels
 
     def unsynchronize_channels(self):
-        self.synchronized_channels = []
+        self.synchronized_channels = None
 
     def set_trigger(self, trigger_string: str = "CONT", channel: int = -1):
         """
@@ -136,10 +165,10 @@ class KeysightM3202A(Instrument):
                 self.trigger_modes[channel - 1] = SD_TriggerModes.AUTOTRIG
 
     def trigger_output_config(self, trig_mode="ON", channel=-1,
-                              trig_length=1000):
+                              trig_length=100, sync = "PXICLK10"):
         """
-            Manipulates the output trigger.
-            If channel is not supplied, trigger output is set for the first channel
+        Manipulates the output trigger.
+        If channel is not supplied, trigger output is set for the first channel
         from synchronized channel group.
             To set synchronized channels, use self.synchronize_channels(...) method. If
         self.synchronized_channels were not set, then the default value is [] and no
@@ -156,7 +185,22 @@ class KeysightM3202A(Instrument):
         trig_length : int
             trigger duration in ns
             trigger duration resolution is 10 ns
+        sync: str
+            Which clock is used to sample the trigger, "PXICLK10" for the
+            PXI clock or "CLK100" for the internal clock, manual at p.31, p.126
+            For the PXICLK10 waveform durations must be multiples of 100 ns
+            ohterwise 100 ns jitter will occur. For CLK100, somehow,
+            there is no jitter for arbitrary durations (tested 1.5 MHz rep
+            rate with a period of 666.67 ns)
         """
+
+        if sync == "PXICLK10":
+            self.trigger_sync_mode = SD_SyncModes.SYNC_CLK10
+        elif sync == "CLK100":
+            self.trigger_sync_mode = SD_SyncModes.SYNC_NONE
+        else:
+            raise ValueError(f'Sync mode {sync} invalid. Can be "PXICLK10" '
+                             f'or "CLK100"')
 
         if trig_mode == "ON":
             self.trigger_output = True
@@ -164,7 +208,7 @@ class KeysightM3202A(Instrument):
         elif trig_mode == "OFF":
             self.trigger_output = False
         else:
-            raise NotImplementedError(
+            raise ValueError(
                 "trig_mode argument can be only 'ON' or 'OFF' ")
 
         # if channel is equal to -1 or is stored in
@@ -187,7 +231,7 @@ class KeysightM3202A(Instrument):
                     chan - 1, SD_MarkerModes.EVERY_CYCLE,
                     trgPXImask, trgIOmask, 1,
                     # trigger sync with internal CLKsys by default
-                    syncMode=self.sync_mode,
+                    syncMode=self.trigger_sync_mode,
                     # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                     length=int(trig_length / 10),
                     delay=0
@@ -206,15 +250,16 @@ class KeysightM3202A(Instrument):
                 self.module.AWGqueueMarkerConfig(chan - 1,
                                                  SD_MarkerModes.DISABLED,
                                                  trgPXImask, trgIOmask, 1,
-                                                 syncMode=self.sync_mode,
-                                                 # trigger synch with internal CLKsys
+                                                 syncMode=SD_SyncModes.SYNC_NONE,
+                                                 # trigger sync with internal 100
+                                                 # MHz clock for the 'off'
+                                                 # state
                                                  length=100,
                                                  # trigger length (100a.u. x 10ns => 1000 ns trigger length)
                                                  delay=0)
                 self.module.triggerIOconfig(SD_TriggerDirections.AOU_TRG_IN)
 
-    def output_arbitrary_waveform(self, waveform, frequency, channel,
-                                  asynchronous=False):
+    def output_arbitrary_waveform(self, waveform, frequency, channel):
         """
         Prepare and output an arbitrary waveform repeated at some repetition_rate
 
@@ -222,8 +267,8 @@ class KeysightM3202A(Instrument):
         -----------
         waveform: array
             ADC levels, in Volts. max( abs(waveform) ) < 1.5 V
-        frequency: float, Hz
-            frequency at which the waveform will be repeated
+        if_freq: float, Hz
+            if_freq at which the waveform will be repeated
         channel: 1,2,3,4
             channel which will output the waveform
 
@@ -239,36 +284,59 @@ class KeysightM3202A(Instrument):
         NOTE_3: waveform's last point must coincide with the waveforms first point.
         Shamil: I assume there is no need to pass np.sin(2*np.pi*np.linspace(0,1,N_pts+1)) here
         because this array basically includes the boundary point twice, which values are already
-        assumed to be equal to each other when specifying waveform frequency.
+        assumed to be equal to each other when specifying waveform if_freq.
         It is rather more rational to  pass np.sin(2*np.pi*np.linspace(0,1,N_pts+1)[:-1])
         Also I'd prefer to pass function explicitly as lambda or something like that
         and only then generate points inside this class method. 25.04.2019
 
         NOTE_4: I suggest we use embeded function generators with amplitude modulation
         in our AWG solution, rather than generating sinus from scratch and using DAC only.
-        This is necessary in order to improve frequency accuracy and stability.
+        This is necessary in order to improve if_freq accuracy and stability.
         """
         # check if pulse sequence length meets the requirement imposed by a
         # trigger sampling
-        if self.trigger_sync_mode is SD_SyncModes.SYNC_CLK10:
-            waveform_duration = int(len(waveform) / self.get_sample_rate()
-                                    * 1e9)  # ns
+        waveform_duration = np.round(1 / frequency * 1e9)
+        if self.trigger_sync_mode == SD_SyncModes.SYNC_CLK10:
             if waveform_duration % 100 != 0:
-                raise KeysightError(f"Duration of the waveform must be a "
-                                    f"multiple of 100 ns, because the "
-                                    f"current trigger is synchronized with "
-                                    f"PXI clock and therefore sampled with "
-                                    f"10 MHz. Not following this requirement "
-                                    f"leads to uncertainty of the trigger "
-                                    f"pulse position relative to the waveform")
+                raise ValueError("Duration of the waveform must be a "
+                  "multiple of 100 ns, because the "
+                  "bias trigger is synchronized with "
+                  "PXI clock and therefore sampled with "
+                  "10 MHz. Not following this requirement "
+                  "leads to uncertainty of the trigger "
+                  "pulse position relative to the waveform")
 
         # stopping AWG so the changes will take place according to the documentation
         # (not neccessary but a good practice)
         self.stop_AWG(channel)
+        self.stop_modulation(channel)
+
+        def clear_unmatched_waveforms():
+            # Checks if other channels' waveforms have matching length,
+            # otherwise clear them (similar to Tektronix implementation)
+            # This helps avoiding situations when 2 channels are inadvertently still
+            # outputting very long sequences while other 2 are short (e.g. switching from
+            # time-resolved measurements to single-tone spectroscopy when only 2 channels are
+            # controlled by the VNA and set to continuous IF sine and the other 2 remain
+            # in the pulsed mode -- STS class doesn't control them)
+            # Alternative solution is to explicitly control every device in every class,
+            # however I think we should make the low-level drivers smart enough to avoid that
+            to_clear = []
+            for idx, existing_freq in enumerate(self.repetition_frequencies):
+                if idx != channel - 1:
+                    if existing_freq is not None:
+                        if (existing_freq - frequency) != 0:
+                            to_clear.append(idx + 1)
+            self.reset(to_clear)
+
+        if not self._allow_unmatched_waveforms:
+            clear_unmatched_waveforms()
+
         # loading a waveform to internal RAM and putting waveform into the channel's AWG queue
         self.load_waveform_to_channel(waveform, frequency, channel)
         # starting operation
         self.start_AWG(channel)
+        # self.reset_phase()
 
     def output_continuous_wave_old(self, frequency, amplitude, phase, offset,
                                    waveform_resolution,
@@ -309,9 +377,10 @@ class KeysightM3202A(Instrument):
 
         """
         self.stop_AWG(channel)  # stop output from this channel
-        self.stop_modulation(
-            channel)  # disable all modulation types for this channel
-        # setup embedded function generator to produce sine wave with parameters
+        # disable all modulation types for this channel
+        self.stop_modulation(channel)
+        # setup embedded function generator to produce
+        # sine wave with parameters
         self.setup_fg_sine(frequency, amplitude, phase, offset, channel)
 
         # output trigger has to be generated
@@ -321,12 +390,16 @@ class KeysightM3202A(Instrument):
                 np.around(trigger_sync_every * self.get_sample_rate() / 1e9)))
             self._load_array_into_AWG(arr, channel)
             self.setup_modulation_amp(channel, 0)
-            self.trigger_output_config("ON", channel,
-                                       trig_length=self.trigger_length)
+            self.trigger_output_config(
+                trig_mode="ON", channel=channel,
+                trig_length=self.trigger_length
+            )
 
-        # resetting phase for synchronization of multiple carrier signals from internal Function Generator
+        # resetting phase for synchronization of multiple carrier
+        # signals from internal Function Generator
         self.module.channelPhaseResetMultiple(
-            sum([1 << (chan - 1) for chan in self.synchronized_channels]))
+            sum([1 << (chan - 1) for chan in self.synchronized_channels])
+        )
         self.start_AWG(channel)
 
     def setup_fg_sine(self, frequency, amplitude, phase, offset, channel):
@@ -345,17 +418,34 @@ class KeysightM3202A(Instrument):
 
     def get_sample_rate(self):
         """
-        Returns : np.int
+        Returns
         -------
-            Return AWG output ports sampling frequency
+        sample_rate : int
+            Returns bias AWG's sample rate in Hz.
         """
         if self._prescaler == 0:
             fs = int(1e9)
         elif self._prescaler == 1:
             fs = int(2e8)
         elif self._prescaler > 1:
-            fs = int(100 // self._prescaler * 1e6)
+            fs = int(100 / self._prescaler * 1e6)
         return fs
+
+    def get_sample_period(self):
+        """
+        Returns
+        -------
+        sample_period : np.float
+            Sample period in nanoseconds
+        """
+        if self._prescaler == 0:
+            dt = 1  # ns
+        elif self._prescaler == 1:
+            dt = 5  # ns
+        elif self._prescaler > 1:
+            dt = 10 * self._prescaler  # ns
+
+        return dt
 
     def setup_amplitude_modulation(self, channel, waveform_id, array,
                                    deviationGain, prescaler):
@@ -384,6 +474,12 @@ class KeysightM3202A(Instrument):
         self._handle_error(ret)
 
     def stop_modulation(self, channel):
+        '''
+        Sets that channel out of any of the modulation modes (Amp, Freq or IQ)
+        and removes any phase and, most importantly, DC offset
+        :param channel:
+        :return:
+        '''
         self.deviation_gains[channel - 1] = 0
         self.module.modulationAmplitudeConfig(channel - 1,
                                               SD_ModulationTypes.AOU_MOD_OFF,
@@ -399,6 +495,12 @@ class KeysightM3202A(Instrument):
         self.waveshape_types[channel - 1] = SD_Waveshapes.AOU_AWG
         self.module.channelWaveShape(channel - 1,
                                      self.waveshape_types[channel - 1])
+        self.module.channelPhase(channel - 1, 0)
+        self.module.channelOffset(channel - 1, 0)
+        # not calling channelFrequency and channelAmplitude as
+        # the prescaler will control the sample rate
+        # and thus the repetition if_freq in non-modulated mode,
+        # and channelAmplitude will be always called there
 
     def change_amplitude_of_carrier_signal(self, amplitude, channel,
                                            ampl_coef=1):
@@ -428,46 +530,51 @@ class KeysightM3202A(Instrument):
                                               deviation_gain)
 
     def load_waveform_to_channel(self, waveform, frequency, channel):
-        if np.max(np.abs(waveform)) >= 1.5:
-            raise ValueError(
-                "trace maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
+        if np.max(np.abs(waveform)) > 1.5:
+            raise ValueError("Trace maximal amplitude is exceeding AWG range: (-1.5 ; 1.5) volts")
 
         # number of points
         if (frequency > 1e9):
-            raise ValueError("frequency is exceeding AWG sampling rate: 1 GHz")
+            raise ValueError("if_freq is exceeding AWG sampling rate: 1 GHz")
 
-        duration_initial = 1 / frequency * 1e9 if frequency != 0 else 10.0  # float
-        # interpolating input waveform to the next step
-        # that rescales waveform to fit frequency
-        interpolation_method = "cubic" if frequency != 0 else "linear"
-        old_x = np.linspace(0, duration_initial, len(waveform) + 1)
-        f_wave = interp1d(old_x, np.concatenate((waveform, [waveform[0]])),
-                          kind=interpolation_method)
+        duration_initial = 1 / frequency * 1e9 if frequency != 0 else 10.0  # float, ns
 
-        # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
-        # but to provide frequency accuracy, we are sampling from
-        # interval 1000 times wider then the original, and we are extending
-        # interpolation function domain using its periodicity
-        # duration = duration_initial*1e4 if duration_initial < 1e2 else 1e6  # here it is
+        if not np.allclose(duration_initial, 1/self.get_sample_rate() * 1e9 * len(waveform)):
+            # interpolating input waveform to the next step
+            # that rescales waveform to fit repetition frequency
+            interpolation_method = "cubic" if frequency != 0 else "linear"
+            old_x = np.linspace(0, duration_initial, len(waveform) + 1)
+            interpolating_function = interp1d(old_x, np.concatenate((waveform, [waveform[0]])),
+                              kind=interpolation_method)
 
-        duration = duration_initial
-        new_x = np.linspace(0, duration, int(
-            np.round(duration / self.get_sample_rate() * 1e9)), endpoint=False)
+            # in order to satisfy NOTE_1 we simply make 10 subsequent waveforms
+            # but to provide if_freq accuracy, we are sampling from
+            # interval 1000 times wider then the original, and we are extending
+            # interpolation function domain using its periodicity
+            # duration = duration_initial*1e4 if duration_initial < 1e2 else 1e6  # here it is
 
-        # converting domain values in the function domain
-        new_x_converted = np.remainder(new_x, duration_initial)
-        waveform_array = f_wave(
-            new_x_converted)  # obtaining new waveform walues
+            duration = duration_initial
+            new_x = np.linspace(0, duration, int(
+                np.round(duration / self.get_sample_rate() * 1e9)), endpoint=False)
 
-        normalization = np.max(np.abs(waveform_array))
+            # converting domain values in the function domain
+            new_x_converted = np.remainder(new_x, duration_initial)
+            waveform = interpolating_function(new_x_converted)  # obtaining new waveform values
+
+        normalization = np.max(np.abs(waveform))
 
         if self.waveshape_types[channel - 1] == SD_Waveshapes.AOU_AWG:
             self.output_voltages[channel - 1] = normalization
 
         # normalize waveform to (-1,1) interval
-        waveform_array /= normalization
+        if normalization != 0:
+            waveform /= normalization
+        else:
+            # all points are equal to zero
+            pass
+
         self.repetition_frequencies[channel - 1] = frequency
-        self._load_array_into_AWG(waveform_array, channel)
+        self._load_array_into_AWG(waveform, channel)
 
     def _load_array_into_AWG(self, waveform_array_normalized, channel):
         """
@@ -487,6 +594,19 @@ class KeysightM3202A(Instrument):
         # only float 16 is supported by AWG (it is actually 12 bit AWG), so
         # if you want to guess what is actually outputted by AWG
         # you should properly convert this to 12 bit numbers
+        reload = False
+        if self.waveform_ids[channel-1] is not None:
+            #  we have already loaded a waveform to the AWG
+            #  the API allows to reload a waveform using the same
+            #  memory space of the on-board RAM; however, the length
+            #  of the new waveform should be smaller than or equal to
+            #  the length of the old one; if that condition is satisfied,
+            #  we will call waveformReLoad. TODO: In the opposite case, ideally
+            #  a full memory flush has to be done and all waveforms reloaded for
+            #  all channels
+            if len(self.waveforms[channel-1]) >= len(waveform_array_normalized):
+                reload = True
+
         self.waveforms[channel - 1] = waveform_array_normalized
 
         # creating SD_Wave() object from keysight API
@@ -507,12 +627,16 @@ class KeysightM3202A(Instrument):
         self.module.AWGflush(channel - 1)
 
         # load waveform to board RAM
-        ret = self.module.waveformLoad(wave, waveform_number)
-        if (ret == SD_Error.INVALID_OBJECTID):
-            # probably, such wave_id already exists
+        if not reload:
+            ret = self.module.waveformLoad(wave, waveform_number)
+            if ret == SD_Error.INVALID_OBJECTID or ret == SD_Error.INVALID_OPERATION:
+                self._handle_error(ret)
+        else:
             ret = self.module.waveformReLoad(wave, waveform_number)
+            self._handle_error(ret)
 
-        self._handle_error(ret)
+        # clear channel queue
+        self.module.AWGflush(channel - 1)
 
         # put waveform as the first and only member of the
         # channel's AWG queue
@@ -542,16 +666,16 @@ class KeysightM3202A(Instrument):
         -------
 
         """
-        if (self._update_dependent_on_start):
+        if self._update_dependent_on_start:
             self._load_dependent_channels()
 
-        if ((not self.synchronized_channels) or (
-                channel not in self.synchronized_channels)):
+        if (not self.synchronized_channels) or \
+                (channel not in self.synchronized_channels):
             # if it is single channel
-            self.module.AWGqueueSyncMode(channel - 1, syncMode=self.sync_mode)
+            self.module.AWGqueueSyncMode(channel - 1, syncMode=self.trigger_sync_mode)
             ret = self.module.AWGstart(channel - 1)
             self._handle_error(ret)
-        elif (channel in self.synchronized_channels):
+        elif channel in self.synchronized_channels:
             # if channel belongs to one of the synchronized groups
             channels_mask = 0
             for chan in self.synchronized_channels:
@@ -561,8 +685,9 @@ class KeysightM3202A(Instrument):
             self._handle_error(ret)
         else:
             raise NotImplementedError(
-                "Check channel number conditions on argument provided: channel={}".format(
-                    channel))
+                "Check channel number conditions on argument"
+                " provided: channel={}".format(channel)
+            )
 
         return ret
 
@@ -622,15 +747,15 @@ class KeysightM3202A(Instrument):
                     self._dependent_channels_group)):
             if (self.waveforms[source_chan - 1] is not None):
                 self.repetition_frequencies[dependent_chan - 1] = \
-                self.repetition_frequencies[source_chan - 1]
+                    self.repetition_frequencies[source_chan - 1]
                 self.output_voltages[dependent_chan - 1] = \
-                self.output_voltages[source_chan - 1]
+                    self.output_voltages[source_chan - 1]
                 self._load_array_into_AWG(self.waveforms[source_chan - 1],
                                           dependent_chan)
                 # print(self.waveforms[source_chan-1]*self.output_voltages[source_chan-1],self.output_voltages[dependent_chan-1]*self.waveforms[source_chan-1])
 
     def get_prescaler(self):
-        self._prescaler
+        return self._prescaler
 
     def plot_waveforms(self, voltage_output=False):
         import matplotlib.pyplot as plt

@@ -5,7 +5,7 @@
 from lib2.digVNA import DigVNA
 dVNA = DigVNA("digitizer VNA", sample_name, lo=[mxg], iqawg=[iqawg], dig=[dig])
 
-q_lo_params = {"frequency":lo_freq}
+q_lo_params = {"if_freq":lo_freq}
 q_iqawg_params = {"calibration":ro_cal}
 
 bandwidth = 100e3  # Hz
@@ -31,7 +31,7 @@ dVNA_result.visualize()
 for amp in np.linspace(0.1,1,10):
     dVNA = DigVNA(f"digitizer VNA amp = {amp}", sample_name, lo=[mxg], iqawg=[iqawg], dig=[dig])
 
-    q_lo_params = {"frequency":lo_freq}
+    q_lo_params = {"if_freq":lo_freq}
     q_iqawg_params = {"calibration":ro_cal}
 
     bandwidth = 100e3  # Hz
@@ -78,7 +78,7 @@ class DigVNA(Measurement):
                  lo=[], iqawg=[], dig=[], save_traces=False):
         """
         name : str
-            name of current measurement
+            name of bias measurement
         sample_name : str
             name of measured sample
         comment: str
@@ -97,9 +97,9 @@ class DigVNA(Measurement):
         self._measurement_result = DigVNAResult(name, sample_name)
 
         ''' internal parameters '''
-        # range of frequency scan
+        # range of if_freq scan
         self._freqs_range: Tuple[float, float] = None
-        # number of points in frequency scan
+        # number of points in if_freq scan
         self._freqs_nop: int = None
         # frequencies that are scanned
         self._freqs: np.ndarray[float] = None
@@ -109,7 +109,7 @@ class DigVNA(Measurement):
         self._iqawg_amplitudes_calib: np.ndarray[float, float] = None
         # bandiwdth of the VNA being faked in Hz
         self._bandwidth: float = None
-        # index in 'fftshift'ed array of the IF frequency
+        # index in 'fftshift'ed array of the IF if_freq
         # this is set once and for all during call of 'set_fixed_parameters'
         self._sideband_freq_idx: float = None
 
@@ -176,21 +176,21 @@ class DigVNA(Measurement):
         if_freq = iqawg._calibration._if_frequency
         calibration_safe_zone = (center_freq - 2*if_freq, center_freq + 2*if_freq)
 
-        # if 'frequency' is in "safe calibration zone"
+        # if 'if_freq' is in "safe calibration zone"
         if (frequency < calibration_safe_zone[1]) and (frequency > calibration_safe_zone[0]):
             sideband = iqawg._calibration._sideband_to_maintain
             lo_freq = None
-            # determine what 'lo_freq' will correspond to the desired 'frequency'
+            # determine what 'lo_freq' will correspond to the desired 'if_freq'
             if sideband == "right":
                 lo_freq = frequency - if_freq
             else:  # calibration with left sideband
                 lo_freq = frequency + if_freq
-            # output desired frequency
+            # output desired if_freq
             self._lo[0].set_frequency(lo_freq)
             from time import sleep
             sleep(0.01)  # wait for microwave source to stabilize
-        else:  # 'frequency' is out of "safe calibration zone"
-            raise ValueError("frequency is out of range")
+        else:  # 'if_freq' is out of "safe calibration zone"
+            raise ValueError("if_freq is out of range")
 
 
     def _recording_iteration(self):

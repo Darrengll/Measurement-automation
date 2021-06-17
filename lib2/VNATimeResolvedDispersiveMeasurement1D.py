@@ -25,8 +25,6 @@ class VNATimeResolvedDispersiveMeasurement1D(VNATimeResolvedDispersiveMeasuremen
                 'q_awg': 0
                 'ro_awg'
         """
-        dev_params['vna'][0]["power"] = dev_params['ro_awg'][0]["calibration"] \
-            .get_radiation_parameters()["lo_power"]
 
         super().set_fixed_parameters(pulse_sequence_parameters,
                                      detect_resonator=detect_resonator,
@@ -181,7 +179,7 @@ class VNATimeResolvedDispersiveMeasurement1DResult( \
         return fig, axes, (None, None)
 
     def _prepare_data_for_plot(self, data):
-        return data[self._parameter_names[0]], data["data"]
+        return data[self._parameter_names[0]]/1e3, data["data"]
 
     def _plot(self, data):
         axes = self._axes

@@ -26,7 +26,7 @@ def qubit_fit_func(x, a, b, c):
 def fit_probe_qubit_sts(filename, plot=True):
     with open(filename, 'rb') as f:
         data = pickle.load(f)
-        currents = data['current, [A]']
+        currents = data['bias, [A]']
         freqs = data['Frequency [Hz]']
         S21 = data['data']
     frequencies = parse_probe_qubit_sts(freqs, S21)
@@ -41,7 +41,7 @@ def fit_probe_qubit_sts(filename, plot=True):
         plt.plot(currents, qubit_fit_func(currents, *popt))
         plt.margins(x=0)
         plt.xlabel("Current, A")
-        plt.ylabel("Qubit frequency, Hz")
+        plt.ylabel("Qubit if_freq, Hz")
         plt.show()
     return popt
 
@@ -49,7 +49,7 @@ def fit_probe_qubit_sts(filename, plot=True):
 def fit_sps_sts(filename, plot=True):
     with open(filename, 'rb') as f:
         data = pickle.load(f)
-        currents = data['current, [A]']
+        currents = data['bias, [A]']
         freqs = data['Frequency [Hz]']
         S21 = data['data']
     frequencies = parse_sps_sts(freqs, S21)
@@ -64,7 +64,7 @@ def fit_sps_sts(filename, plot=True):
         plt.plot(currents, qubit_fit_func(currents, *popt))
         plt.margins(x=0)
         plt.xlabel("Current, A")
-        plt.ylabel("Qubit frequency, Hz")
+        plt.ylabel("Qubit if_freq, Hz")
         plt.show()
     return popt
 

@@ -37,7 +37,7 @@ class DispersiveShiftSpectroscopyJoint(VNATimeResolvedDispersiveMeasurement):
 
     def _recording_iteration(self):
         vna = self._vna[0]
-        q_lo = self._q_lo[0]
+        q_lo = self._exc_iqvg[0]
 
         for i in range(self._soft_avg):
             vna.avg_clear();
@@ -95,8 +95,8 @@ class TimeResolvedDispersiveShiftSpectroscopyResult(VNATimeResolvedDispersiveMea
                self._remove_delay(data["vna_frequency"], data["data"])
 
     def _annotate_axes(self, axes):
-        axes[0].set_ylabel("VNA frequency [GHz]")
-        axes[-2].set_ylabel("VNA frequency [GHz]")
+        axes[0].set_ylabel("VNA if_freq [GHz]")
+        axes[-2].set_ylabel("VNA if_freq [GHz]")
 
     def _remove_delay(self, frequencies, s_data):
         phases = unwrap(angle(s_data * exp(2 * pi * 1j * 50e-9 * frequencies)))

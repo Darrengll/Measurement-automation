@@ -12,7 +12,7 @@ from lib2.VNATimeResolvedDispersiveMeasurement1D import VNATimeResolvedDispersiv
 from drivers.Spectrum_m4x import SPCM, SPCM_MODE, SPCM_TRIGGER
 from drivers.IQAWG import IQAWG
 from drivers.E8257D import MXG
-from drivers.Yokogawa_GS200 import Yokogawa_GS210
+from drivers.Yokogawa_GS210 import Yokogawa_GS210
 
 from typing import Dict, Union
 
@@ -47,7 +47,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
              "z_smoothing_coefficient": 0}
         self._down_conversion_calibration = None
 
-        # ADC trace fourier component frequency [Hz]
+        # ADC trace fourier component if_freq [Hz]
         self._downconv_freq = None
 
         ''' DEBUG '''
@@ -247,7 +247,7 @@ class DigitizerTimeResolvedDirectMeasurement(Measurement):
             data = self._down_conversion_calibration.apply(data)
 
         # exctacting Fourier component that exactly matches
-        # 'self._downconv_freq' (because if use FFT, frequency mesh may not
+        # 'self._downconv_freq' (because if use FFT, if_freq mesh may not
         # exactly coincide with desired 'self._downconv_freq'
         dt = 1/self._dig[0].get_sample_rate()  # sec
         t = np.linspace(0, data.shape[-1]*dt, data.shape[-1], endpoint=False)

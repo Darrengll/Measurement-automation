@@ -119,7 +119,7 @@ def setup_stimulated_emission_measurement(devices_dict, params):
     returns an object of that class
     :param devices_dict:
         dictionary with primary devices: microwave source 'mw', IQ AWG 
-        driver 'iqawg', digitizer 'dig', current source 'coil' 
+        driver 'iqawg', digitizer 'dig', bias source 'coil'
     :param params: 
         dictionary with all the required parameters
     :return: 
@@ -165,7 +165,7 @@ def setup_stimulated_emission_measurement(devices_dict, params):
                   }
 
     dev_params = {'q_lo_params':  [
-                            {"frequency": upconv_cal.get_lo_frequency()}
+                            {"if_freq": upconv_cal.get_lo_frequency()}
                         ],
                   'q_iqawg_params': [
                             {"calibration": upconv_cal}

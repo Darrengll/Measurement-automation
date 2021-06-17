@@ -21,7 +21,6 @@ from prompt_toolkit import output
 
 from lib2.IQPulseSequence import *
 import drivers.keysightSD1 as keysightSD1
-from drivers.keysightM3202A import KeysightM3202A
 # there are functions that are not universal and work only with M3202A
 from drivers.keysightAWG import KeysightAWG
 
@@ -35,8 +34,9 @@ class AWGChannel():
 
     def output_arbitrary_waveform(self, waveform, frequency, asynchronous=False):
 
-        self._host_awg.output_arbitrary_waveform(waveform, frequency,
-                                                 self._channel_number, asynchronous=asynchronous)
+        self._host_awg.output_arbitrary_waveform(
+            waveform, frequency, self._channel_number
+        )
 
     def output_continuous_wave(self, frequency, amplitude, phase, offset, waveform_resolution, asynchronous=False,
                                trigger_sync_every=None):
@@ -68,7 +68,6 @@ class CalibratedAWG():
     def get_calibration(self):
         return self._calibration
 
-
     def get_pulse_builder(self):
         """
         Returns a PulseBuilder instance using the calibration loaded before
@@ -84,8 +83,11 @@ class CalibratedAWG():
         pulse_sequence: PulseSequence instance
         """
         frequency = 1/pulse_sequence.get_duration()*1e9
-        self._channel.output_arbitrary_waveform(pulse_sequence\
-                        .get_waveform(), frequency, asynchronous=asynchronous)
+        self._channel.output_arbitrary_waveform(
+            pulse_sequence.get_waveform(),
+            frequency,
+            asynchronous=asynchronous
+        )
 
 class IQAWG():
     def __init__(self, channel_I: AWGChannel, channel_Q: AWGChannel, triggered=False):
@@ -127,12 +129,12 @@ class IQAWG():
         offsets, waveform_resolution, optimized=True):
         """
         Prepare and output a sine wave of the form:
-        y = A*sin(2*pi*frequency + phase) + offset
+        y = A*sin(2*pi*if_freq + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output waves
+        if_freq: float, Hz
+            if_freq of the output waves
         amplitudes: float, V
             amplitude of the output waves
         phase: float
@@ -158,11 +160,10 @@ class IQAWG():
 
         Parameters
         ----------
-        optimized
-        trigger_sync_every
-
-        Returns
-        -------
+        optimized : bool
+            unknown TODO: declare what it does
+        trigger_sync_every : float
+            time between trigger outputs [ns]
 
         Notes
         -------
@@ -347,7 +348,7 @@ class IQAWG():
         deviationGainQ = cal._if_amplitudes[1] * ampl_coeffs[1]
         awg.module.modulationAmplitudeConfig(chanI-1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM, deviationGainI)
         awg.module.modulationAmplitudeConfig(chanQ-1, keysightSD1.SD_ModulationTypes.AOU_MOD_AM, deviationGainQ)
-        awg.start_AWG(chanI)
+        awg._start_AWG(chanI)
 
     def stop_modulated_IQ_waves(self):
         awg = self._channels[0]._host_awg
@@ -359,12 +360,12 @@ class IQAWG():
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous=False, trigger_sync_every=None):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output wave
+        if_freq: float, Hz
+            if_freq of the output wave
         amplitude: float, V
             amplitude of the output wave
         phase: float
@@ -421,7 +422,7 @@ class IQAWG_Multiplexed(IQAWG):
         -----------
         parameteres: dict {"param_name":param_value, ...}
         """
-        par_names = ["calibration","calibration2"]
+        par_names = ["calibration", "calibration2"]
         for par_name in par_names:
             if par_name in parameters.keys():
                 setattr(self, "_"+par_name, parameters[par_name])
@@ -435,12 +436,12 @@ class IQAWG_Multiplexed(IQAWG):
     def output_continuous_IQ_waves(self, frequency, amplitudes, relative_phase,
         offsets, waveform_resolution, optimized = True):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
         on both of the I and Q channels
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output waves
+        if_freq: float, Hz
+            if_freq of the output waves
         amplitudes: float, V
             amplitude of the output waves
         phase: float
@@ -463,12 +464,12 @@ class IQAWG_Multiplexed(IQAWG):
     def _output_continuous_wave(self, frequency, amplitude, phase, offset,
             waveform_resolution, channel, asynchronous):
         """
-        Prepare and output a sine wave of the form: y = A*sin(2*pi*frequency + phase) + offset
+        Prepare and output a sine wave of the form: y = A*sin(2*pi*if_freq + phase) + offset
 
         Parameters:
         -----------
-        frequency: float, Hz
-            frequency of the output wave
+        if_freq: float, Hz
+            if_freq of the output wave
         amplitude: float, V
             amplitude of the output wave
         phase: float

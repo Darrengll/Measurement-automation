@@ -1,8 +1,0 @@
-# This document is intended to define the python packages that need to be installed on
-# a PC in order to use any of the QET Reference Design scripts.
-# See https://pip.pypa.io/en/latest/reference/pip_install/ for information on using a reference file.
-# From a command prompt, enter "pip install -r ktqet_requirements.txt" to install all of the
-# packages.
-matplotlib
-parse
-time

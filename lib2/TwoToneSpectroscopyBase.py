@@ -3,7 +3,7 @@ Parametric single-tone spectroscopy is perfomed with a Vector Network Analyzer
 (VNA) for each parameter value which is set by a specific function that must be
 passed to the SingleToneSpectroscopy class when it is created.
 """
-
+from drivers.BiasType import BiasType
 from numpy import *
 from lib2.SingleToneSpectroscopy import *
 from datetime import datetime as dt
@@ -25,59 +25,51 @@ class TwoToneSpectroscopyBase(Measurement):
         self._base_parameter_name = None
 
     def set_zero_output(self):
-        self._mw_src.set_output_state("OFF")
-        if (self._voltage_source is not None):
-            self._voltage_source.set_voltage(0)
-        if (self._current_source is not None):
-            self._current_source.set_current(0)
+        self._mw_src[0].set_output_state("OFF")
+        self._bias_src[0].set(0)
 
-    def set_fixed_parameters(self, current=None, voltage=None, detect_resonator=True,
+    def set_fixed_parameters(self, flux_bias=None, detect_resonator=True,
                              **dev_params):
 
         vna_parameters = dev_params['vna'][0]
-        if voltage is None:
-            self._base_parameter_setter = self._current_src[0].set_current
-            base_parameter_value = current
-            self._base_parameter_name = "Current [A]"
-            msg1 = "at %.2f mA" % (current * 1e3)
-        else:
-            self._base_parameter_setter = self._voltage_src[0].set_voltage
-            base_parameter_value = voltage
-            self._base_parameter_name = "Voltage [V]"
-            msg1 = "at %.1f V" % (voltage)
+        bias_type = self._bias_src[0].get_bias_type()
+        self._base_parameter_setter = self._bias_src[0].set
+        self._base_parameter_name = BiasType.NAMES[bias_type]
+        msg1 = "at %.1e " % (flux_bias) + self._base_parameter_name[-2]  # V
+                                                                         # or A
 
-        self._base_parameter_setter(base_parameter_value)
+        self._base_parameter_setter(flux_bias)
 
         if detect_resonator:
             self._mw_src[0].set_output_state("OFF")
-            msg = "Detecting a resonator within provided frequency range of the VNA %s \
+            msg = "Detecting a resonator within provided if_freq range of the VNA %s \
                             " % (str(vna_parameters["freq_limits"]))
             print(msg + msg1, flush=True)
-            res_freq, res_amp, res_phase = self._detect_resonator(vna_parameters)
-            print("Detected frequency is %.5f GHz, at %.2f mU and %.2f degrees" % (
-            res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
+            res_freq, res_amp, res_phase = self._detect_resonator(
+                vna_parameters, True)
+            print(
+                "Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % (
+                    res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
             vna_parameters["freq_limits"] = (res_freq, res_freq)
             self._measurement_result.get_context() \
                 .get_equipment()["vna"] = vna_parameters
             self._mw_src[0].set_output_state("ON")
 
-        super().set_fixed_parameters(vna=[vna_parameters], mw_src=dev_params['mw_src'])
+
+        super().set_fixed_parameters(vna=[vna_parameters],
+                                     mw_src=dev_params['mw_src'])
 
     def _detect_resonator(self, vna_parameters, plot=False):
         vna = self._vna[0]
-        vna.set_nop(vna_parameters["resonator_detection_nop"])
-        vna.set_freq_limits(*vna_parameters["freq_limits"])
-        vna.set_power(vna_parameters["power"])
-        vna.set_bandwidth(vna_parameters["resonator_detection_bandwidth"])
-        vna.set_averages(vna_parameters["averages"])
-        result = super()._detect_resonator(plot)
-        if result is None:
-            lims = array(vna_parameters["freq_limits"])
-            lims = (lims-mean(lims))*3+mean(lims)
-            vna_parameters["freq_limits"] = lims
-            vna.set_freq_limits(*vna_parameters["freq_limits"])
-            result = super()._detect_resonator(plot)
+        parameters = {"nop": vna_parameters["resonator_detection_nop"],
+                      "freq_limits": vna_parameters["freq_limits"],
+                      "power": vna_parameters["power"],
+                      "bandwidth": vna_parameters[
+                          "resonator_detection_bandwidth"],
+                      "averages": vna_parameters["averages"]}
+        vna.set_parameters(parameters)
 
+        result = super()._detect_resonator(plot)
         return result
 
     def _recording_iteration(self):
@@ -90,7 +82,8 @@ class TwoToneSpectroscopyBase(Measurement):
         return mean(data)
 
     def _finalize(self):
-        pass
+        for src in self._bias_src:
+            src.set(0)
 
 
 class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
@@ -103,11 +96,16 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
         self._annotation_bbox_props = dict(boxstyle="round", fc="white",
                                            ec="black", lw=1, alpha=0.5)
 
-    def _tr_spectrum(self, parameter_value, parameter_value_at_sweet_spot, frequency, period):
-        return frequency * sqrt(cos((parameter_value - parameter_value_at_sweet_spot) / period))
+    def _tr_spectrum(self, parameter_value, parameter_value_at_sweet_spot,
+                     frequency, period):
+        return frequency * sqrt(
+            cos((parameter_value - parameter_value_at_sweet_spot) / period))
 
-    def _lorentzian_peak(self, frequency, amplitude, offset, res_frequency, width):
-        return amplitude * (0.5 * width) ** 2 / ((frequency - res_frequency) ** 2 + (0.5 * width) ** 2) + offset
+    def _lorentzian_peak(self, frequency, amplitude, offset, res_frequency,
+                         width):
+        return amplitude * (0.5 * width) ** 2 / (
+                (frequency - res_frequency) ** 2 + (
+                0.5 * width) ** 2) + offset
 
     def _find_peaks(self, freqs, data):
         peaks = []
@@ -139,8 +137,11 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
         y = self._find_peaks(freqs, Z)
 
         try:
-            popt = curve_fit(self._tr_spectrum, x, y, p0=(mean(x), max(y), ptp(x)))[0]
-            annotation_string = parameter_name + " sweet spot at: " + self._latex_float(popt[0])
+            popt = \
+                curve_fit(self._tr_spectrum, x, y,
+                          p0=(mean(x), max(y), ptp(x)))[0]
+            annotation_string = parameter_name + " sweet spot at: " + self._latex_float(
+                popt[0])
 
             for ax in axes:
                 h_pos = mean(ax.get_xlim())
@@ -150,7 +151,8 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
                 ax.plot([popt[0]], [popt[1] / 1e9], "+")
 
             axes[annotation_ax_idx].annotate(annotation_string, (h_pos, v_pos),
-                                             bbox=self._annotation_bbox_props, ha="center")
+                                             bbox=self._annotation_bbox_props,
+                                             ha="center")
             return popt[0], popt[1]
         except Exception as e:
             print("Could not find transmon spectral line" + str(e))
@@ -165,4 +167,5 @@ class TwoToneSpectroscopyResult(SingleToneSpectroscopyResult):
         return parameter_list, data["Frequency [Hz]"] / 1e9, s_data
 
     def _prepare_measurement_result_data(self, data):
-        return data[self._parameter_names[0]], data["Frequency [Hz]"] / 1e9, data["data"]
+        return data[self._parameter_names[0]], data["Frequency [Hz]"] / 1e9, \
+               data["data"]

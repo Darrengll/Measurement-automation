@@ -21,7 +21,7 @@ from .structures import Snapshot
 
 class DispersiveRabiFromFrequency(Measurement):
     '''
-    @brief: class is used to measure qubit lifetimes from the flux/qubit frequency
+    @brief: class is used to measure qubit lifetimes from the flux/qubit if_freq
             displacement from the sweet-spot.
 
             Measurement setup is the same as for the any other dispersive measurements.
@@ -37,12 +37,12 @@ class DispersiveRabiFromFrequency(Measurement):
             sample_name: string.
 
             ss_current_or_voltage: float
-                    sweet spot DC current or voltage depending on wether
-                    current source or AWG is used to bias qubit flux
+                    sweet spot DC bias or voltage depending on wether
+                    bias source or AWG is used to bias qubit flux
             ss_freq: float
-                    frequency of the qubit in the sweet-spot of interest
+                    if_freq of the qubit in the sweet-spot of interest
             lowest_ss: bool
-                    sign of the second derivative of frequency on flux shift variable
+                    sign of the second derivative of if_freq on flux shift variable
                     if sign is positive, then this is a lower sweet-spot
                         and lower_ss=True
                     if sign is negative -> lower_ss = False
@@ -51,7 +51,7 @@ class DispersiveRabiFromFrequency(Measurement):
                 vna: alias address string or driver class
                     vector network analyzer.
                 q_lo: alias address string or driver class
-                    qubit frequency generator for lo input of the mixer.
+                    qubit if_freq generator for lo input of the mixer.
                 ro_iqawg: IQAWG class instance
                         AWG used to control readout pulse generation mixer
                 q_iqawg: IQAWG class instance
@@ -59,9 +59,9 @@ class DispersiveRabiFromFrequency(Measurement):
 
             One of the following DC sources must be provided:
             current_source: alias address string or driver class
-                            current source used to tune qubit frequency
+                            bias source used to tune qubit if_freq
             q_z_awg: alias address string or driver class
-                     AWG generator that used to tune qubit frequency
+                     AWG generator that used to tune qubit if_freq
 
 
             plot_update_interval: float
@@ -97,13 +97,13 @@ class DispersiveRabiFromFrequency(Measurement):
         self._tts_result = tts_result
         self._snap = Snapshot(self._tts_result._data) # can be used to exctract curves in the future
         self._tts_curves = {} # list of functions that results from scipy.interp1d
-        self._current_curve = None # current tts curve that is chosen by self.set_tts_curve(curve_key) method
+        self._current_curve = None # bias tts curve that is chosen by self.set_tts_curve(curve_key) method
 
-        ## Initial and current freq(current or voltage) point control START ##
+        ## Initial and bias freq(bias or voltage) point control START ##
         self._ss_freq = ss_freq
         self._ss_flux_var_value = ss_current_or_voltage
         self._lowest_ss = lowest_ss
-        # True if current is used, False if voltage source is used
+        # True if bias is used, False if voltage source is used
         self._current_flag = None
         self._flux_var_setter = None
 
@@ -122,7 +122,7 @@ class DispersiveRabiFromFrequency(Measurement):
                   constructor parameters:\n \
                   current_source or q_z_awg.")
             raise TypeError
-        ## Initial and current freq(current or voltage) point control END ##
+        ## Initial and bias freq(bias or voltage) point control END ##
 
         # set_fixed_params args are stored here
         self._fixed_devices_params = {}
@@ -180,7 +180,7 @@ class DispersiveRabiFromFrequency(Measurement):
         '''
         @params:
             excitation_durations - list of the rabi excitation pulse durations
-            ss_shifts - list of absolute values of the qubit frequency shift from sweet-spot
+            ss_shifts - list of absolute values of the qubit if_freq shift from sweet-spot
         '''
         self._basic_excitation_durations = rabi_excitation_durations
         self._DRO.set_swept_parameters(rabi_excitation_durations)
@@ -197,7 +197,7 @@ class DispersiveRabiFromFrequency(Measurement):
         self._fluxPts_iter_ctr += 1
         '''
         @brief: sets new flux bias for a qubit to achieve
-                qubit frequency = ss_freq +- ss_freq_shift
+                qubit if_freq = ss_freq +- ss_freq_shift
                 '+' or '-' is depending on the qubit freq(flux_bias)
                 function behaviour around sweet_spot value
         '''
@@ -212,7 +212,7 @@ class DispersiveRabiFromFrequency(Measurement):
         f = self._current_curve
 
         def f2min(x):
-            return (f(x) - qubit_frequency)**2  # f(x) is returning frequency value in Hz
+            return (f(x) - qubit_frequency)**2  # f(x) is returning if_freq value in Hz
 
 
         ig_x = None
@@ -227,13 +227,13 @@ class DispersiveRabiFromFrequency(Measurement):
         self._flux_var_setter(self._flux_var)
         print("new flux variable: {}".format(self._flux_var), " mA")
 
-        ## Adjusting frequency to the present spot START ##
+        ## Adjusting if_freq to the present spot START ##
         ramsey_freq = 0
         ramsey_shift = 5e6
         ramsey_shift_error = 0.5e6
         iteration_ctr = 0
-        # if there is no winner during the choice of the ramsey frequency side,
-        # than we change qubit frequency by shift in this list
+        # if there is no winner during the choice of the ramsey if_freq side,
+        # than we change qubit if_freq by shift in this list
         n_trials = 5
         fail_shift_list = []
         for i in range(n_trials+1):
@@ -254,7 +254,7 @@ class DispersiveRabiFromFrequency(Measurement):
                 m = 1
             elif dro_fixed_pars["q_awg"][0]["calibration"]._sideband_to_maintain == "right":
                 m = -1
-            dro_fixed_pars["q_lo"][0]["frequency"] = qubit_frequency + m * dro_fixed_pars["q_awg"][0]["calibration"]._if_frequency
+            dro_fixed_pars["q_lo"][0]["if_freq"] = qubit_frequency + m * dro_fixed_pars["q_awg"][0]["calibration"]._if_frequency
 
             # finding Rabi pi/2 pulse
             self._DRO.set_fixed_parameters(pulse_seq_params,
@@ -270,9 +270,9 @@ class DispersiveRabiFromFrequency(Measurement):
             ramsey_pulse_seq_params = deepcopy(pulse_seq_params)
             ramsey_pulse_seq_params.update(half_pi_pulse_duration=pi_pulse_duration / 2)
 
-            # measuring Ramsey frequency number 1 | (q_freq - ramsey_shift)
+            # measuring Ramsey if_freq number 1 | (q_freq - ramsey_shift)
             apr_ramsey_freq1 = qubit_frequency - ramsey_shift
-            dro_fixed_pars["q_lo"][0]["frequency"] = apr_ramsey_freq1 + m * dro_fixed_pars["q_awg"][0]["calibration"]._if_frequency
+            dro_fixed_pars["q_lo"][0]["if_freq"] = apr_ramsey_freq1 + m * dro_fixed_pars["q_awg"][0]["calibration"]._if_frequency
             self._DR.set_fixed_parameters(ramsey_pulse_seq_params,
                                           detect_resonator=True, plot_resonator_fit=False, **dro_fixed_pars)
             self._DR.set_swept_parameters(self._basic_excitation_durations)  # ramsey delays
@@ -285,9 +285,9 @@ class DispersiveRabiFromFrequency(Measurement):
             residuals1 = self._DR._measurement_result._cost_function(fit_params1, *data1)
             print(ramsey_freq1)
 
-            # measuring Ramsey frequency number 2 | (q_freq + ramsey_shift)
+            # measuring Ramsey if_freq number 2 | (q_freq + ramsey_shift)
             apr_ramsey_freq2 = qubit_frequency + ramsey_shift
-            dro_fixed_pars["q_lo"][0]["frequency"] = apr_ramsey_freq2 + m * dro_fixed_pars["q_awg"][0]["calibration"]._if_frequency
+            dro_fixed_pars["q_lo"][0]["if_freq"] = apr_ramsey_freq2 + m * dro_fixed_pars["q_awg"][0]["calibration"]._if_frequency
             self._DR.set_fixed_parameters(ramsey_pulse_seq_params,
                                           detect_resonator=True, plot_resonator_fit=False, **dro_fixed_pars)
             self._DR.set_swept_parameters(self._basic_excitation_durations)  # ramsey delays
@@ -311,7 +311,7 @@ class DispersiveRabiFromFrequency(Measurement):
                 trial_ctr += 1
 
 
-        print("New qubit frequency: {}", qubit_frequency, flush=True)
+        print("New qubit if_freq: {}", qubit_frequency, flush=True)
         self._last_flux_var = self._flux_var
 
         print("new ss shift is setted")
@@ -320,7 +320,7 @@ class DispersiveRabiFromFrequency(Measurement):
     def _adjust_freq_with_TTS(self, flux_var, ro_power=None):
         """
         @brief: Function measures single line of TTS in the 'flux_val' point around the
-                current chosen curve y(flux_var) point. The scan is performed with very weak readout freq
+                bias chosen curve y(flux_var) point. The scan is performed with very weak readout freq
                 to neglect ACSTark effect. Measured curve is then fitted and maximum corresponding to the qubit
                 is exctracted.
         @params:
@@ -338,7 +338,7 @@ class DispersiveRabiFromFrequency(Measurement):
         raise NotImplementedError
 
     def _recording_iteration(self):
-        # _DRO will detect resonator and new qubit frequency current
+        # _DRO will detect resonator and new qubit if_freq bias
         # during the call of the setters
         print("starting rabi\n")
         T_R, T_R_error = self._rabi_oscillations_record()
@@ -356,7 +356,7 @@ class DispersiveRabiFromFrequency(Measurement):
         # almost every time tries to use this parameters as the new best initial guess
         # and due to the fact, that the next measurements is performed in entirely different flux point
         # this initial guess vector does not fit the parameter's fit bounds that are generated from
-        # the data of the current measurement
+        # the data of the bias measurement
         self._DRO._measurement_result._fit_params = None
         self._DRO._measurement_result._fit_errors = None
         # this is due to the fact that first fit of the data
@@ -390,7 +390,7 @@ class DispersiveRabiFromFrequency(Measurement):
         # almost every time tries to use this parameters as the new best initial guess
         # and due to the fact, that the next measurements is performed in entirely different flux point
         # this initial guess vector does not fit the parameter's fit bounds that are generated from
-        # the data of the current measurement
+        # the data of the bias measurement
         self._measurement_result._now_meas_type = "Ramsey"
         self._DR._measurement_result._fit_params = None
         self._DR._measurement_result._fit_errors = None
@@ -524,7 +524,7 @@ class RabiFromFrequencyResult(MeasurementResult):
             self._DRO_result._axes = self._axes[1:3]
             self._DRO_result._figure = self._figure
 
-            DRO_data = self._DRO_result.get_data() # prepeare current DRO_data
+            DRO_data = self._DRO_result.get_data() # prepeare bias DRO_data
             # TODO: hotfix by Shamil
             # 'DispersiveRabiOscillationsResult' object has no attribute '_dynamic'
             # when dynamic==True the code in VNATRDM1D skips replotting the data
@@ -538,7 +538,7 @@ class RabiFromFrequencyResult(MeasurementResult):
             self._DR_result._axes = self._axes[1:3]
             self._DR_result._figure = self._figure
 
-            DR_data = self._DR_result.get_data()  # prepeare current DRO_data
+            DR_data = self._DR_result.get_data()  # prepeare bias DRO_data
             # TODO: hotfix by Shamil
             # 'DispersiveRabiOscillationsResult' object has no attribute '_dynamic'
             # when dynamic==True the code in VNATRDM1D skips replotting the data

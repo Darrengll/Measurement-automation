@@ -1,14 +1,12 @@
 import drivers.instr as instr
 import numpy as np
-# from time import sleep
+
 
 class Znb(instr.Instr):
 
     def __init__(self, visa_name):
         super(Znb, self).__init__(visa_name)
         self.cls()
-        # self.current_channel = 0
-        # self.current_measurement_name = None
         self._visainstrument.read_termination = '\n'
         self._visainstrument.timeout = 5000
         self.write("ROSCillator EXT")
@@ -357,7 +355,6 @@ class Znb(instr.Instr):
         for i in range(1, 4):
             self.write("DISPlay:WINDow:TRACe:Y:SCALe:AUTO ONCE, '{0}'".format("Trc"+str(i)))
 
-
     def scale_auto_by_trace_name(self, trace_name):
         self.write("DISPlay:WINDow:TRACe:Y:SCALe:AUTO ONCE, '{0}'".format(trace_name))
 
@@ -382,7 +379,6 @@ class Znb(instr.Instr):
     def get_errors(self):
         output = self.query("SYSTem:ERRor:ALL?")
         return output
-
 
     def set_electrical_delay(self, delay):
         self.write("SENSe{0}:CORRection:EDELay2:TIME {1}".format(self.current_channel, delay))

@@ -2,9 +2,8 @@
 *cache*
 *.pyc
 *.bak
-data*
+data/
 *.ipynb
-qubit-measurements*
 log/
 *.pkl
 .idea/*
@@ -15,3 +14,4 @@ spectrum_code
 *.eps
 *.png
 *.rar
+/lib2/experiment_parameters.json

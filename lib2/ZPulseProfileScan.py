@@ -19,7 +19,7 @@ class ZPulseProfileScan(VNATimeResolvedDispersiveMeasurement2D):
             m = -1
         if_frequency = self._fixed_pars["q_awg"][0]["calibration"]._if_frequency
         def set_lo_freq(excitation_freq):
-            return self._q_lo[0].set_frequency(excitation_freq + m*if_frequency)
+            return self._exc_iqvg[0].set_frequency(excitation_freq + m * if_frequency)
 
         q_if_frequency = self._q_awg[0].get_calibration() \
             .get_radiation_parameters()["if_frequency"]
@@ -46,5 +46,5 @@ class ZPulseProfileScanResult(VNATimeResolvedDispersiveMeasurement2DResult):
     def _annotate_axes(self, axes):
         axes[-1].set_xlabel("$(\pi)$-pulse delay [$\mu$s]")
         axes[-2].set_xlabel("$(\pi)$-pulse delay [$\mu$s]")
-        axes[0].set_ylabel("Excitation frequency [GHz]")
-        axes[-2].set_ylabel("Excitation frequency [GHz]")
+        axes[0].set_ylabel("Excitation if_freq [GHz]")
+        axes[-2].set_ylabel("Excitation if_freq [GHz]")

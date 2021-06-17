@@ -34,7 +34,7 @@ start_freq = float(sys.argv[3])
 stop_freq = float(sys.argv[4])
 step_freq = (stop_freq-start_freq)/1000
 
-P = int((stop_freq-start_freq)/step_freq+1) #kol-vo tochek by frequency
+P = int((stop_freq-start_freq)/step_freq+1) #kol-vo tochek by if_freq
 
 current = float(sys.argv[5])/1000
 
@@ -55,8 +55,8 @@ freq = np.linspace(start_freq, stop_freq, P)
 
 
 
-#Presetting the current in the coil to initial current of the sweep****************
-# myyoko.set_appropriate_range(max(abs(current)))
+#Presetting the bias in the coil to initial bias of the sweep****************
+# myyoko.set_appropriate_range(max(abs(bias)))
 curstepabs = 20e-6
 
 

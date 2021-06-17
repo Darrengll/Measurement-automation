@@ -1,11 +1,7 @@
-import drivers.instr as instr
+import visa
+import logging
 
 from drivers.instrument import Instrument
-import visa
-import types
-import logging
-from time import sleep
-import numpy
 
 
 class MXG(Instrument):
@@ -47,10 +43,10 @@ class MXG(Instrument):
 
     def get_parameters(self):
         """
-        Returns a dictionary containing frequency and power currently used
+        Returns a dictionary containing if_freq and power currently used
         by the device
         """
-        return {"power":self.get_power(), "frequency":self.get_frequency()}
+        return {"power":self.get_power(), "if_freq":self.get_frequency()}
 
     def set_parameters(self, parameters_dict):
         """
@@ -60,11 +56,11 @@ class MXG(Instrument):
         keys = parameters_dict.keys()
         if "power" in keys:
             self.set_power(parameters_dict["power"])
-        if "frequency" in keys:
-            self.set_frequency(parameters_dict["frequency"])
+        if "freq" in keys:
+            self.set_frequency(parameters_dict["freq"])
 
         if "sweep_trg_src" in keys:
-            self.set_freq_sweep()
+            self.set_mode_freq_sweep()
 
         if "frequencies" in keys:
             freqs = parameters_dict["frequencies"]
@@ -136,17 +132,15 @@ class MXG(Instrument):
             output = -1.0
         return output
 
-    # def set_frequency_sweep(self):
-
     def do_set_ext_trig_channel(self, ext_trig_channel):
         self.write(":LIST:TRIG:EXT:SOUR %s" % (ext_trig_channel))  # choose external trigger channel
 
     def do_get_ext_trig_channel(self):
         raise NotImplemented
 
-    def set_freq_sweep(self):
+    def set_mode_freq_sweep(self):
         # LIST, CW OR FIXED
-        # (CW and FIXED is the same and refers to the fixed frequency)
+        # (CW and FIXED is the same and refers to the fixed if_freq)
         self.write(":FREQuency:MODE LIST")
 
     def set_single_point(self):
@@ -160,7 +154,7 @@ class MXG(Instrument):
         self.write(":LIST:TYPE STEP")
 
     def set_freq_limits(self, freq_limits):
-        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz")) # TODO: rename
+        self.write(":FREQuency:STARt %f%s" % (freq_limits[0], "Hz"))
         self.write(":FREQuency:STOP %f%s" % (freq_limits[-1], "Hz"))
 
     def do_set_nop(self, nop):
