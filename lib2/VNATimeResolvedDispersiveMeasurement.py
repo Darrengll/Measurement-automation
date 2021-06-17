@@ -161,7 +161,7 @@ class VNATimeResolvedDispersiveMeasurement(Measurement):
             self._q_z_awg[0].output_pulse_sequence(q_z_pb.add_zero_until(rep_period).build())
 
         res_freq, res_amp, res_phase = super()._detect_resonator(plot_resonator_fit)
-        print("Detected if_freq is %.5f GHz, at %.2f mU and %.2f degrees" % \
+        print("Detected freq is %.5f GHz, at %.2f mU and %.2f degrees" % \
               (res_freq / 1e9, res_amp * 1e3, res_phase / pi * 180))
 
         # turning microwave back ON
@@ -210,10 +210,8 @@ class VNATimeResolvedDispersiveMeasurementResult(MeasurementResult):
         self._phase_units = "rad"
         self._data_formats = {
             "imag": (imag, "$\mathfrak{Im}[S_{21}]$ [a.u.]"),
-            "real": (real, "$\mathfrak{Re}[S_{21}]$ [a.u.]")}
-            # "phase": (self._unwrapped_phase, \
-            #           r"$\angle S_{21}$ [%s]" % self._phase_units),
-            # "abs": (abs, r"$\left.|S_{21}|\right.$ [a.u.]")}
+            "real": (real, "$\mathfrak{Re}[S_{21}]$ [a.u.]")
+        }
 
     def _generate_fit_arguments(self):
         """

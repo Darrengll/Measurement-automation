@@ -89,7 +89,7 @@ class MeasurementResult:
         self._lines = []
 
         # iteration index from main loop that indicates the last
-        # valiable data index stored into 'self._data["data"]'
+        # avaliable data index stored into 'self._data["data"]'
         self._iter_idx_ready = None
 
         self._exception_info = None

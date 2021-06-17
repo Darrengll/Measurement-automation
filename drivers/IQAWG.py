@@ -20,7 +20,10 @@ from numpy import *
 from prompt_toolkit import output
 
 from lib2.IQPulseSequence import *
-import drivers.keysightSD1 as keysightSD1
+try:
+    import drivers.keysightSD1 as keysightSD1
+except OSError:
+    pass  # we are not on the measurement PC
 # there are functions that are not universal and work only with M3202A
 from drivers.keysightAWG import KeysightAWG
 

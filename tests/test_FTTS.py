@@ -21,7 +21,7 @@ class DataGen:
     def get_sdata(self):
         retval = self.fun(self._counter)
         self._counter += 1
-        sleep(0.1)
+        sleep(0.001)
         return retval
 
     def get_frequencies(self):
@@ -54,7 +54,7 @@ vna.set_nop = dg.set_nop
 vna.set_parameters = MagicMock(side_effect = dg.set_parameters)
 
 equipment = {"vna": [vna], "mw_src": [mw_src],
-             'bias_src': [cur_src], 'voltage_src': [vol_src]}
+             'current_src': [cur_src], 'voltage_src': [vol_src]}
 
 vna_parameters = {"bandwidth": 25,
                   "freq_limits": [4e9, 6e9],

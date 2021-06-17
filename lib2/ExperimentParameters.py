@@ -1,6 +1,7 @@
+import os
 from enum import Enum, auto
 from json import load
-
+from shutil import copyfile
 
 class ResonatorType(Enum):
     REFLECTION = auto()
@@ -17,10 +18,13 @@ class ExperimentParameters:
     _group_name = None
     _subgroup_name = None
     _path = "lib2/experiment_parameters.json"
+    _template_path = "lib2/experiment_parameters_template.json"
     _parameters = {}
 
     def __init__(self):
-        with open(self._path) as f:
+        if not os.path.exists(self._path):
+            copyfile(ExperimentParameters._template_path, ExperimentParameters._path)
+        with open(ExperimentParameters._path) as f:
             self._parameters = load(f)[self._group_name]
 
         if self._subgroup_name is not None:
