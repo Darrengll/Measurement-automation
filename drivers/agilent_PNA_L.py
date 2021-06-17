@@ -24,6 +24,28 @@ import pyvisa as visa
 import logging
 from time import sleep
 import numpy as np
+from dataclasses import dataclass
+
+
+# not implemented yet
+@dataclass
+class VnaParameters:
+    bandwidth: float  # Hz
+    averages: int  # number of averages
+    trig_dur: float  # seconds
+    power: float  # dBm
+    nop: int  # number of sweep points
+    span: float  # Hz
+    centerfreq: float  # Hz
+    aux_num: int
+    freq_limits: tuple  # tuple of two frequencies with lower and upper bounds
+    averaging_mode: str = "SWEEP"  # either "POINT" or "SWEEP"
+    sweep_type: str = ""
+    trigger_source: str = "AUTO"
+    trigger_per_point: bool = False
+    pos: bool = True
+    bef: bool = True
+
 
 class Agilent_PNA_L(Instrument):
     """
@@ -147,6 +169,9 @@ class Agilent_PNA_L(Instrument):
                         # by quering number of points in bias sweep), because there is no traces defined, hence there
                         # is no number of points parameter available to read
         # self.select_default_trace()
+        self.select_S_param("S21")
+        self.sweep_hold()
+        self.set_output_state("OFF")
 
 
         # Implement functions
@@ -168,8 +193,6 @@ class Agilent_PNA_L(Instrument):
         self.add_function('sweep_continuous')
         self.add_function('autoscale_all')
         self.add_function('set_cw_time')
-
-        self.get_all()
 
     def get_all(self):
         self.get_nop()

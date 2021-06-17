@@ -30,8 +30,8 @@ print("REPORT ON LOADED DEVICES")
 
 # ## RF generators ##
 exec(my_import("drivers.sc5502a", "SC5502A"))
-mw_sps = SC5502A(idx=1, master=False)
-mw_probe = SC5502A(idx=0, master=False)
+mw_sps = SC5502A(idx=1)
+mw_probe = SC5502A(idx=0)
 print("Microwave source 'mw_sps' is loaded")
 print("Microwave source 'mw_probe' is loaded")
 
@@ -76,7 +76,7 @@ print(f"Digitizer 'dig_sps' is loaded. Slot #{dig_sps.get_slot_number()}")
 print(f"Digitizer 'dig_probe' is loaded. Slot #{dig_probe.get_slot_number()}")
 
 # stabilized bias sources ##
-exec(my_import("drivers.Yokogawa_GS200", "Yokogawa_GS210"))
+exec(my_import("drivers.Yokogawa_GS210", "Yokogawa_GS210"))
 sps_coil = Yokogawa_GS210("yok1")
 sps_coil.set_src_mode_curr()  # set current source mode
 sps_coil.set_range(0.01)  # set 10 mA range regime

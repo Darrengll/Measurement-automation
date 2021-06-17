@@ -100,7 +100,7 @@ class Yokogawa_GS210(Instrument):
         """Get basic info on device"""
         return self._visainstrument.query("*IDN?")
 
-    def do_set_current(self, current):
+    def set_current(self, current):
         """Set bias"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
             print("Tough luck, mode is voltage source, cannot set bias.")
@@ -112,7 +112,7 @@ class Yokogawa_GS210(Instrument):
             # else:
                 # print("Error: bias limits,",(self._mincurrent, self._maxcurrent)," exceeded.")
 
-    def do_get_current(self):
+    def get_current(self):
         """Get bias"""
         if (self._visainstrument.query(":SOUR:FUNC?") == "VOLT\n"):
             print("Tough luck, mode is voltage source, cannot get bias.")
@@ -138,7 +138,7 @@ class Yokogawa_GS210(Instrument):
             return False
         return float(self._visainstrument.query("SOUR:LEVEL?"))
 
-    def do_set_status(self, status):
+    def set_status(self, status):
         """
         Turn output on and off
 
@@ -149,7 +149,7 @@ class Yokogawa_GS210(Instrument):
         """
         self._visainstrument.write("OUTP "+("ON" if status==1 else "OFF"))
 
-    def do_get_status(self):
+    def get_status(self):
         """Check if output is turned on"""
         return self._visainstrument.query("OUTP?")
 
