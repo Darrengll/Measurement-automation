@@ -16,7 +16,7 @@ class Keysight11713C:
         self.swc = rm.open_resource(alias)
         self.bank_id = bank_id
         if not (bank_id == "X" or bank_id == "Y"):
-            raise ValueError("Such kind of bank does not exist")
+            raise ValueError(f"Bank id {bank_id} is not allowed! Use 'X' or 'Y'")
 
     def set_attenuation(self, attenuation):
         if attenuation > 81:
